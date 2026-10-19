@@ -1,26 +1,126 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------
+   Identidad LinkTic: azul cielo + verde hoja (tomados del logo)
+   --accent cambia según el proyecto activo (ver Dashboard).
+------------------------------------------------------------------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f4f8fc;
+  --foreground: #0f1b2d;
+  --muted: #5d6b7e;
+  --line: #e3eaf2;
+  --card: #ffffff;
+  --brand-blue: #0090ff;
+  --brand-sky: #00c2ff;
+  --brand-green: #13a538;
+  --brand-lime: #22d400;
+  --accent: var(--brand-blue);
+  --accent-soft: #e0f2ff;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-card: var(--card);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-sky: var(--brand-sky);
+  --color-brand-green: var(--brand-green);
+  --color-brand-lime: var(--brand-lime);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-outfit);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: light;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand-sky) 30%, transparent);
+}
+
+/* Transición suave del acento al cambiar de proyecto */
+.accent-transition {
+  transition:
+    background-color 0.5s ease,
+    color 0.5s ease,
+    border-color 0.5s ease;
+}
+
+/* Fondo del tablero: malla suave de marca */
+.app-bg {
+  background:
+    radial-gradient(60rem 30rem at 110% -10%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%),
+    radial-gradient(50rem 30rem at -10% 10%, color-mix(in srgb, var(--brand-sky) 10%, transparent), transparent 60%),
+    var(--background);
+  transition: background 0.6s ease;
+}
+
+.glass {
+  background: color-mix(in srgb, white 78%, transparent);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+}
+
+/* Skeleton con brillo */
+.shimmer {
+  position: relative;
+  overflow: hidden;
+  background: #e8eef5;
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Blobs animados del login */
+@keyframes blob {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(40px, -60px) scale(1.12);
+  }
+  66% {
+    transform: translate(-30px, 30px) scale(0.92);
+  }
+}
+.animate-blob {
+  animation: blob 14s ease-in-out infinite;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #cdd7e3 transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
