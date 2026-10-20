@@ -21,13 +21,15 @@ El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Maste
 
 - **Acceso:** login con token único (`ACCESS_TOKEN`) y sesión firmada de 12 h.
 - **Filtros globales**, en el header y en el botón "Filtros" de móvil; se recuerdan por proyecto:
-  - **Periodo:** sprint actual, 14/30/90 días, este mes, trimestre o rango personalizado.
+  - **Periodo:** atajos **Hoy, Ayer, Esta semana** (por defecto) y **Semana pasada**. En "Más periodos" están sprint actual, 14/30/90 días, este mes, trimestre o rango personalizado. La semana va de lunes a domingo.
+    - **Comparación de los indicadores:** Hoy y Ayer, contra el día hábil anterior; las semanas, contra los mismos días de la semana anterior; el resto, contra el periodo anterior de igual duración.
   - **Colaboradores:** multiselección, más "Incluir fuera de la planeación".
   - **Épica:** en 348, "Todas las épicas · CORE · Temáticos"; en 005 se muestra solo su épica. Fuera de las épicas monitoreadas no se analiza nada.
 - **Vistas:**
   - **Resumen** (`/`):
     - 6 KPIs con delta frente al periodo anterior: entregados, horas entregadas, en curso, vencidos, % a tiempo y cycle time;
-    - **entregas por semana**, distribución por estado y **flujo acumulado (CFD)**;
+    - **entregas por día o por semana** (selector Días / Semanas, compartido con la carga de Colaboradores), distribución por estado y **flujo acumulado (CFD)**;
+    - si el periodo dura menos de 7 días (Hoy, Ayer, inicio de semana), las gráficas de tendencia muestran los últimos 7 días y resaltan el periodo elegido;
     - **burnup** de horas y **dispersión de cycle time** con P50/P85;
     - tarjeta de **alertas**: vencidos y trabajo estancado.
   - **Cronograma** (`/cronograma`): **diagrama de Gantt**.
@@ -36,7 +38,7 @@ El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Maste
     - Incluye línea de "hoy", bandas de sprint, zoom día/semana/mes, orden, filtros por tipo y "solo con retraso".
   - **Colaboradores** (`/colaboradores`):
     - **scorecards** (tarjetas o tabla) con utilización, puntualidad, cycle time y vencidos;
-    - **carga semanal** (mapa de calor persona × semana);
+    - **carga** por día o por semana (mapa de calor persona × día/semana);
     - gráficas de estado por persona y de estimado frente a reportado;
     - sección **"Fuera de la planeación"**: personas con ítems en las épicas que no están en el Excel de ese proyecto (p. ej. en 348, David Vergara y Jhostin Ladino). No cuentan en los indicadores salvo que se active "Incluir fuera de la planeación", y se pueden vincular si son la misma persona con otro correo.
   - **Backlog Azure** (`/backlog`): árbol Épica → Feature → HU → Tarea con estado, asignado, objetivo, entrega y horas acumuladas.
@@ -122,8 +124,9 @@ pnpm dev               # http://localhost:3000
 | `0004_azure_sync.sql` | `azure_work_items`, `azure_revisions`, `azure_sync_runs`, `employee_aliases`, RPC `azure_dataset` |
 | `0005_azure_dataset_assigned.sql` | `azure_dataset(p, desde, hasta)` solo con ítems asignados (**legado**: se conserva para despliegues anteriores) |
 | `0006_dataset_monitored_epics.sql` | `azure_dataset(p, desde, hasta, épicas)`: solo el árbol de las épicas monitoreadas |
+| `0007_dataset_backfilled_delivery.sql` | Un ítem entregado en el periodo cuenta aunque se haya creado después (fecha de entrega real registrada a posteriori); bordes ±1 día |
 
-**Estado (20-oct-2026):** las seis migraciones están aplicadas. Primera sincronización: 348 con 6.838 ítems y 25.874 revisiones (≈ 45 s); 005 con 627 ítems y 1.942 revisiones (≈ 7 s). Las incrementales tardan segundos.
+**Estado (20-oct-2026):** las siete migraciones están aplicadas. Primera sincronización: 348 con 6.838 ítems y 25.874 revisiones (≈ 45 s); 005 con 627 ítems y 1.942 revisiones (≈ 7 s). Las incrementales tardan segundos.
 
 **Seguridad:**
 - RLS está activo en todas las tablas sin políticas: `anon`/`authenticated` no tienen acceso.
@@ -174,7 +177,7 @@ src/
     charts/     # Chart.js: flow-charts (throughput, CFD, burnup, cycle time, estados, estimado), chart-card, chart-theme
     dashboard/  # work-item-sheet (traza de estados), member-sheet, client-api (fetch + preferencias)
     ui/         # primitives, sheet, popover, theme, display (escala TV + pantalla completa)…
-supabase/migrations/   # 0001 → 0006
+supabase/migrations/   # 0001 → 0007
 scripts/               # generate-seed.py, apply-migrations.mjs
 context/               # Excel de planeación (contiene datos personales)
 ```

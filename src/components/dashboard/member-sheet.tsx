@@ -105,7 +105,7 @@ function Body({ person }: { person: Person }) {
         <>
           <section>
             <h3 className="mb-2 font-display text-sm font-semibold">Cronograma del periodo</h3>
-            <Gantt items={items} model={model!} range={range} zoom="week" groupBy="feature" sort="start" onOpenItem={openWorkItem} onOpenPerson={openPerson} />
+            <Gantt items={items} model={model!} range={range} zoom={range.to - range.from <= 21 * 86_400_000 ? "day" : "week"} groupBy="feature" sort="start" onOpenItem={openWorkItem} onOpenPerson={openPerson} />
           </section>
 
           <section>

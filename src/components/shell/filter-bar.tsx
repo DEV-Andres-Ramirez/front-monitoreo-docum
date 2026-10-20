@@ -8,11 +8,10 @@ import { useMemo, useState } from "react";
 import { Avatar, Segmented } from "@/components/ui/primitives";
 import { Popover } from "@/components/ui/popover";
 import { normalizeText, type EpicRef } from "@/lib/analytics/model";
-import { PRESET_LABEL, type PeriodPreset } from "@/lib/analytics/period";
+import { MORE_PRESETS, PRESET_LABEL, QUICK_PRESETS, type PeriodPreset } from "@/lib/analytics/period";
 import { formatShort, formatTime } from "@/lib/dates";
 import { useApp } from "./app-provider";
 
-const PRESETS: PeriodPreset[] = ["sprint", "14d", "30d", "90d", "month", "quarter"];
 
 const triggerClass = (active: boolean) =>
   clsx(
@@ -25,25 +24,29 @@ export function PeriodPanel({ onDone }: { onDone?: () => void }) {
   const { period, setPreset, setCustomPeriod, today } = useApp();
   const [from, setFrom] = useState(period.from);
   const [to, setTo] = useState(period.to);
+  const presetButton = (p: PeriodPreset, primary = false) => (
+    <button
+      key={p}
+      onClick={() => {
+        setPreset(p);
+        onDone?.();
+      }}
+      className={clsx(
+        "rounded-xl px-3 text-left text-sm transition",
+        primary ? "py-2.5 font-semibold" : "py-2",
+        period.preset === p ? "bg-accent text-white" : "bg-surface-2 text-foreground hover:bg-surface-3",
+      )}
+    >
+      {PRESET_LABEL[p]}
+    </button>
+  );
   return (
     <div className="space-y-3">
       <p className="text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Periodo de análisis</p>
-      <div className="grid grid-cols-2 gap-1.5">
-        {PRESETS.map((p) => (
-          <button
-            key={p}
-            onClick={() => {
-              setPreset(p);
-              onDone?.();
-            }}
-            className={clsx(
-              "rounded-xl px-3 py-2 text-left text-sm transition",
-              period.preset === p ? "bg-accent text-white" : "bg-surface-2 text-foreground hover:bg-surface-3",
-            )}
-          >
-            {PRESET_LABEL[p]}
-          </button>
-        ))}
+      <div className="grid grid-cols-2 gap-1.5">{QUICK_PRESETS.map((p) => presetButton(p, true))}</div>
+      <div className="border-t border-line pt-3">
+        <p className="mb-2 text-xs font-medium text-muted">Más periodos</p>
+        <div className="grid grid-cols-2 gap-1.5">{MORE_PRESETS.map((p) => presetButton(p))}</div>
       </div>
       <div className="border-t border-line pt-3">
         <p className="mb-2 text-xs font-medium text-muted">Rango personalizado</p>

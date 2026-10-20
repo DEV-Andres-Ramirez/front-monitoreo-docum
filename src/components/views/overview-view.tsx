@@ -6,11 +6,11 @@ import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { ChartCard } from "@/components/charts/chart-card";
 import { useChartTheme } from "@/components/charts/chart-theme";
-import { BurnupChart, CumulativeFlowChart, CycleScatterChart, Sparkline, StateDonut, ThroughputChart } from "@/components/charts/flow-charts";
+import { BurnupChart, CumulativeFlowChart, CycleScatterChart, Sparkline, StateDonut, ThroughputChart, bucketLabel } from "@/components/charts/flow-charts";
 import { useApp } from "@/components/shell/app-provider";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { EmptyState, Segmented, TypeBadge, type StatusTone } from "@/components/ui/primitives";
-import { CATEGORIES, CATEGORY_LABEL, agingWip, burnup, cumulativeFlow, cycleScatter, distribution, kpis, weeklyThroughput } from "@/lib/analytics/metrics";
+import { CATEGORIES, CATEGORY_LABEL, agingWip, burnup, cumulativeFlow, cycleScatter, distribution, kpis, throughput } from "@/lib/analytics/metrics";
 import type { Item } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import { formatShort } from "@/lib/dates";
@@ -25,16 +25,21 @@ export function OverviewView() {
 }
 
 function Overview() {
-  const { scoped, range, prevRange, model, projectKey, openWorkItem, period } = useApp();
+  const { scoped, range, prevRange, trend, chartUnit, setChartUnit, comparison, model, projectKey, openWorkItem, period } = useApp();
   const theme = useChartTheme(projectKey);
   const [metric, setMetric] = useState<"items" | "hours">("hours");
   const now = model!.now;
 
   const k = useMemo(() => kpis(scoped, range, now), [scoped, range, now]);
   const p = useMemo(() => kpis(scoped, prevRange, now), [scoped, prevRange, now]);
-  const weekly = useMemo(() => weeklyThroughput(scoped, range), [scoped, range]);
-  const cfd = useMemo(() => cumulativeFlow(scoped, range), [scoped, range]);
-  const burn = useMemo(() => burnup(scoped, range), [scoped, range]);
+  // Periodos cortos (Hoy, Ayer, inicio de semana): las tendencias muestran 7 días y resaltan el periodo
+  const extended = trend.from !== range.from;
+  // Por semanas no se extiende: 7 días partirían la semana en dos barras
+  const flowExtended = extended && chartUnit === "day";
+  const flow = useMemo(() => throughput(scoped, flowExtended ? trend : range, chartUnit), [scoped, flowExtended, trend, range, chartUnit]);
+  const spark = useMemo(() => throughput(scoped, trend, "day"), [scoped, trend]);
+  const cfd = useMemo(() => cumulativeFlow(scoped, trend), [scoped, trend]);
+  const burn = useMemo(() => burnup(scoped, trend), [scoped, trend]);
   const scatter = useMemo(() => cycleScatter(scoped, range), [scoped, range]);
   const dist = useMemo(() => distribution(scoped, range), [scoped, range]);
   const aging = useMemo(() => agingWip(scoped, now), [scoped, now]);
@@ -44,9 +49,10 @@ function Overview() {
   const closedNoFlow = useMemo(() => scoped.filter((i) => i.completedAt !== null && i.completedAt >= range.from && i.completedAt <= range.to && (i.cycleTime ?? 0) < 0.01).length, [scoped, range]);
   const stale = aging.filter((a) => a.item.cat === "InProgress" && a.ageDays > staleThreshold);
   const periodLabel = `${formatShort(period.from)} – ${formatShort(period.to)}`;
+  const trendNote = `Últimos 7 días · resaltado: ${period.label}`;
 
   if (!scoped.length) {
-    return <EmptyState variant="search" title="Sin ítems para estos filtros" description="Amplía el periodo, cambia el ámbito o selecciona otros colaboradores." />;
+    return <EmptyState variant="search" title="Sin ítems para estos filtros" description="Amplía el periodo, cambia la épica o selecciona otros colaboradores." />;
   }
 
   const tiles = [
@@ -56,7 +62,7 @@ function Overview() {
       value: <AnimatedNumber value={k.delivered} />,
       hint: `${k.active.toLocaleString("es-CO")} ítems activos en el periodo`,
       delta: pct(k.delivered, p.delivered),
-      spark: weekly.map((w) => w.items),
+      spark: spark.map((d) => d.items),
     },
     {
       label: "Horas entregadas",
@@ -64,7 +70,7 @@ function Overview() {
       value: <AnimatedNumber value={k.hoursDelivered} decimals={1} suffix=" h" />,
       hint: `1 punto = 1 h · reportado: ${k.completedWork.toLocaleString("es-CO")} h`,
       delta: pct(k.hoursDelivered, p.hoursDelivered),
-      spark: weekly.map((w) => w.hours),
+      spark: spark.map((d) => d.hours),
     },
     {
       label: "En curso (WIP)",
@@ -130,7 +136,7 @@ function Overview() {
             <p className="relative mt-0.5 line-clamp-2 text-[0.6875rem] text-muted">{t.hint}</p>
             <div className="relative mt-2 flex min-h-5 items-center gap-2">
               {t.delta && <Delta {...t.delta} />}
-              {t.delta && <span className="truncate text-[0.6875rem] text-subtle">vs. periodo anterior</span>}
+              {t.delta && <span className="truncate text-[0.6875rem] text-subtle" title={comparison}>{comparison}</span>}
             </div>
             {t.spark && t.spark.length > 1 && (
               <div className="relative -mx-1 mt-1 h-8">
@@ -144,26 +150,37 @@ function Overview() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <ChartCard
           className="xl:col-span-2"
-          title="Entregas por semana"
-          subtitle={`Throughput del periodo · ${periodLabel}`}
+          title={chartUnit === "day" ? "Entregas por día" : "Entregas por semana"}
+          subtitle={`Throughput · ${flowExtended ? trendNote : periodLabel}`}
           icon={BarChart3}
           actions={
-            <Segmented
-              size="sm"
-              value={metric}
-              onChange={setMetric}
-              options={[
-                { value: "hours", label: "Horas" },
-                { value: "items", label: "Ítems" },
-              ]}
-            />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Segmented
+                size="sm"
+                value={chartUnit}
+                onChange={setChartUnit}
+                options={[
+                  { value: "day", label: "Días", title: "Ver por día" },
+                  { value: "week", label: "Semanas", title: "Ver por semana" },
+                ]}
+              />
+              <Segmented
+                size="sm"
+                value={metric}
+                onChange={setMetric}
+                options={[
+                  { value: "hours", label: "Horas" },
+                  { value: "items", label: "Ítems" },
+                ]}
+              />
+            </div>
           }
-          summary="Ítems u horas entregadas por semana en el periodo."
-          table={{ columns: ["Semana", "Ítems", "Horas"], rows: weekly.map((w) => [formatShort(new Date(w.start).toISOString().slice(0, 10)), w.items, w.hours]) }}
-          empty={k.delivered === 0 ? { title: "Sin entregas en el periodo" } : false}
+          summary={`Ítems u horas entregadas por ${chartUnit === "day" ? "día" : "semana"}.`}
+          table={{ columns: [chartUnit === "day" ? "Día" : "Semana", "Ítems", "Horas"], rows: flow.map((b) => [bucketLabel(b.start, chartUnit), b.items, b.hours]) }}
+          empty={flow.every((b) => b.items === 0) ? { title: flowExtended ? "Sin entregas en los últimos 7 días" : "Sin entregas en el periodo" } : false}
           height={280}
         >
-          <ThroughputChart weeks={weekly} metric={metric} theme={theme} />
+          <ThroughputChart buckets={flow} unit={chartUnit} metric={metric} highlight={flowExtended ? range : undefined} theme={theme} />
         </ChartCard>
 
         <ChartCard
@@ -181,13 +198,13 @@ function Overview() {
         <ChartCard
           className="xl:col-span-2"
           title="Flujo acumulado (CFD)"
-          subtitle="Cómo se mueve el trabajo entre estados día a día"
+          subtitle={extended ? "Día a día · últimos 7 días" : "Cómo se mueve el trabajo entre estados día a día"}
           icon={Layers}
           legend={(["Proposed", "InProgress", "Resolved", "Completed"] as const).map((c) => ({ label: CATEGORY_LABEL[c], color: categoryColor(c, theme.dark) }))}
           summary="Diagrama de flujo acumulado de los ítems por categoría de estado."
           table={{
             columns: ["Día", ...CATEGORIES.map((c) => CATEGORY_LABEL[c])],
-            rows: cfd.map((d) => [formatShort(new Date(d.t).toISOString().slice(0, 10)), ...CATEGORIES.map((c) => d[c])]),
+            rows: cfd.map((d) => [bucketLabel(d.t, "day"), ...CATEGORIES.map((c) => d[c])]),
           }}
           height={300}
         >
@@ -199,14 +216,14 @@ function Overview() {
         <ChartCard
           className="xl:col-span-2"
           title="Burnup de horas"
-          subtitle="Horas completadas frente al alcance del periodo"
+          subtitle={extended ? "Horas completadas frente al alcance · últimos 7 días" : "Horas completadas frente al alcance del periodo"}
           icon={TrendingUp}
           legend={[
             { label: "Horas completadas", color: categoryColor("Completed", theme.dark) },
             { label: "Alcance", color: theme.reference, dashed: true },
           ]}
           summary="Burnup de horas completadas frente al alcance total."
-          table={{ columns: ["Día", "Alcance (h)", "Completado (h)"], rows: burn.map((b) => [formatShort(new Date(b.t).toISOString().slice(0, 10)), b.scope, b.done]) }}
+          table={{ columns: ["Día", "Alcance (h)", "Completado (h)"], rows: burn.map((b) => [bucketLabel(b.t, "day"), b.scope, b.done]) }}
           empty={burn.every((b) => b.scope === 0) ? { title: "Sin horas estimadas en el alcance", description: "Los ítems no tienen puntos ni estimación." } : false}
           height={280}
         >
@@ -225,7 +242,7 @@ function Overview() {
           summary="Dispersión del cycle time de los ítems cerrados en el periodo, con percentiles 50 y 85."
           table={{
             columns: ["Ítem", "Cerrado", "Cycle time (d)"],
-            rows: scatter.points.map((pt) => [`#${pt.item.id} ${pt.item.title ?? ""}`, formatShort(new Date(pt.x).toISOString().slice(0, 10)), pt.y]),
+            rows: scatter.points.map((pt) => [`#${pt.item.id} ${pt.item.title ?? ""}`, bucketLabel(pt.x, "day"), pt.y]),
           }}
           empty={scatter.points.length === 0 ? { title: "Sin ítems cerrados en el periodo" } : false}
           height={280}

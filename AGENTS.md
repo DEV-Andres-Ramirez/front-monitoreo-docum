@@ -75,18 +75,21 @@ Reglas de negocio (decididas con el usuario):
 - **Dataset:**
   - el RPC `azure_dataset(p, from, to, p_epics)` (0006) recorre el árbol de las épicas monitoreadas y devuelve los ítems **asignados** vivos en el periodo que cuelgan de ellas (`created ≤ to` y abiertos o `completed ≥ from`), sus **ancestros hasta la épica**, las **épicas** (siempre, para el filtro) y las **transiciones de estado** (filas donde cambia el estado);
   - la sincronización copia todo el proyecto a propósito (detecta lo que entra o sale de las épicas); **el recorte se hace en el RPC**. La versión de 3 argumentos (0005) es legado: no la uses ni la borres sin coordinar los despliegues;
-  - la UI pide desde el inicio del **periodo anterior**, para los deltas.
+  - un ítem está "vivo" en el periodo si se creó antes de su fin **o se entregó dentro de él** (fecha de entrega real registrada a posteriori; 0007), y no se cerró antes de su inicio. `isAlive()` en `metrics.ts` aplica la misma regla;
+  - la UI pide desde lo más antiguo entre el **periodo anterior** (deltas) y la **ventana de tendencia** (`trendRange`: 7 días mínimo para CFD, burnup, sparklines y entregas por día).
 - **Motor de análisis (cliente, TS puro)** en `src/lib/analytics/`:
   - `model.ts`: `buildModel()` resuelve identidad (alias → correo exacto → parte local → tokens del nombre), horas sin doble conteo, fechas plan/real, puntualidad, vencidos, segmentos de estado, ancestros (feature, `epicId` = épica monitoreada de la que cuelga, `inMonitoredEpics`), `model.epics` (id + título) e iteraciones;
   - `scopedWork()` / `inEpics()` en `metrics.ts` exigen `inMonitoredEpics` (defensa además del RPC) y aplican el filtro por épica;
   - `metrics.ts`: KPIs, throughput semanal, CFD, burnup, cycle time (P50/P85), antigüedad del WIP, `perPerson` y `workloadMatrix`. Recibe `now` explícito: no llames `Date.now()` en render;
-  - `period.ts`: presets, con "Sprint actual" deducido de las iteraciones conocidas, guardadas en localStorage;
+  - `period.ts`: presets. Los rápidos son `today`, `yesterday`, `thisWeek` (`DEFAULT_PRESET`) y `lastWeek`, con semana de lunes a domingo. El resto (`MORE_PRESETS`) incluye "Sprint actual", deducido de las iteraciones conocidas guardadas en localStorage. `comparisonLabel()` describe el periodo con que se compara (`previousRange(range, preset)` en `metrics.ts`: Hoy y Ayer contra el día hábil anterior; semanas, desplazadas 7 días);
+  - cubetas de tiempo: `throughput()` y `workloadMatrix()` aceptan `TimeUnit` (`"day" | "week"`). La preferencia es global (`docum:chart-unit`, por defecto `"day"`; `chartUnit` en `useApp()`);
   - `state-colors.ts`: colores por `StateCategory`, validados con dataviz (no cambiar el orden).
   - Usa siempre `StateCategory` (Proposed / InProgress / Resolved / Completed / Removed), **nunca el nombre del estado**: cada proceso tiene estados propios.
 - **Estado global** en `AppProvider` (`src/components/shell/app-provider.tsx`):
   - proyecto, periodo, filtros (`people`, `includeOthers`, `epics`: épicas seleccionadas, vacío = todas), dataset (SWR, con polling mientras `sync.running`), `model`, `scoped` (ítems en el alcance), `people`, sincronización y paneles globales (`WorkItemSheet`, `MemberSheet`, `CommandPalette`, `ShortcutsDialog`).
   - Las vistas usan `useApp()` y se envuelven en `<DatasetGate>`.
-  - Los filtros se guardan por proyecto (`docum:filters:<p>`) con `useStored()` (`client-api.ts`).
+  - Los filtros se guardan por proyecto (`docum:filters:<p>`) con `useStored()` (`client-api.ts`). `v: 2` marca los guardados con los periodos nuevos; sin esa marca se conservan personas y épicas, pero el periodo vuelve a "Esta semana".
+  - **Fechas en tablas y etiquetas:** usa `bucketLabel()` o `format()` en hora local. Nunca `new Date(t).toISOString().slice(0, 10)` sobre marcas locales: el fin de día de Bogotá cae al día siguiente en UTC.
 - **Acento por proyecto:** `<div data-project className="contents">` en el provider; los paneles nuevos van dentro.
 - **Supabase:** `db()` es server-only con la llave secreta. **Nunca** crear un cliente en el navegador.
 
@@ -106,7 +109,7 @@ Reglas de negocio (decididas con el usuario):
   - RLS activo **sin políticas** y `revoke all … from anon, authenticated`;
   - RPC con `revoke execute … from public, anon, authenticated` + `grant … to service_role`;
   - tras cualquier DDL, revisar `get_advisors`.
-- **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004), `azure_dataset_assigned` (0005) y `dataset_monitored_epics` (0006).
+- **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004), `azure_dataset_assigned` (0005), `dataset_monitored_epics` (0006) y `dataset_backfilled_delivery` (0007).
   - Se aplican con el MCP del proyecto (`.mcp.json`, ref `klrierizueihrenhcema`) o con `scripts/apply-migrations.mjs`.
   - **No** usar el conector `claude.ai Supabase` (es otra cuenta).
 - **Nueva planeación de personal:** reemplazar el Excel → `python3 scripts/generate-seed.py` → aplicar `0002_seed.sql` (upsert).

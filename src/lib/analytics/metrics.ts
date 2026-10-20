@@ -1,4 +1,5 @@
 // Métricas de flujo y desempeño sobre el modelo filtrado (TypeScript puro, cliente).
+import type { PeriodPreset } from "./period";
 import type { StateCategory } from "./types";
 import { DAY, capacityHours, categoryAt, endOfDay, type Item, type Model, type Person } from "./model";
 
@@ -21,10 +22,32 @@ export function periodRange(f: Pick<Filters, "from" | "to">): Range {
   return { from: startOfDay(f.from), to: endOfDay(startOfDay(f.to)) };
 }
 
-/** Periodo anterior de igual duración, inmediatamente antes. */
-export function previousRange(r: Range): Range {
+/**
+ * Periodo con el que se comparan los indicadores:
+ * Hoy / Ayer → el día hábil anterior · semanas → los mismos días de la semana anterior ·
+ * resto → periodo de igual duración inmediatamente antes.
+ */
+export function previousRange(r: Range, preset?: PeriodPreset): Range {
+  if (preset === "today" || preset === "yesterday") {
+    const d = new Date(r.from);
+    do d.setDate(d.getDate() - 1);
+    while (d.getDay() === 0 || d.getDay() === 6);
+    return { from: d.getTime(), to: endOfDay(d.getTime()) };
+  }
+  if (preset === "thisWeek" || preset === "lastWeek") return { from: r.from - 7 * DAY, to: r.to - 7 * DAY };
   const span = r.to - r.from;
   return { from: r.from - span - 1, to: r.from - 1 };
+}
+
+export const MIN_TREND_DAYS = 7;
+
+/** Ventana de las gráficas de tendencia: el periodo, o los últimos 7 días si es más corto (p. ej. "Hoy"). */
+export function trendRange(r: Range): Range {
+  if (r.to - r.from >= (MIN_TREND_DAYS - 1) * DAY) return r;
+  const d = new Date(r.to);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - (MIN_TREND_DAYS - 1));
+  return { from: d.getTime(), to: r.to };
 }
 
 /** Personas visibles según el filtro (planeación ± otros). */
@@ -48,7 +71,9 @@ export function scopedWork(model: Model, f: Filters): Item[] {
   });
 }
 
-export const isAlive = (i: Item, r: Range) => i.cat !== "Removed" && i.createdAt <= r.to && (i.completedAt === null || i.completedAt >= r.from);
+/** Vivo en el periodo: creado antes de su fin (o entregado dentro de él aunque se registrara después) y no cerrado antes de su inicio. */
+export const isAlive = (i: Item, r: Range) =>
+  i.cat !== "Removed" && (i.createdAt <= r.to || deliveredIn(i, r)) && (i.completedAt === null || i.completedAt >= r.from);
 export const deliveredIn = (i: Item, r: Range) => i.deliveredAt !== null && i.deliveredAt >= r.from && i.deliveredAt <= r.to;
 export const completedIn = (i: Item, r: Range) => i.completedAt !== null && i.completedAt >= r.from && i.completedAt <= r.to;
 
@@ -124,10 +149,30 @@ export function weeks(r: Range) {
   return out;
 }
 
-export function weeklyThroughput(items: Item[], r: Range) {
-  return weeks(r).map((w) => {
-    const done = items.filter((i) => i.deliveredAt !== null && i.deliveredAt >= Math.max(w.start, r.from) && i.deliveredAt <= Math.min(w.end, r.to));
-    return { start: w.start, items: done.length, hours: round(sum(done.map((i) => i.countedHours))) };
+export type TimeUnit = "day" | "week";
+
+/** Días calendario del periodo (00:00 → 23:59:59 locales). */
+export function dayBuckets(r: Range) {
+  const out: { start: number; end: number }[] = [];
+  const d = new Date(r.from);
+  d.setHours(0, 0, 0, 0);
+  while (d.getTime() <= r.to) {
+    const start = d.getTime();
+    d.setDate(d.getDate() + 1);
+    out.push({ start, end: d.getTime() - 1 });
+  }
+  return out;
+}
+
+/** Cubetas del periodo por día o por semana (lunes → domingo; los extremos se recortan al contar). */
+export const buckets = (r: Range, unit: TimeUnit) => (unit === "day" ? dayBuckets(r) : weeks(r));
+
+/** Ítems y horas entregadas por día o por semana. */
+export function throughput(items: Item[], r: Range, unit: TimeUnit) {
+  const delivered = items.filter((i) => i.deliveredAt !== null && i.deliveredAt >= r.from && i.deliveredAt <= r.to);
+  return buckets(r, unit).map((b) => {
+    const done = delivered.filter((i) => i.deliveredAt! >= b.start && i.deliveredAt! <= b.end);
+    return { start: b.start, items: done.length, hours: round(sum(done.map((i) => i.countedHours))) };
   });
 }
 
@@ -226,16 +271,16 @@ export function perPerson(people: Person[], items: Item[], r: Range, now = Date.
   });
 }
 
-/** Horas entregadas por persona y semana (heatmap). */
-export function workloadMatrix(people: Person[], items: Item[], r: Range) {
-  const ws = weeks(r);
+/** Horas entregadas por persona y día o semana (heatmap). */
+export function workloadMatrix(people: Person[], items: Item[], r: Range, unit: TimeUnit = "week") {
+  const bs = buckets(r, unit);
   return {
-    weeks: ws,
+    buckets: bs,
     rows: people.map((p) => {
       const mine = items.filter((i) => i.personKey === p.key && i.deliveredAt !== null);
       return {
         person: p,
-        cells: ws.map((w) => {
+        cells: bs.map((w) => {
           const done = mine.filter((i) => i.deliveredAt! >= Math.max(w.start, r.from) && i.deliveredAt! <= Math.min(w.end, r.to));
           return { hours: round(sum(done.map((i) => i.countedHours))), items: done.length };
         }),

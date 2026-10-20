@@ -83,7 +83,7 @@ function People() {
             options={[
               { value: "cards", label: "Tarjetas", icon: LayoutGrid },
               { value: "table", label: "Tabla", icon: List },
-              { value: "heatmap", label: "Carga semanal", icon: Grid3x3 },
+              { value: "heatmap", label: "Carga", icon: Grid3x3 },
             ]}
           />
         </div>
@@ -278,30 +278,52 @@ function PeopleTable({ rows, onOpen }: { rows: PersonRow[]; onOpen: (key: string
   );
 }
 
-/** Mapa de calor persona × semana con las horas entregadas (escala secuencial del acento). */
+/** Mapa de calor persona × día o semana con las horas entregadas (escala secuencial del acento). */
 function Heatmap({ people }: { people: Person[] }) {
-  const { scoped, range, openPerson } = useApp();
-  const matrix = useMemo(() => workloadMatrix(people, scoped, range), [people, scoped, range]);
+  const { scoped, range, openPerson, chartUnit, setChartUnit } = useApp();
+  const matrix = useMemo(() => workloadMatrix(people, scoped, range, chartUnit), [people, scoped, range, chartUnit]);
+  const byDay = chartUnit === "day";
   const max = Math.max(1, ...matrix.rows.flatMap((r) => r.cells.map((c) => c.hours)));
   const mix = (h: number) => (h <= 0 ? 0 : Math.round(18 + (h / max) * 77));
   return (
     <div className="card overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div>
-          <h3 className="font-display text-[0.9375rem] font-semibold">Carga entregada por semana</h3>
-          <p className="text-xs text-muted">Horas (puntos) entregadas por colaborador y semana. Intensidad relativa al máximo ({fmtH(max)}).</p>
+          <h3 className="font-display text-[0.9375rem] font-semibold">Carga entregada por {byDay ? "día" : "semana"}</h3>
+          <p className="text-xs text-muted">
+            Horas (puntos) entregadas por colaborador y {byDay ? "día" : "semana"}. Intensidad relativa al máximo ({fmtH(max)}).
+          </p>
         </div>
+        <Segmented
+          size="sm"
+          value={chartUnit}
+          onChange={setChartUnit}
+          options={[
+            { value: "day", label: "Días", title: "Ver por día" },
+            { value: "week", label: "Semanas", title: "Ver por semana" },
+          ]}
+        />
       </div>
       <div className="scrollbar-thin max-h-[40rem] overflow-auto">
         <table className="w-full min-w-[45rem] border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-10">
             <tr>
               <th className="sticky left-0 z-20 bg-surface-2 px-4 py-2.5 text-left text-[0.6875rem] font-semibold uppercase tracking-wider text-subtle">Colaborador</th>
-              {matrix.weeks.map((w) => (
-                <th key={w.start} className="bg-surface-2 px-1 py-2 text-center text-[0.6875rem] font-semibold text-subtle">
-                  {format(w.start, "d MMM", { locale: es })}
-                </th>
-              ))}
+              {matrix.buckets.map((b) => {
+                const weekend = byDay && [0, 6].includes(new Date(b.start).getDay());
+                return (
+                  <th key={b.start} className={clsx("bg-surface-2 px-1 py-2 text-center text-[0.6875rem] font-semibold", weekend ? "text-subtle/60" : "text-subtle")}>
+                    {byDay ? (
+                      <>
+                        <span className="block font-normal capitalize">{format(b.start, "EEE", { locale: es })}</span>
+                        {format(b.start, "d MMM", { locale: es })}
+                      </>
+                    ) : (
+                      format(b.start, "d MMM", { locale: es })
+                    )}
+                  </th>
+                );
+              })}
               <th className="bg-surface-2 px-3 py-2 text-right text-[0.6875rem] font-semibold uppercase tracking-wider text-subtle">Total</th>
             </tr>
           </thead>

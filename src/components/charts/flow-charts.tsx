@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useMemo } from "react";
 import { Bar, Chart, Doughnut, Line } from "react-chartjs-2";
-import { CATEGORIES, CATEGORY_LABEL, type PersonRow } from "@/lib/analytics/metrics";
+import { CATEGORIES, CATEGORY_LABEL, type PersonRow, type Range, type TimeUnit } from "@/lib/analytics/metrics";
 import type { Item } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import type { StateCategory } from "@/lib/analytics/types";
@@ -16,24 +16,36 @@ const fmtDay = (t: number) => format(t, "d MMM", { locale: es });
 const fmtHours = (v: number) => `${(Math.round(v * 10) / 10).toLocaleString("es-CO")} h`;
 const fmtDays = (v: number) => `${(Math.round(v * 10) / 10).toLocaleString("es-CO")} d`;
 
-// ------------------------------------------------------------------ Throughput semanal
+/** Etiqueta de una cubeta de tiempo: "lun 19 oct" (día) o "Sem. 19 oct" (semana). */
+export const bucketLabel = (t: number, unit: TimeUnit) => (unit === "day" ? format(t, "EEE d MMM", { locale: es }) : `Sem. ${fmtDay(t)}`);
+const isWeekend = (t: number) => [0, 6].includes(new Date(t).getDay());
+
+// ------------------------------------------------------------------ Throughput (por día o por semana)
 export function ThroughputChart({
-  weeks,
+  buckets,
+  unit,
   metric,
+  highlight,
   theme,
 }: {
-  weeks: { start: number; items: number; hours: number }[];
+  buckets: { start: number; items: number; hours: number }[];
+  unit: TimeUnit;
   metric: "items" | "hours";
+  /** Periodo seleccionado: las barras fuera de él (contexto de 7 días) se atenúan */
+  highlight?: Range;
   theme: ChartTheme;
 }) {
   const data = useMemo<ChartData<"bar", number[], string>>(
     () => ({
-      labels: weeks.map((w) => `Sem. ${fmtDay(w.start)}`),
+      labels: buckets.map((b) => bucketLabel(b.start, unit)),
       datasets: [
         {
           label: metric === "items" ? "Ítems entregados" : "Horas entregadas",
-          data: weeks.map((w) => (metric === "items" ? w.items : w.hours)),
-          backgroundColor: withAlpha(theme.accent, 0.8),
+          data: buckets.map((b) => (metric === "items" ? b.items : b.hours)),
+          // Atenuadas: fuera del periodo seleccionado o fin de semana (vista por días)
+          backgroundColor: buckets.map((b) =>
+            withAlpha(theme.accent, (highlight && (b.start < highlight.from || b.start > highlight.to)) || (unit === "day" && isWeekend(b.start)) ? 0.35 : 0.8),
+          ),
           hoverBackgroundColor: theme.accent,
           borderRadius: { topLeft: theme.px(4), topRight: theme.px(4) },
           borderSkipped: "start",
@@ -41,7 +53,7 @@ export function ThroughputChart({
         },
       ],
     }),
-    [weeks, metric, theme],
+    [buckets, unit, metric, highlight, theme],
   );
   const options = useMemo<ChartOptions<"bar">>(() => {
     const base = baseOptions<"bar">(theme);
@@ -55,14 +67,14 @@ export function ThroughputChart({
           callbacks: {
             label: (i) => ` ${i.dataset.label}: ${metric === "hours" ? fmtHours(Number(i.raw)) : i.raw}`,
             footer: (items) => {
-              const w = weeks[items[0].dataIndex];
-              return metric === "items" ? `${fmtHours(w.hours)} entregadas` : `${w.items} ítems entregados`;
+              const b = buckets[items[0].dataIndex];
+              return metric === "items" ? `${fmtHours(b.hours)} entregadas` : `${b.items} ítems entregados`;
             },
           },
         },
       },
     };
-  }, [theme, metric, weeks]);
+  }, [theme, metric, buckets]);
   return <Bar data={data} options={options} />;
 }
 

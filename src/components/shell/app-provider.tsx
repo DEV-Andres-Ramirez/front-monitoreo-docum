@@ -10,9 +10,9 @@ import { WorkItemSheet } from "@/components/dashboard/work-item-sheet";
 import { toggleFullscreen } from "@/components/ui/display";
 import { changeScale } from "@/components/ui/display-controls";
 import { isSheetOpen } from "@/components/ui/sheet";
-import { periodRange, previousRange, scopedWork, visiblePeople, type Filters, type Range } from "@/lib/analytics/metrics";
+import { periodRange, previousRange, scopedWork, trendRange, visiblePeople, type Filters, type Range, type TimeUnit } from "@/lib/analytics/metrics";
 import { buildModel, type EpicRef, type Item, type Model, type Person } from "@/lib/analytics/model";
-import { resolvePreset, type PeriodPreset } from "@/lib/analytics/period";
+import { DEFAULT_PRESET, comparisonLabel, resolvePreset, type PeriodPreset } from "@/lib/analytics/period";
 import type { DatasetResponse, SyncInfo } from "@/lib/analytics/types";
 import { PROJECT_KEYS, PROJECTS, type ProjectKey, type ProjectMeta } from "@/lib/config";
 import { todayISO } from "@/lib/dates";
@@ -21,9 +21,11 @@ import { NAV } from "./nav";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 
 // `epics` vacío = todas las épicas monitoreadas del proyecto (el antiguo `scope` guardado se ignora)
-type StoredFilters = { preset: PeriodPreset; from: string; to: string; people: string[]; includeOthers: boolean; epics?: number[] };
+// `v: 2` marca los filtros guardados con los periodos nuevos (Hoy / Ayer / semanas): los anteriores
+// conservan personas y épicas pero vuelven al periodo por defecto.
+type StoredFilters = { v?: number; preset: PeriodPreset; from: string; to: string; people: string[]; includeOthers: boolean; epics?: number[] };
 type StoredIteration = { name: string; start: number; end: number; count: number };
-const DEFAULT_FILTERS: StoredFilters = { preset: "30d", from: "", to: "", people: [], includeOthers: false, epics: [] };
+const DEFAULT_FILTERS: StoredFilters = { v: 2, preset: DEFAULT_PRESET, from: "", to: "", people: [], includeOthers: false, epics: [] };
 const NO_EPICS: EpicRef[] = [];
 const NO_ITERATIONS: StoredIteration[] = [];
 
@@ -39,6 +41,13 @@ type AppContextValue = {
   today: string;
   /** Periodo resuelto + etiqueta */
   period: { preset: PeriodPreset; from: string; to: string; label: string };
+  /** Texto de la comparación de los indicadores ("vs. día hábil anterior", …) */
+  comparison: string;
+  /** Ventana de las gráficas de tendencia (el periodo, o 7 días si es más corto) */
+  trend: Range;
+  /** Gráficas por día o por semana (preferencia compartida) */
+  chartUnit: TimeUnit;
+  setChartUnit: (unit: TimeUnit) => void;
   setPreset: (preset: PeriodPreset) => void;
   setCustomPeriod: (from: string, to: string) => void;
   filters: Filters;
@@ -106,18 +115,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const { mutate } = useSWRConfig();
 
   // --- Periodo (los presets son relativos a hoy; "Sprint actual" usa las iteraciones conocidas) ---
+  const storedPreset = stored.v === 2 ? stored.preset : DEFAULT_PRESET;
   const period = useMemo(() => {
-    if (stored.preset === "custom" && stored.from && stored.to) {
+    if (storedPreset === "custom" && stored.from && stored.to) {
       return { preset: "custom" as const, from: stored.from, to: stored.to, label: "Personalizado" };
     }
-    return resolvePreset(stored.preset === "custom" ? "30d" : stored.preset, today, iterations);
-  }, [stored.preset, stored.from, stored.to, today, iterations]);
+    return resolvePreset(storedPreset === "custom" ? DEFAULT_PRESET : storedPreset, today, iterations);
+  }, [storedPreset, stored.from, stored.to, today, iterations]);
 
   const range = useMemo(() => periodRange(period), [period]);
-  const prevRange = useMemo(() => previousRange(range), [range]);
+  const prevRange = useMemo(() => previousRange(range, period.preset), [range, period.preset]);
+  const trend = useMemo(() => trendRange(range), [range]);
+  const [chartUnit, setChartUnit] = useStored<TimeUnit>("docum:chart-unit", "day");
 
-  // El dataset incluye el periodo anterior (para los deltas)
-  const fetchFrom = isoLocal(prevRange.from);
+  // El dataset incluye el periodo anterior (deltas) y la ventana de tendencia (gráficas)
+  const fetchFrom = isoLocal(Math.min(prevRange.from, trend.from));
   const dataset = useSWR<DatasetResponse>(`/api/projects/${projectKey}/dataset?from=${fetchFrom}&to=${period.to}`, fetcher, {
     keepPreviousData: true,
     revalidateOnFocus: false,
@@ -153,7 +165,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const people = useMemo(() => (model ? visiblePeople(model, filters) : []), [model, filters]);
   const scoped = useMemo(() => (model ? scopedWork(model, filters) : []), [model, filters]);
 
-  const update = useCallback((patch: Partial<StoredFilters>) => setStored({ ...stored, ...patch }), [stored, setStored]);
+  const update = useCallback(
+    (patch: Partial<StoredFilters>) => setStored({ ...stored, v: 2, preset: storedPreset, ...patch }),
+    [stored, storedPreset, setStored],
+  );
 
   const setProjectKey = useCallback(
     (key: ProjectKey) => {
@@ -283,6 +298,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProjectKey,
     today,
     period,
+    comparison: comparisonLabel(period.preset),
+    trend,
+    chartUnit,
+    setChartUnit,
     setPreset: (preset) => update({ preset }),
     setCustomPeriod: (from, to) => update({ preset: "custom", from, to }),
     filters,

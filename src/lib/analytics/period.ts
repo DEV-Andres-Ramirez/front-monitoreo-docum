@@ -1,10 +1,20 @@
 // Presets de periodo para el análisis.
 import { addDaysISO } from "@/lib/dates";
 
-export type PeriodPreset = "sprint" | "14d" | "30d" | "90d" | "month" | "quarter" | "custom";
+export type PeriodPreset = "today" | "yesterday" | "thisWeek" | "lastWeek" | "sprint" | "14d" | "30d" | "90d" | "month" | "quarter" | "custom";
 export type Period = { preset: PeriodPreset; from: string; to: string };
 
+/** Periodo por defecto del tablero. */
+export const DEFAULT_PRESET: PeriodPreset = "thisWeek";
+/** Atajos principales (seguimiento diario) y el resto de periodos. */
+export const QUICK_PRESETS: PeriodPreset[] = ["today", "yesterday", "thisWeek", "lastWeek"];
+export const MORE_PRESETS: PeriodPreset[] = ["sprint", "14d", "30d", "month", "90d", "quarter"];
+
 export const PRESET_LABEL: Record<PeriodPreset, string> = {
+  today: "Hoy",
+  yesterday: "Ayer",
+  thisWeek: "Esta semana",
+  lastWeek: "Semana pasada",
   sprint: "Sprint actual",
   "14d": "Últimos 14 días",
   "30d": "Últimos 30 días",
@@ -13,6 +23,17 @@ export const PRESET_LABEL: Record<PeriodPreset, string> = {
   quarter: "Este trimestre",
   custom: "Personalizado",
 };
+
+/** Contra qué se comparan los indicadores (ver previousRange en metrics.ts). */
+export function comparisonLabel(preset: PeriodPreset) {
+  if (preset === "today" || preset === "yesterday") return "vs. día hábil anterior";
+  if (preset === "thisWeek") return "vs. mismos días de la semana pasada";
+  if (preset === "lastWeek") return "vs. la semana anterior";
+  return "vs. periodo anterior";
+}
+
+/** Lunes (ISO) de la semana de una fecha; la semana va de lunes a domingo. */
+const mondayOf = (iso: string) => addDaysISO(iso, -((new Date(`${iso}T12:00:00`).getDay() + 6) % 7));
 
 const isoLocal = (t: number) => {
   const d = new Date(t);
@@ -29,6 +50,18 @@ export function resolvePreset(
   iterations: { name: string; start: number; end: number; count: number }[] = [],
 ): Period & { label: string } {
   switch (preset) {
+    case "today":
+      return { preset, from: today, to: today, label: PRESET_LABEL[preset] };
+    case "yesterday": {
+      const day = addDaysISO(today, -1);
+      return { preset, from: day, to: day, label: PRESET_LABEL[preset] };
+    }
+    case "thisWeek":
+      return { preset, from: mondayOf(today), to: today, label: PRESET_LABEL[preset] };
+    case "lastWeek": {
+      const monday = addDaysISO(mondayOf(today), -7);
+      return { preset, from: monday, to: addDaysISO(monday, 6), label: PRESET_LABEL[preset] };
+    }
     case "14d":
       return { preset, from: addDaysISO(today, -13), to: today, label: PRESET_LABEL[preset] };
     case "30d":
@@ -52,6 +85,6 @@ export function resolvePreset(
       return { preset, from: isoLocal(it.start), to, label: it.name };
     }
     default:
-      return { preset: "custom", from: addDaysISO(today, -29), to: today, label: PRESET_LABEL.custom };
+      return resolvePreset(DEFAULT_PRESET, today, iterations);
   }
 }

@@ -8,7 +8,7 @@ import { Avatar, Kbd, TypeBadge } from "@/components/ui/primitives";
 import { toggleFullscreen } from "@/components/ui/display";
 import { changeScale } from "@/components/ui/display-controls";
 import { setTheme } from "@/components/ui/theme";
-import { PRESET_LABEL, type PeriodPreset } from "@/lib/analytics/period";
+import { MORE_PRESETS, PRESET_LABEL, QUICK_PRESETS } from "@/lib/analytics/period";
 import { PROJECTS, PROJECT_KEYS } from "@/lib/config";
 import { useApp } from "./app-provider";
 import { NAV } from "./nav";
@@ -19,7 +19,7 @@ const norm = (s: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 
-const PRESETS: PeriodPreset[] = ["sprint", "14d", "30d", "90d", "month", "quarter"];
+const PRESETS = [...QUICK_PRESETS, ...MORE_PRESETS];
 
 /** Paleta ⌘K: navegación, acciones, personas, ítems de Azure, periodo y pantalla. */
 export function CommandPalette() {
