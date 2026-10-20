@@ -128,10 +128,10 @@ function DrawerBody({
         ) : groups.size === 0 ? (
           <EmptyState title="Sin actividades en este rango" description="Registra la primera con el botón de arriba." />
         ) : (
-          <div className="relative space-y-5 before:absolute before:bottom-2 before:left-[5px] before:top-2 before:w-px before:bg-line">
+          <div className="relative space-y-5 before:absolute before:bottom-2 before:left-[0.3125rem] before:top-2 before:w-px before:bg-line">
             {[...groups.entries()].map(([day, items]) => (
               <div key={day} className="relative pl-6">
-                <span className="absolute left-0 top-1.5 size-[11px] rounded-full border-2 border-surface bg-accent shadow" />
+                <span className="absolute left-0 top-1.5 size-[0.6875rem] rounded-full border-2 border-surface bg-accent shadow" />
                 <p className="mb-2 flex items-baseline justify-between text-xs font-semibold capitalize text-muted">
                   {formatDayMonth(day)}
                   <span className="tabular-nums text-foreground">{formatHours(items.reduce((s, a) => s + a.hours, 0))}</span>
@@ -155,9 +155,9 @@ function DrawerBody({
 function Stat({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-line bg-surface-2 p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle">{label}</p>
+      <p className="text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">{label}</p>
       <p className="mt-0.5 font-display text-lg font-semibold tabular-nums">{value}</p>
-      <p className="truncate text-[11px] text-muted">{hint}</p>
+      <p className="truncate text-[0.6875rem] text-muted">{hint}</p>
     </motion.div>
   );
 }

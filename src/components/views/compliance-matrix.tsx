@@ -38,7 +38,7 @@ export function ComplianceMatrix({ members }: { members: TeamMember[] }) {
     return map;
   }, [weekData]);
 
-  if (!weekData) return <Skeleton className="h-[420px] rounded-[1.25rem]" />;
+  if (!weekData) return <Skeleton className="h-[26.25rem] rounded-[1.25rem]" />;
 
   const dayTotals = days.map((d) => members.reduce((s, m) => s + (cell.get(`${m.employeeId}|${d}`) ?? 0), 0));
 
@@ -46,10 +46,10 @@ export function ComplianceMatrix({ members }: { members: TeamMember[] }) {
     <div className="card overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
         <div>
-          <h3 className="font-display text-[15px] font-semibold">Matriz de cumplimiento semanal</h3>
+          <h3 className="font-display text-[0.9375rem] font-semibold">Matriz de cumplimiento semanal</h3>
           <p className="text-xs text-muted">Horas registradas frente a la jornada esperada (8 h × % asignado). Clic en una celda para ver o registrar.</p>
         </div>
-        <ul className="flex flex-wrap items-center gap-3 text-[11px] text-muted" aria-label="Escala">
+        <ul className="flex flex-wrap items-center gap-3 text-[0.6875rem] text-muted" aria-label="Escala">
           <li className="flex items-center gap-1.5">
             <span className="size-3 rounded border border-dashed border-warning bg-warning-soft" /> Sin registro
           </li>
@@ -60,16 +60,16 @@ export function ComplianceMatrix({ members }: { members: TeamMember[] }) {
           ))}
         </ul>
       </div>
-      <div className="scrollbar-thin max-h-[640px] overflow-auto">
-        <table className="w-full min-w-[720px] border-separate border-spacing-0 text-sm">
+      <div className="scrollbar-thin max-h-[40rem] overflow-auto">
+        <table className="w-full min-w-[45rem] border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-10">
             <tr>
-              <th className="sticky left-0 z-20 bg-surface-2 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-subtle">Colaborador</th>
+              <th className="sticky left-0 z-20 bg-surface-2 px-4 py-2.5 text-left text-[0.6875rem] font-semibold uppercase tracking-wider text-subtle">Colaborador</th>
               {days.map((d) => (
                 <th
                   key={d}
                   className={clsx(
-                    "bg-surface-2 px-1 py-2 text-center text-[11px] font-semibold uppercase tracking-wider",
+                    "bg-surface-2 px-1 py-2 text-center text-[0.6875rem] font-semibold uppercase tracking-wider",
                     d === date ? "text-accent-fg" : isBusinessDay(d) ? "text-subtle" : "text-subtle/60",
                   )}
                 >
@@ -77,7 +77,7 @@ export function ComplianceMatrix({ members }: { members: TeamMember[] }) {
                   <span className="block font-display text-sm normal-case tracking-normal text-foreground">{format(parseISO(d), "d")}</span>
                 </th>
               ))}
-              <th className="bg-surface-2 px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-subtle">Semana</th>
+              <th className="bg-surface-2 px-3 py-2 text-right text-[0.6875rem] font-semibold uppercase tracking-wider text-subtle">Semana</th>
             </tr>
           </thead>
           <tbody>
@@ -87,11 +87,11 @@ export function ComplianceMatrix({ members }: { members: TeamMember[] }) {
               return (
                 <tr key={m.memberId} className="group">
                   <td className="sticky left-0 z-[5] border-t border-line bg-surface px-4 py-2 group-hover:bg-surface-2">
-                    <button onClick={() => openMember(m)} className="flex max-w-[240px] items-center gap-2.5 text-left">
+                    <button onClick={() => openMember(m)} className="flex max-w-[15rem] items-center gap-2.5 text-left">
                       <Avatar name={m.name} size="xs" />
                       <span className="min-w-0">
-                        <span className="block truncate text-[13px] font-medium">{m.name}</span>
-                        <span className="block truncate text-[10px] text-subtle">{Math.round(m.allocation * 100)} % · {m.role}</span>
+                        <span className="block truncate text-[0.8125rem] font-medium">{m.name}</span>
+                        <span className="block truncate text-[0.625rem] text-subtle">{Math.round(m.allocation * 100)} % · {m.role}</span>
                       </span>
                     </button>
                   </td>

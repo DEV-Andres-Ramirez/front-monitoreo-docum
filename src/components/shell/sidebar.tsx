@@ -22,24 +22,24 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
   return (
     <motion.aside
-      animate={{ width: collapsed ? 84 : 280 }}
+      animate={{ width: collapsed ? "5.25rem" : "17.5rem" }}
       transition={{ type: "spring", stiffness: 380, damping: 40 }}
-      className="fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-line bg-surface/80 backdrop-blur-xl lg:flex"
+      className="scrollbar-thin fixed inset-y-0 left-0 z-40 hidden flex-col overflow-y-auto overflow-x-hidden border-r border-line bg-surface/80 backdrop-blur-xl lg:flex"
     >
       {/* Marca */}
-      <div className={clsx("flex h-[72px] items-center gap-3 px-5", collapsed && "justify-center px-0")}>
+      <div className={clsx("flex h-[4.5rem] items-center gap-3 px-5", collapsed && "justify-center px-0")}>
         <Image src="/linktic_icon.png" alt="LinkTic" width={36} height={36} className="size-9 object-contain" priority />
         {!collapsed && (
           <motion.div initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} className="min-w-0 leading-tight">
-            <p className="font-display text-[17px] font-semibold tracking-tight">Monitoreo Docum</p>
-            <p className="text-[11px] text-subtle">LinkTic · Evolucionamos contigo</p>
+            <p className="font-display text-[1.0625rem] font-semibold tracking-tight">Monitoreo Docum</p>
+            <p className="text-[0.6875rem] text-subtle">LinkTic · Evolucionamos contigo</p>
           </motion.div>
         )}
       </div>
 
       {/* Selector de proyecto */}
       <div className={clsx("px-4", collapsed && "px-3")}>
-        {!collapsed && <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-subtle">Proyecto</p>}
+        {!collapsed && <p className="mb-2 px-1 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Proyecto</p>}
         <div className="space-y-1.5">
           {PROJECT_KEYS.map((key) => {
             const p = PROJECTS[key];
@@ -71,7 +71,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                 {!collapsed && (
                   <span className="relative min-w-0">
                     <span className={clsx("block truncate text-sm font-semibold", selected ? "text-foreground" : "text-muted")}>{p.name}</span>
-                    <span className="block truncate text-[11px] text-subtle">{p.client}</span>
+                    <span className="block truncate text-[0.6875rem] text-subtle">{p.client}</span>
                   </span>
                 )}
               </button>
@@ -82,7 +82,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
       {/* Navegación */}
       <nav className={clsx("mt-6 flex-1 space-y-1 px-4", collapsed && "px-3")} aria-label="Principal">
-        {!collapsed && <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-subtle">Vistas</p>}
+        {!collapsed && <p className="mb-2 px-1 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Vistas</p>}
         {NAV.map((item) => {
           const isActive = item.href === active.href;
           return (
@@ -105,10 +105,10 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                   <span className={clsx("absolute top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-accent", collapsed ? "-left-3" : "-left-4")} />
                 </motion.span>
               )}
-              <item.icon className="relative size-[18px] shrink-0" />
+              <item.icon className="relative size-[1.125rem] shrink-0" />
               {!collapsed && <span className="relative flex-1">{item.label}</span>}
               {!collapsed && item.href === "/equipo" && pending > 0 && (
-                <span className="relative rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-bold tabular-nums text-warning-fg">{pending}</span>
+                <span className="relative rounded-full bg-warning-soft px-2 py-0.5 text-[0.625rem] font-bold tabular-nums text-warning-fg">{pending}</span>
               )}
               {!collapsed && item.href !== "/equipo" && (
                 <Kbd className="relative opacity-0 transition-opacity group-hover:opacity-100">{item.key}</Kbd>
@@ -125,9 +125,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
             <ShieldCheck className="size-4 text-good-fg" />
             Azure DevOps
-            <span className="ml-auto rounded-md bg-surface-3 px-1.5 py-0.5 text-[10px] font-semibold text-muted">Solo lectura</span>
+            <span className="ml-auto rounded-md bg-surface-3 px-1.5 py-0.5 text-[0.625rem] font-semibold text-muted">Solo lectura</span>
           </div>
-          <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted">
+          <p className="mt-1.5 flex items-center gap-1.5 text-[0.6875rem] text-muted">
             <span
               className={clsx(
                 "size-1.5 rounded-full",
@@ -160,7 +160,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             </span>
             <span className="min-w-0 leading-tight">
               <span className="block truncate text-sm font-semibold">Scrum Master</span>
-              <span className="flex items-center gap-1 text-[11px] text-subtle">
+              <span className="flex items-center gap-1 text-[0.6875rem] text-subtle">
                 <span className="size-1.5 rounded-full bg-good" /> Sesión activa
               </span>
             </span>
@@ -174,7 +174,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         </div>
         <button
           onClick={onToggle}
-          className="flex w-full items-center justify-center gap-2 rounded-lg py-1.5 text-[11px] font-medium text-subtle transition hover:bg-surface-2 hover:text-foreground"
+          className="flex w-full items-center justify-center gap-2 rounded-lg py-1.5 text-[0.6875rem] font-medium text-subtle transition hover:bg-surface-2 hover:text-foreground"
           title={collapsed ? "Expandir menú" : "Contraer menú"}
         >
           {collapsed ? <PanelLeftOpen className="size-4" /> : <><PanelLeftClose className="size-4" /> Contraer</>}

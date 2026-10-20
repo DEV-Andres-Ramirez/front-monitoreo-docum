@@ -167,7 +167,7 @@ export function WorkItemPicker({
         ) : (
           <>
             {suggestedCount > 0 && (
-              <p className="flex items-center gap-1 px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-accent-fg">
+              <p className="flex items-center gap-1 px-2 pb-1 pt-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-accent-fg">
                 <Sparkles className="size-3" /> Asignados a esta persona
               </p>
             )}
@@ -192,17 +192,17 @@ export function WorkItemPicker({
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-1.5">
                     <TypeBadge type={w.type} />
-                    <span className="font-mono text-[11px] text-subtle">#{w.id}</span>
+                    <span className="font-mono text-[0.6875rem] text-subtle">#{w.id}</span>
                     <StateBadge state={w.state} />
                   </span>
-                  <span className="mt-0.5 line-clamp-2 block text-[13px] text-foreground">{w.title}</span>
-                  {w.assignedTo && <span className="block truncate text-[11px] text-subtle">{w.assignedTo}</span>}
+                  <span className="mt-0.5 line-clamp-2 block text-[0.8125rem] text-foreground">{w.title}</span>
+                  {w.assignedTo && <span className="block truncate text-[0.6875rem] text-subtle">{w.assignedTo}</span>}
                 </span>
                 {w.id === value && <Check className="mt-1 size-4 shrink-0 text-accent-fg" />}
               </button>
             ))}
             {total > results.length && (
-              <p className="px-2 py-2 text-center text-[11px] text-subtle">
+              <p className="px-2 py-2 text-center text-[0.6875rem] text-subtle">
                 Mostrando {results.length} de {total}. Refina la búsqueda para ver más.
               </p>
             )}

@@ -1,10 +1,12 @@
 "use client";
 
 import { Command } from "cmdk";
-import { CalendarCheck, FolderKanban, LogOut, Monitor, Moon, Plus, RefreshCw, Search, Sun, UserRound } from "lucide-react";
+import { CalendarCheck, FolderKanban, LogOut, Maximize, Monitor, Moon, Plus, RefreshCw, RotateCcw, Search, Sun, UserRound, ZoomIn, ZoomOut } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { Avatar, Kbd, TypeBadge } from "@/components/ui/primitives";
+import { toggleFullscreen } from "@/components/ui/display";
+import { changeScale } from "@/components/ui/display-controls";
 import { setTheme } from "@/components/ui/theme";
 import { PROJECTS, PROJECT_KEYS } from "@/lib/config";
 import { useApp } from "./app-provider";
@@ -64,7 +66,7 @@ export function CommandPalette() {
             >
               <div className="flex items-center gap-3 border-b border-line px-4">
                 <Search className="size-4 text-subtle" />
-                <Command.Input autoFocus placeholder="Busca personas, HU, vistas o acciones…" className="h-14 flex-1 bg-transparent text-[15px] outline-none placeholder:text-subtle focus-visible:outline-none" />
+                <Command.Input autoFocus placeholder="Busca personas, HU, vistas o acciones…" className="h-14 flex-1 bg-transparent text-[0.9375rem] outline-none placeholder:text-subtle focus-visible:outline-none" />
                 <Kbd>Esc</Kbd>
               </div>
               <Command.List className="scrollbar-thin max-h-[56vh] overflow-y-auto p-2">
@@ -94,9 +96,24 @@ export function CommandPalette() {
                   {PROJECT_KEYS.map((k) => (
                     <Command.Item key={k} onSelect={() => run(() => app.setProjectKey(k))} keywords={[PROJECTS[k].client]}>
                       <FolderKanban className="size-4 text-muted" /> Cambiar a {k} · {PROJECTS[k].name}
-                      {k === app.projectKey && <span className="ml-auto text-[11px] text-subtle">Actual</span>}
+                      {k === app.projectKey && <span className="ml-auto text-[0.6875rem] text-subtle">Actual</span>}
                     </Command.Item>
                   ))}
+                </Command.Group>
+
+                <Command.Group heading="Pantalla">
+                  <Command.Item onSelect={() => run(() => void toggleFullscreen())} keywords={["pantalla completa", "fullscreen", "tv", "presentar"]}>
+                    <Maximize className="size-4 text-muted" /> Pantalla completa <Kbd className="ml-auto">F</Kbd>
+                  </Command.Item>
+                  <Command.Item onSelect={() => changeScale(1)} keywords={["aumentar", "agrandar", "zoom", "tamaño", "tv"]}>
+                    <ZoomIn className="size-4 text-muted" /> Aumentar tamaño <Kbd className="ml-auto">+</Kbd>
+                  </Command.Item>
+                  <Command.Item onSelect={() => changeScale(-1)} keywords={["reducir", "achicar", "zoom", "tamaño"]}>
+                    <ZoomOut className="size-4 text-muted" /> Reducir tamaño <Kbd className="ml-auto">−</Kbd>
+                  </Command.Item>
+                  <Command.Item onSelect={() => changeScale(0)} keywords={["restablecer", "100", "zoom", "tamaño"]}>
+                    <RotateCcw className="size-4 text-muted" /> Tamaño al 100 % <Kbd className="ml-auto">0</Kbd>
+                  </Command.Item>
                 </Command.Group>
 
                 <Command.Group heading="Tema">
@@ -141,7 +158,7 @@ export function CommandPalette() {
                   </Command.Item>
                 </Command.Group>
               </Command.List>
-              <div className="flex items-center gap-4 border-t border-line bg-surface-2 px-4 py-2.5 text-[11px] text-subtle">
+              <div className="flex items-center gap-4 border-t border-line bg-surface-2 px-4 py-2.5 text-[0.6875rem] text-subtle">
                 <span className="flex items-center gap-1">
                   <Kbd>↑</Kbd>
                   <Kbd>↓</Kbd> navegar

@@ -58,7 +58,7 @@ export function WorkItemSheet({
             {path.map((p) => (
               <span key={p.id} className="flex items-center gap-1">
                 <TypeBadge type={p.type} />
-                <span className="max-w-[180px] truncate">{p.title}</span>
+                <span className="max-w-[11.25rem] truncate">{p.title}</span>
                 <span className="text-subtle">›</span>
               </span>
             ))}
@@ -67,15 +67,15 @@ export function WorkItemSheet({
 
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-2xl border border-line bg-surface-2 p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle">Horas</p>
+            <p className="text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">Horas</p>
             <p className="mt-0.5 font-display text-lg font-semibold tabular-nums">{formatHours(total)}</p>
           </div>
           <div className="rounded-2xl border border-line bg-surface-2 p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle">Registros</p>
+            <p className="text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">Registros</p>
             <p className="mt-0.5 font-display text-lg font-semibold tabular-nums">{data?.activities.length ?? "—"}</p>
           </div>
           <div className="rounded-2xl border border-line bg-surface-2 p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle">Personas</p>
+            <p className="text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">Personas</p>
             <p className="mt-0.5 font-display text-lg font-semibold tabular-nums">{data ? people : "—"}</p>
           </div>
         </div>
@@ -89,7 +89,7 @@ export function WorkItemSheet({
             </a>
           </div>
         )}
-        <p className="flex items-center gap-1.5 rounded-xl bg-surface-2 px-3 py-2 text-[11px] text-muted">
+        <p className="flex items-center gap-1.5 rounded-xl bg-surface-2 px-3 py-2 text-[0.6875rem] text-muted">
           <ShieldCheck className="size-3.5 text-good-fg" /> Azure DevOps se consulta en modo solo lectura: aquí nada modifica el work item.
         </p>
 
@@ -108,7 +108,7 @@ export function WorkItemSheet({
               <AnimatePresence initial={false}>
                 {data.activities.map((a) => (
                   <div key={a.id}>
-                    <p className="mb-1 px-1 text-[11px] font-semibold capitalize text-subtle">{formatDayMonth(a.workDate)}</p>
+                    <p className="mb-1 px-1 text-[0.6875rem] font-semibold capitalize text-subtle">{formatDayMonth(a.workDate)}</p>
                     <ActivityItem activity={a} projectKey={projectKey} onEdit={onEdit} showEmployee />
                   </div>
                 ))}

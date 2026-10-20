@@ -121,7 +121,7 @@ export function AuditView() {
                 <span className="h-px flex-1 bg-line" />
                 <span>{list.length} eventos</span>
               </h3>
-              <ol className="relative space-y-2 before:absolute before:bottom-3 before:left-[19px] before:top-3 before:w-px before:bg-line">
+              <ol className="relative space-y-2 before:absolute before:bottom-3 before:left-[1.1875rem] before:top-3 before:w-px before:bg-line">
                 {list.map((e, i) => (
                   <AuditRow key={e.id} entry={e} index={i} names={names} />
                 ))}

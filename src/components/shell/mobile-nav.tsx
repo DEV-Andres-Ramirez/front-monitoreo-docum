@@ -7,6 +7,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { DisplayControls } from "@/components/ui/display-controls";
 import { Sheet } from "@/components/ui/sheet";
 import { ThemeSwitchButton, ThemeToggle } from "@/components/ui/theme-toggle";
 import { PROJECTS, PROJECT_KEYS } from "@/lib/config";
@@ -31,10 +32,10 @@ export function MobileNav() {
           <Image src="/linktic_icon.png" alt="LinkTic" width={32} height={32} className="size-8 object-contain" priority />
           <div className="relative min-w-0 flex-1">
             <button onClick={() => setProjectsOpen((o) => !o)} className="flex max-w-full items-center gap-2 rounded-xl px-2 py-1 text-left" aria-expanded={projectsOpen}>
-              <span className="grid h-6 min-w-8 place-items-center rounded-lg bg-accent px-1 font-display text-[11px] font-bold text-white">{projectKey}</span>
+              <span className="grid h-6 min-w-8 place-items-center rounded-lg bg-accent px-1 font-display text-[0.6875rem] font-bold text-white">{projectKey}</span>
               <span className="min-w-0">
-                <span className="block truncate font-display text-[15px] font-semibold leading-tight">{project.name}</span>
-                <span className="block truncate text-[11px] text-subtle">{active.label}</span>
+                <span className="block truncate font-display text-[0.9375rem] font-semibold leading-tight">{project.name}</span>
+                <span className="block truncate text-[0.6875rem] text-subtle">{active.label}</span>
               </span>
               <ChevronDown className={clsx("size-4 shrink-0 text-muted transition-transform", projectsOpen && "rotate-180")} />
             </button>
@@ -60,7 +61,7 @@ export function MobileNav() {
                       </span>
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold">{PROJECTS[key].name}</span>
-                        <span className="block truncate text-[11px] text-subtle">{PROJECTS[key].client}</span>
+                        <span className="block truncate text-[0.6875rem] text-subtle">{PROJECTS[key].client}</span>
                       </span>
                     </button>
                   ))}
@@ -68,6 +69,7 @@ export function MobileNav() {
               )}
             </AnimatePresence>
           </div>
+          <DisplayControls className="hidden sm:flex" />
           <button onClick={() => setPaletteOpen(true)} className="grid size-10 place-items-center rounded-xl border border-line bg-surface text-muted" aria-label="Buscar">
             <Search className="size-4" />
           </button>
@@ -84,7 +86,7 @@ export function MobileNav() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={clsx("relative flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-semibold", item.href === active.href ? "text-accent-fg" : "text-subtle")}
+                className={clsx("relative flex flex-col items-center gap-0.5 py-2.5 text-[0.625rem] font-semibold", item.href === active.href ? "text-accent-fg" : "text-subtle")}
               >
                 {item.href === active.href && <motion.span layoutId="tab-dot" className="absolute top-0 h-0.5 w-8 rounded-full bg-accent" />}
                 <item.icon className="size-5" />
@@ -105,7 +107,7 @@ export function MobileNav() {
           )}
           <button
             onClick={() => setMoreOpen(true)}
-            className={clsx("flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-semibold", ["/backlog", "/bitacora"].includes(active.href) ? "text-accent-fg" : "text-subtle")}
+            className={clsx("flex flex-col items-center gap-0.5 py-2.5 text-[0.625rem] font-semibold", ["/backlog", "/bitacora"].includes(active.href) ? "text-accent-fg" : "text-subtle")}
           >
             <MoreHorizontal className="size-5" />
             Más
@@ -131,8 +133,10 @@ export function MobileNav() {
               </span>
             </Link>
           ))}
-          <p className="px-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-subtle">Tema</p>
+          <p className="px-1 pt-3 text-[0.6875rem] font-semibold uppercase tracking-wider text-subtle">Tema</p>
           <ThemeToggle />
+          <p className="px-1 pt-3 text-[0.6875rem] font-semibold uppercase tracking-wider text-subtle">Pantalla</p>
+          <DisplayControls size="lg" />
           <div className="grid grid-cols-2 gap-2 pt-3">
             <button onClick={syncAzure} disabled={syncing} className="flex items-center justify-center gap-2 rounded-xl border border-line py-2.5 text-sm font-semibold">
               <RefreshCw className={clsx("size-4", syncing && "animate-spin")} /> Azure

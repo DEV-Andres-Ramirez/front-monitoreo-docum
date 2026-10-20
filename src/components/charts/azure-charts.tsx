@@ -34,10 +34,10 @@ export function TypeDonut({ slices, theme }: { slices: TypeSlice[]; theme: Chart
           hoverBackgroundColor: ordered.map((s) => typeColor(s.type, theme)),
           borderColor: theme.surface,
           hoverBorderColor: theme.surface,
-          borderWidth: 2,
-          borderRadius: 4,
-          spacing: 1,
-          hoverOffset: 6,
+          borderWidth: theme.px(2),
+          borderRadius: theme.px(4),
+          spacing: theme.px(1),
+          hoverOffset: theme.px(6),
         },
       ],
     }),
@@ -47,7 +47,7 @@ export function TypeDonut({ slices, theme }: { slices: TypeSlice[]; theme: Chart
   const options = useMemo<ChartOptions<"doughnut">>(
     () => ({
       cutout: "72%",
-      layout: { padding: 6 },
+      layout: { padding: theme.px(6) },
       plugins: {
         crosshair: { enabled: false },
         tooltip: {
@@ -70,7 +70,7 @@ export function TypeDonut({ slices, theme }: { slices: TypeSlice[]; theme: Chart
       <div className="pointer-events-none absolute inset-0 grid place-items-center">
         <div className="text-center">
           <p className="font-display text-2xl font-semibold tabular-nums text-foreground">{hoursLabel(total)}</p>
-          <p className="text-[11px] uppercase tracking-wider text-muted">registradas</p>
+          <p className="text-[0.6875rem] uppercase tracking-wider text-muted">registradas</p>
         </div>
       </div>
     </div>
@@ -99,9 +99,9 @@ export function FeatureBars({ rows, theme }: { rows: FeatureRow[]; theme: ChartT
           data: rows.map((r) => r.hours),
           backgroundColor: theme.accent,
           hoverBackgroundColor: theme.accent,
-          borderRadius: 4,
+          borderRadius: theme.px(4),
           borderSkipped: "start",
-          barThickness: 14,
+          barThickness: theme.px(14),
         },
       ],
     }),

@@ -8,6 +8,8 @@ import { ActivityForm, type ActivityFormState } from "@/components/dashboard/act
 import { api, fetcher, useProjectKey } from "@/components/dashboard/client-api";
 import { MemberDrawer } from "@/components/dashboard/member-drawer";
 import { WorkItemSheet } from "@/components/dashboard/work-item-sheet";
+import { toggleFullscreen } from "@/components/ui/display";
+import { changeScale } from "@/components/ui/display-controls";
 import { isSheetOpen } from "@/components/ui/sheet";
 import { PROJECTS, type ProjectKey, type ProjectMeta } from "@/lib/config";
 import { addDaysISO, todayISO, weekRange } from "@/lib/dates";
@@ -139,6 +141,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       switch (e.key) {
+        case "+":
+        case "=":
+          e.preventDefault();
+          changeScale(1);
+          break;
+        case "-":
+        case "_":
+          e.preventDefault();
+          changeScale(-1);
+          break;
+        case "0":
+          changeScale(0);
+          break;
+        case "f":
+        case "F":
+          void toggleFullscreen();
+          break;
         case "n":
         case "N":
           e.preventDefault();

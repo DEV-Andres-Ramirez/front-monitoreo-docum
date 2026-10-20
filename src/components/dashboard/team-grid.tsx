@@ -79,8 +79,8 @@ function MemberCard({ member: m, index, businessDay, onOpen, onRegister }: Handl
             {m.role}
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <span className="rounded-md bg-surface-3 px-1.5 py-0.5 text-[11px] font-medium text-muted">{Math.round(m.allocation * 100)} % asignado</span>
-            <span className="rounded-md bg-surface-3 px-1.5 py-0.5 text-[11px] font-medium text-muted">{m.assignmentType}</span>
+            <span className="rounded-md bg-surface-3 px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted">{Math.round(m.allocation * 100)} % asignado</span>
+            <span className="rounded-md bg-surface-3 px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted">{m.assignmentType}</span>
           </div>
         </div>
         <StatusPill tone={status.tone} icon={status.icon} label={status.label} compact />
@@ -129,8 +129,8 @@ export function TeamList({ members, loading, businessDay, onOpen, onRegister }: 
   return (
     <div className="card overflow-hidden">
       <div className="scrollbar-thin overflow-x-auto">
-        <table className="w-full min-w-[760px] text-sm">
-          <thead className="bg-surface-2 text-left text-[11px] uppercase tracking-wider text-subtle">
+        <table className="w-full min-w-[47.5rem] text-sm">
+          <thead className="bg-surface-2 text-left text-[0.6875rem] uppercase tracking-wider text-subtle">
             <tr>
               <th className="px-4 py-3 font-semibold">Colaborador</th>
               <th className="px-4 py-3 font-semibold">Asignación</th>

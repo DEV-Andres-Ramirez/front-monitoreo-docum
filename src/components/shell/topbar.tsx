@@ -3,6 +3,7 @@
 import { Plus, Search } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { usePathname } from "next/navigation";
+import { DisplayControls } from "@/components/ui/display-controls";
 import { Button, Kbd } from "@/components/ui/primitives";
 import { capitalizeFirst, formatLong } from "@/lib/dates";
 import { useApp } from "./app-provider";
@@ -17,11 +18,11 @@ export function Topbar() {
 
   return (
     <header className="glass sticky top-0 z-30 hidden border-b border-line lg:block">
-      <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-x-6 gap-y-3 px-8 py-4">
-        <div className="min-w-[240px] flex-1">
+      <div className="mx-auto flex max-w-[93.75rem] flex-wrap items-center gap-x-6 gap-y-3 px-8 py-4">
+        <div className="min-w-[15rem] flex-1">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div key={nav.href + projectKey} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.2 }}>
-              <p className="flex items-center gap-2 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-fg">
+              <p className="flex items-center gap-2 whitespace-nowrap text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-accent-fg">
                 {projectKey} · {project.name}
                 <span className="text-subtle">/</span>
                 <span className="text-subtle">{nav.label}</span>
@@ -36,6 +37,7 @@ export function Topbar() {
         <WeekStrip />
 
         <div className="flex items-center gap-2">
+          <DisplayControls />
           <button
             onClick={() => setPaletteOpen(true)}
             title="Buscar o ejecutar (⌘K)"

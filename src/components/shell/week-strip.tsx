@@ -43,14 +43,14 @@ export function WeekStrip({ className }: { className?: string }) {
               aria-pressed={selected}
               aria-label={`${format(parseISO(d), "EEEE d 'de' MMMM", { locale: es })}${stat?.due ? `, ${stat.reported} de ${stat.due} reportaron` : ""}`}
               className={clsx(
-                "relative flex w-[46px] shrink-0 flex-col items-center rounded-xl py-1 transition-colors disabled:cursor-not-allowed disabled:opacity-35",
+                "relative flex w-[2.875rem] shrink-0 flex-col items-center rounded-xl py-1 transition-colors disabled:cursor-not-allowed disabled:opacity-35",
                 selected ? "text-white" : "text-muted hover:bg-surface-2 hover:text-foreground",
               )}
             >
               {selected && (
                 <motion.span layoutId={`week-day-${id}`} className="absolute inset-0 rounded-xl bg-accent shadow-md shadow-accent/30" transition={{ type: "spring", stiffness: 500, damping: 38 }} />
               )}
-              <span className={clsx("relative text-[10px] font-semibold uppercase", weekend && !selected && "text-subtle")}>
+              <span className={clsx("relative text-[0.625rem] font-semibold uppercase", weekend && !selected && "text-subtle")}>
                 {format(parseISO(d), "EEEEEE", { locale: es })}
               </span>
               <span className="relative grid size-9 place-items-center">

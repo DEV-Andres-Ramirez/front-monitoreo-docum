@@ -224,7 +224,7 @@ function FormBody({ state, onClose, projectKey, members, defaultDate, today, wor
           placeholder="Describe la actividad realizada, avances, bloqueos…"
           className="w-full resize-y rounded-2xl border border-line bg-surface px-3.5 py-3 text-sm outline-none transition placeholder:text-subtle focus:border-accent focus:ring-4 focus:ring-accent/10"
         />
-        <p className="mt-1 text-right text-[11px] tabular-nums text-subtle">{description.length} / 4000</p>
+        <p className="mt-1 text-right text-[0.6875rem] tabular-nums text-subtle">{description.length} / 4000</p>
       </Field>
 
       <Field label="Evidencia (enlace, opcional)">

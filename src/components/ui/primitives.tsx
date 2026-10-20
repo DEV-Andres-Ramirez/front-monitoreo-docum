@@ -44,7 +44,7 @@ export function Avatar({ name, size = "md", status }: { name: string; size?: "xs
       className={clsx(
         "grid shrink-0 place-items-center bg-gradient-to-br font-display font-semibold text-white shadow-sm",
         AVATAR_GRADIENTS[hash(name) % AVATAR_GRADIENTS.length],
-        size === "xs" && "size-6 rounded-lg text-[10px]",
+        size === "xs" && "size-6 rounded-lg text-[0.625rem]",
         size === "sm" && "size-8 rounded-xl text-xs",
         size === "md" && "size-11 rounded-2xl text-sm",
         size === "lg" && "size-14 rounded-2xl text-lg",
@@ -67,7 +67,7 @@ export function AvatarStack({ names, max = 4 }: { names: string[]; max?: number 
         </div>
       ))}
       {names.length > max && (
-        <span className="grid size-6 place-items-center rounded-lg bg-surface-3 text-[10px] font-semibold text-muted ring-2 ring-surface">
+        <span className="grid size-6 place-items-center rounded-lg bg-surface-3 text-[0.625rem] font-semibold text-muted ring-2 ring-surface">
           +{names.length - max}
         </span>
       )}
@@ -87,7 +87,7 @@ export function TypeBadge({ type, className }: { type: string | null | undefined
   const color = resolved === "dark" ? meta.dark : meta.light;
   return (
     <span
-      className={clsx("inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-foreground", className)}
+      className={clsx("inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold text-foreground", className)}
       style={{ background: `color-mix(in srgb, ${color} 14%, transparent)` }}
     >
       <span className="size-1.5 rounded-full" style={{ background: color }} />
@@ -113,7 +113,7 @@ const TONE_CLASS: Record<StatusTone, string> = {
 
 export function StateBadge({ state }: { state: string | null | undefined }) {
   return (
-    <span className={clsx("inline-flex shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-medium", TONE_CLASS[stateTone(state)])}>
+    <span className={clsx("inline-flex shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium", TONE_CLASS[stateTone(state)])}>
       {state || "—"}
     </span>
   );
@@ -132,7 +132,7 @@ export function StatusPill({
   compact?: boolean;
 }) {
   return (
-    <span className={clsx("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold", TONE_CLASS[tone])} title={label}>
+    <span className={clsx("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[0.6875rem] font-semibold", TONE_CLASS[tone])} title={label}>
       <Icon className="size-3" />
       <span className={compact ? "sr-only" : undefined}>{label}</span>
     </span>
@@ -165,7 +165,7 @@ export function Chip({
     >
       {children}
       {count !== undefined && (
-        <span className={clsx("rounded-full px-1.5 text-[10px] tabular-nums", active ? "bg-white/25" : "bg-surface-3")}>{count}</span>
+        <span className={clsx("rounded-full px-1.5 text-[0.625rem] tabular-nums", active ? "bg-white/25" : "bg-surface-3")}>{count}</span>
       )}
     </button>
   );
@@ -198,7 +198,7 @@ export function Segmented<T extends string>({
             aria-label={o.title ?? o.label}
             onClick={() => onChange(o.value)}
             className={clsx(
-              "relative flex items-center gap-1.5 rounded-[10px] font-medium transition-colors",
+              "relative flex items-center gap-1.5 rounded-[0.625rem] font-medium transition-colors",
               size === "sm" ? "px-2.5 py-1 text-xs" : "px-3.5 py-1.5 text-sm",
               active ? "text-foreground" : "text-muted hover:text-foreground",
             )}
@@ -206,7 +206,7 @@ export function Segmented<T extends string>({
             {active && (
               <motion.span
                 layoutId={`seg-${id}`}
-                className="absolute inset-0 rounded-[10px] bg-surface shadow-sm ring-1 ring-line"
+                className="absolute inset-0 rounded-[0.625rem] bg-surface shadow-sm ring-1 ring-line"
                 transition={{ type: "spring", stiffness: 500, damping: 38 }}
               />
             )}
@@ -259,7 +259,7 @@ export function Kbd({ children, className }: { children: React.ReactNode; classN
   return (
     <kbd
       className={clsx(
-        "inline-grid h-5 min-w-5 place-items-center rounded-md border border-line-strong bg-surface-2 px-1 font-sans text-[10px] font-semibold text-muted shadow-[inset_0_-1px_0_var(--line-strong)]",
+        "inline-grid h-5 min-w-5 place-items-center rounded-md border border-line-strong bg-surface-2 px-1 font-sans text-[0.625rem] font-semibold text-muted shadow-[inset_0_-1px_0_var(--line-strong)]",
         className,
       )}
     >
@@ -340,7 +340,7 @@ export function ProgressRing({ value, size = 36, stroke = 4, className }: { valu
   const c = 2 * Math.PI * r;
   const clamped = Math.max(0, Math.min(1, value));
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={clsx("-rotate-90", className)} aria-hidden>
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: `${size / 16}rem`, height: `${size / 16}rem` }} className={clsx("shrink-0 -rotate-90", className)} aria-hidden>
       <circle cx={size / 2} cy={size / 2} r={r} stroke="var(--surface-3)" strokeWidth={stroke} fill="none" />
       <motion.circle
         cx={size / 2}

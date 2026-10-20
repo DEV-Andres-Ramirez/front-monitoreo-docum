@@ -61,7 +61,7 @@ export function DeleteButton({ activity, projectKey }: { activity: Activity; pro
         animate={{ scale: 1, opacity: 1 }}
         onClick={remove}
         disabled={deleting}
-        className="flex items-center gap-1 rounded-lg bg-critical px-2 py-1 text-[11px] font-semibold text-white"
+        className="flex items-center gap-1 rounded-lg bg-critical px-2 py-1 text-[0.6875rem] font-semibold text-white"
       >
         {deleting ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />} ¿Eliminar?
       </motion.button>

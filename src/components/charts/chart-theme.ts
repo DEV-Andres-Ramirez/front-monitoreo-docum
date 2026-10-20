@@ -2,6 +2,7 @@
 
 import type { ChartOptions, ScriptableContext, TooltipOptions } from "chart.js";
 import { useMemo, useSyncExternalStore } from "react";
+import { useUiScale } from "@/components/ui/display";
 import { useTheme } from "@/components/ui/theme";
 import type { ProjectKey } from "@/lib/config";
 
@@ -39,7 +40,15 @@ const ACCENTS: Record<ProjectKey, { light: string; dark: string }> = {
   "005": { light: "#13A538", dark: "#22AE52" },
 };
 
-export type ChartTheme = (typeof BASE)["light"] & { dark: boolean; accent: string; font: string };
+export type ChartTheme = (typeof BASE)["light"] & {
+  dark: boolean;
+  accent: string;
+  font: string;
+  /** Escala de la interfaz: multiplica fuentes, grosores y rellenos (TV / pantallas grandes) */
+  scale: number;
+  /** px de diseño → px escalados */
+  px: (n: number) => number;
+};
 
 function readFont() {
   return getComputedStyle(document.body).fontFamily || "system-ui, sans-serif";
@@ -47,14 +56,22 @@ function readFont() {
 
 export function useChartTheme(projectKey: ProjectKey): ChartTheme {
   const { resolved } = useTheme();
+  const scale = useUiScale();
   const font = useSyncExternalStore(
     () => () => {},
     readFont,
     () => "system-ui, sans-serif",
   );
   return useMemo(
-    () => ({ ...BASE[resolved], dark: resolved === "dark", accent: ACCENTS[projectKey][resolved], font }),
-    [resolved, projectKey, font],
+    () => ({
+      ...BASE[resolved],
+      dark: resolved === "dark",
+      accent: ACCENTS[projectKey][resolved],
+      font,
+      scale,
+      px: (n: number) => Math.round(n * scale * 10) / 10,
+    }),
+    [resolved, projectKey, font, scale],
   );
 }
 
@@ -84,35 +101,35 @@ export function tooltipStyle(t: ChartTheme): Partial<TooltipOptions<"bar" | "lin
     footerColor: t.text,
     borderColor: t.line,
     borderWidth: 1,
-    padding: 12,
-    cornerRadius: 12,
-    boxPadding: 5,
+    padding: t.px(12),
+    cornerRadius: t.px(12),
+    boxPadding: t.px(5),
     usePointStyle: true,
-    caretSize: 6,
-    titleFont: { family: t.font, weight: 600, size: 12 },
-    bodyFont: { family: t.font, size: 12 },
-    footerFont: { family: t.font, weight: 600, size: 12 },
+    caretSize: t.px(6),
+    titleFont: { family: t.font, weight: 600, size: t.px(12) },
+    bodyFont: { family: t.font, size: t.px(12) },
+    footerFont: { family: t.font, weight: 600, size: t.px(12) },
   };
 }
 
 /** Ejes recesivos: grilla punteada solo en el eje de valores, sin bordes. */
 export function axes(t: ChartTheme, opts: { horizontal?: boolean; suffix?: string; max?: number } = {}) {
-  const tick = { color: t.muted, font: { family: t.font, size: 11 } };
+  const tick = { color: t.muted, font: { family: t.font, size: t.px(11) } };
   const value = {
     beginAtZero: true,
     max: opts.max,
     border: { display: false },
     grid: { color: t.grid, drawTicks: false, tickBorderDash: [3, 3] },
-    ticks: { ...tick, padding: 8, maxTicksLimit: 6, callback: (v: string | number) => `${Number(v).toLocaleString("es-CO")}${opts.suffix ?? ""}` },
+    ticks: { ...tick, padding: t.px(8), maxTicksLimit: 6, callback: (v: string | number) => `${Number(v).toLocaleString("es-CO")}${opts.suffix ?? ""}` },
   };
-  const category = { border: { display: false }, grid: { display: false }, ticks: { ...tick, padding: 6 } };
+  const category = { border: { display: false }, grid: { display: false }, ticks: { ...tick, padding: t.px(6) } };
   return opts.horizontal ? { x: value, y: category } : { x: category, y: value };
 }
 
 export function baseOptions<T extends "bar" | "line">(t: ChartTheme): ChartOptions<T> {
   return {
     interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: 8, right: 4 } },
+    layout: { padding: { top: t.px(8), right: t.px(4) } },
     plugins: {
       tooltip: tooltipStyle(t) as never,
       crosshair: { enabled: true, color: withAlpha(t.text, 0.25) },

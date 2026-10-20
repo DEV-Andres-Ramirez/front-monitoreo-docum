@@ -3,6 +3,18 @@
 /* El tema se fija en <html data-theme="light|dark"> antes del primer pintado (ver layout.tsx). */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/*
+  Breakpoints sobre el ANCHO EFECTIVO (ventana ÷ escala de la interfaz), no sobre la ventana:
+  <html data-bp="sm md lg …"> lo calcula DISPLAY_INIT_SCRIPT (src/lib/boot-scripts.ts).
+  Así, al agrandar la interfaz para un TV, el diseño se reacomoda como con el zoom del navegador.
+  El orden de declaración (sm → 2xl) preserva la cascada de Tailwind.
+*/
+@custom-variant sm (&:where([data-bp~="sm"], [data-bp~="sm"] *));
+@custom-variant md (&:where([data-bp~="md"], [data-bp~="md"] *));
+@custom-variant lg (&:where([data-bp~="lg"], [data-bp~="lg"] *));
+@custom-variant xl (&:where([data-bp~="xl"], [data-bp~="xl"] *));
+@custom-variant 2xl (&:where([data-bp~="2xl"], [data-bp~="2xl"] *));
+
 /* ------------------------------------------------------------------
    Tokens semánticos — Identidad LinkTic (azul cielo + verde hoja)
 ------------------------------------------------------------------- */
@@ -293,6 +305,21 @@ body {
 ::view-transition-new(root) {
   animation: none;
   mix-blend-mode: normal;
+}
+
+/* Toasts (sonner usa px fijos): ancho y texto en rem para que escalen con la interfaz */
+[data-sonner-toaster] {
+  --width: 22.25rem !important;
+}
+[data-sonner-toast] {
+  font-size: 0.8125rem !important;
+  padding: 1rem !important;
+}
+[data-sonner-toast] [data-title] {
+  font-size: 0.875rem !important;
+}
+[data-sonner-toast] [data-description] {
+  font-size: 0.8125rem !important;
 }
 
 /* Paleta de comandos (cmdk) */

@@ -25,6 +25,15 @@ const GROUPS: { title: string; items: { keys: string[]; label: string }[] }[] = 
     ],
   },
   { title: "Vistas", items: NAV.map((n) => ({ keys: [n.key], label: n.label })) },
+  {
+    title: "Pantalla (TV)",
+    items: [
+      { keys: ["F"], label: "Pantalla completa" },
+      { keys: ["+"], label: "Aumentar tamaño" },
+      { keys: ["−"], label: "Reducir tamaño" },
+      { keys: ["0"], label: "Tamaño al 100 %" },
+    ],
+  },
   { title: "Formulario", items: [{ keys: ["⌘", "↵"], label: "Guardar actividad" }, { keys: ["↑", "↓"], label: "Moverse entre HU / tareas" }] },
 ];
 
@@ -60,7 +69,7 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () 
             <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
               {GROUPS.map((g) => (
                 <div key={g.title}>
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-subtle">{g.title}</p>
+                  <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">{g.title}</p>
                   <ul className="space-y-1.5">
                     {g.items.map((i) => (
                       <li key={i.label} className="flex items-center justify-between gap-3 text-sm">

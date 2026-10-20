@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { BarChart3, Table2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
+import { useUiScale } from "@/components/ui/display";
 import { EmptyState, Segmented, Skeleton } from "@/components/ui/primitives";
 
 export type LegendItem = { label: string; color: string; dashed?: boolean; value?: string };
@@ -25,8 +26,10 @@ type Props = {
 };
 
 /** Contenedor estándar de gráficas: título, leyenda HTML, alternar gráfica ↔ tabla, estados. */
-export function ChartCard({ title, subtitle, icon: Icon, legend, actions, table, loading, empty, summary, height = 260, className, children }: Props) {
+export function ChartCard({ title, subtitle, icon: Icon, legend, actions, table, loading, empty, summary, height: baseHeight = 260, className, children }: Props) {
   const [mode, setMode] = useState<"chart" | "table">("chart");
+  // Alturas en px de diseño → escaladas con la interfaz (TV / pantallas grandes)
+  const height = Math.round(baseHeight * useUiScale());
 
   return (
     <section className={clsx("card flex min-w-0 flex-col p-4 sm:p-5", className)}>
@@ -34,11 +37,11 @@ export function ChartCard({ title, subtitle, icon: Icon, legend, actions, table,
         <div className="flex min-w-0 items-start gap-3">
           {Icon && (
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent-fg">
-              <Icon className="size-[18px]" />
+              <Icon className="size-[1.125rem]" />
             </span>
           )}
           <div className="min-w-0">
-            <h3 className="font-display text-[15px] font-semibold leading-tight text-foreground">{title}</h3>
+            <h3 className="font-display text-[0.9375rem] font-semibold leading-tight text-foreground">{title}</h3>
             {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
           </div>
         </div>
@@ -65,7 +68,7 @@ export function ChartCard({ title, subtitle, icon: Icon, legend, actions, table,
               {l.dashed ? (
                 <span className="w-4 border-t-2 border-dashed" style={{ borderColor: l.color }} />
               ) : (
-                <span className="size-2.5 rounded-[3px]" style={{ background: l.color }} />
+                <span className="size-2.5 rounded-[0.1875rem]" style={{ background: l.color }} />
               )}
               <span>{l.label}</span>
               {l.value && <b className="font-semibold tabular-nums text-foreground">{l.value}</b>}

@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Outfit } from "next/font/google";
 import { ThemedToaster } from "@/components/ui/themed-toaster";
-import { THEME_INIT_SCRIPT } from "@/components/ui/theme";
+import { DISPLAY_INIT_SCRIPT, THEME_INIT_SCRIPT } from "@/lib/boot-scripts";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -43,6 +43,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         {/* Aplica el tema guardado antes del primer pintado (sin parpadeo). */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {/* Aplica la escala de la interfaz y los breakpoints efectivos antes del primer pintado. */}
+        <script dangerouslySetInnerHTML={{ __html: DISPLAY_INIT_SCRIPT }} />
       </head>
       <body className="min-h-full flex flex-col">
         {children}

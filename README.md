@@ -26,6 +26,11 @@ Todo queda guardado en Supabase con **traza completa**: bitácora de auditoría 
   - **barra inferior tipo app** en móvil, con botón central "+" para registrar;
   - **tira semanal** (Lun→Dom) con un anillo de cobertura por día.
 - **Tema claro / oscuro / sistema:** sin parpadeo al cargar (script inline) y con transición circular al cambiar (View Transitions API).
+- **Modo TV / pantallas grandes:** botones **− / % / +** para ajustar el tamaño de toda la interfaz, de 75 % a 300 % (clic en el % = 100 %), y botón de **pantalla completa**.
+  - Están en la barra superior, en la barra compacta, en "Más" (móvil), en el login y en ⌘K.
+  - Atajos: `+`, `−`, `0` y `F`.
+  - El tamaño elegido se recuerda en ese navegador y se aplica antes del primer pintado.
+  - Al agrandar, el diseño se reacomoda como con el zoom del navegador. Las gráficas se redibujan nítidas (no se estiran).
 - **Vistas (rutas reales):**
   - **Resumen** (`/`):
     - 4 KPIs con delta frente al periodo anterior y *sparkline*;
@@ -38,7 +43,7 @@ Todo queda guardado en Supabase con **traza completa**: bitácora de auditoría 
   - **Bitácora** (`/bitacora`): línea de tiempo de la auditoría (ingresos, registros, ediciones con comparación antes→después, borrados, restauraciones y sincronizaciones), con filtros y carga incremental.
 - **Productividad:**
   - **paleta ⌘K** (`cmdk`) para buscar personas, HU, vistas y acciones;
-  - **atajos de teclado**: `N` nueva actividad, `T` hoy, `←/→` día, `1–5` vistas, `?` ayuda y `⌘↵` guardar;
+  - **atajos de teclado**: `N` nueva actividad, `T` hoy, `←/→` día, `1–5` vistas, `F` pantalla completa, `+`/`−`/`0` tamaño, `?` ayuda y `⌘↵` guardar;
   - "Repetir última actividad" y resumen en vivo en el formulario.
 - **Formulario:** buscador de work items con teclado (↑↓ Enter). Primero aparecen los ítems **asignados a esa persona**; el servidor valida que pertenezcan a las épicas.
 - **Fines de semana:** no se exige reporte (esperado 0 h y estado "Fin de semana"), pero se puede registrar.
@@ -153,6 +158,7 @@ src/
       audit                          # GET bitácora paginada por cursor
   lib/
     config.ts, dates.ts, types.ts, work-item-types.ts   # compartidos cliente/servidor
+    boot-scripts.ts                  # scripts de <head>: tema y escala/breakpoints antes del primer pintado
     session.ts, auth.ts              # JWT de sesión y DAL
     supabase.ts, members.ts, stats.ts, activities.ts, audit.ts, validators.ts  # servidor
     azure.ts                         # cliente Azure SOLO LECTURA + getWorkItems() con 'use cache'
@@ -161,7 +167,7 @@ src/
     views/      # overview, team (+ compliance-matrix), activities, backlog, audit
     charts/     # setup (registro Chart.js + crosshair), chart-theme, chart-card, hours-charts, azure-charts
     dashboard/  # activity-form, work-item-picker, member-drawer, work-item-sheet, activity-item, team-grid, client-api
-    ui/         # primitives (Button, Segmented, Chip, Avatar, badges, Kbd, EmptyState, ProgressRing), sheet, theme, theme-toggle…
+    ui/         # primitives (Button, Segmented, Chip, Avatar, badges, Kbd, EmptyState, ProgressRing), sheet, theme, theme-toggle, display (escala + pantalla completa), display-controls…
 supabase/migrations/   # SQL versionado (0001 esquema · 0002 semilla · 0003 analítica/restauración)
 scripts/               # generate-seed.py, apply-migrations.mjs
 context/               # Excel de planeación de personal (insumo; contiene datos personales)

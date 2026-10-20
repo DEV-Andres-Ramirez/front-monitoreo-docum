@@ -196,7 +196,7 @@ export function BacklogView() {
         <EmptyState variant="search" title="Sin ítems para este filtro" description="Ajusta la búsqueda o los filtros." />
       ) : (
         <div className="card overflow-hidden">
-          <div className="hidden grid-cols-[1fr_140px_120px_110px] gap-4 border-b border-line bg-surface-2 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-subtle md:grid">
+          <div className="hidden grid-cols-[1fr_140px_120px_110px] gap-4 border-b border-line bg-surface-2 px-4 py-2.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-subtle md:grid">
             <span>Ítem</span>
             <span>Personas</span>
             <span className="text-right">Horas propias</span>
@@ -220,7 +220,7 @@ export function BacklogView() {
                     n.depth === 0 && "bg-surface-2/60",
                   )}
                 >
-                  <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: n.depth * 20 }}>
+                  <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: `${n.depth * 1.25}rem` }}>
                     <button
                       onClick={() => hasChildren && toggle(n.item.id)}
                       className={clsx("grid size-6 shrink-0 place-items-center rounded-md text-subtle", hasChildren ? "hover:bg-surface-3 hover:text-foreground" : "invisible")}
@@ -231,7 +231,7 @@ export function BacklogView() {
                     </button>
                     <TypeBadge type={n.item.type} />
                     <button onClick={() => openWorkItem(n.item.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                      <span className="font-mono text-[11px] text-subtle">#{n.item.id}</span>
+                      <span className="font-mono text-[0.6875rem] text-subtle">#{n.item.id}</span>
                       <span className={clsx("truncate text-sm", n.depth === 0 ? "font-display font-semibold" : "text-foreground")}>{n.item.title}</span>
                     </button>
                     <span className="hidden lg:inline">

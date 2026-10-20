@@ -45,10 +45,10 @@ function Frame({ children }: { children: React.ReactNode }) {
   return (
     <div data-project={projectKey} className="app-bg noise relative min-h-dvh flex-1">
       <Sidebar collapsed={collapsed} onToggle={toggle} />
-      <div className={clsx("relative z-10 transition-[padding] duration-300", collapsed ? "lg:pl-[84px]" : "lg:pl-[280px]")}>
+      <div className={clsx("relative z-10 transition-[padding] duration-300", collapsed ? "lg:pl-[5.25rem]" : "lg:pl-[17.5rem]")}>
         <Topbar />
         <MobileNav />
-        <main className="mx-auto max-w-[1500px] px-4 pb-32 pt-5 sm:px-6 lg:px-8 lg:pb-12 lg:pt-7">{children}</main>
+        <main className="mx-auto max-w-[93.75rem] px-4 pb-32 pt-5 sm:px-6 lg:px-8 lg:pb-12 lg:pt-7">{children}</main>
       </div>
     </div>
   );
@@ -58,10 +58,10 @@ function Frame({ children }: { children: React.ReactNode }) {
 export function ShellSkeleton() {
   return (
     <div className="app-bg min-h-dvh flex-1">
-      <div className="fixed inset-y-0 left-0 hidden w-[280px] border-r border-line bg-surface/80 lg:block" />
-      <div className="lg:pl-[280px]">
-        <div className="h-[88px] border-b border-line" />
-        <div className="mx-auto max-w-[1500px] space-y-5 px-4 pt-7 sm:px-6 lg:px-8">
+      <div className="fixed inset-y-0 left-0 hidden w-[17.5rem] border-r border-line bg-surface/80 lg:block" />
+      <div className="lg:pl-[17.5rem]">
+        <div className="h-[5.5rem] border-b border-line" />
+        <div className="mx-auto max-w-[93.75rem] space-y-5 px-4 pt-7 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="shimmer h-36 rounded-[1.25rem]" />

@@ -12,6 +12,7 @@ import { CoverageChart, DailyHoursChart, MemberHoursChart, Sparkline, plottedDay
 import { fetcher } from "@/components/dashboard/client-api";
 import { useApp } from "@/components/shell/app-provider";
 import { AnimatedNumber } from "@/components/ui/animated-number";
+import { useUiScale } from "@/components/ui/display";
 import { Avatar, Button, EmptyState, ProgressRing, Segmented, Skeleton, type StatusTone } from "@/components/ui/primitives";
 import { addDaysISO, formatDayMonth, formatHours, formatShort } from "@/lib/dates";
 import type { StatsResponse } from "@/lib/types";
@@ -31,6 +32,7 @@ export function OverviewView() {
   const { data: raw, isLoading } = useSWR<StatsResponse>(`/api/projects/${projectKey}/stats?from=${from}&to=${date}`, fetcher, { keepPreviousData: true });
   const stats = raw?.projectKey === projectKey ? raw : undefined;
   const theme = useChartTheme(projectKey);
+  const scale = useUiScale();
 
   const days = useMemo(() => (stats ? plottedDays(stats.daily) : []), [stats]);
   const memberRows = useMemo(() => (stats?.byMember ?? []).filter((m) => m.expected > 0 || m.hours > 0), [stats]);
@@ -112,7 +114,7 @@ export function OverviewView() {
         >
           {stats && (
             <div className="scrollbar-thin h-full overflow-y-auto pr-1">
-              <div style={{ height: Math.max(memberRows.length * 28 + 40, 320) }}>
+              <div style={{ height: Math.max(memberRows.length * 28 + 40, 320) * scale }}>
                 <MemberHoursChart rows={memberRows} theme={theme} onSelect={(id) => openMemberById(id)} />
               </div>
             </div>
@@ -166,14 +168,14 @@ export function OverviewView() {
 
 // ------------------------------------------------------------------ KPIs
 function Delta({ value, suffix = "%", invert = false }: { value: number | null; suffix?: string; invert?: boolean }) {
-  if (value === null || !Number.isFinite(value)) return <span className="text-[11px] text-subtle">sin referencia</span>;
+  if (value === null || !Number.isFinite(value)) return <span className="text-[0.6875rem] text-subtle">sin referencia</span>;
   const rounded = Math.round(value);
   const tone: StatusTone = rounded === 0 ? "neutral" : rounded > 0 !== invert ? "good" : "critical";
   const Icon = rounded === 0 ? Minus : rounded > 0 ? TrendingUp : TrendingDown;
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
+        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.6875rem] font-semibold tabular-nums",
         tone === "good" && "bg-good-soft text-good-fg",
         tone === "critical" && "bg-critical-soft text-critical-fg",
         tone === "neutral" && "bg-surface-3 text-muted",
@@ -258,19 +260,19 @@ function KpiRow({ stats }: { stats?: StatsResponse }) {
         >
           <div className="pointer-events-none absolute -right-10 -top-10 size-32 rounded-full bg-accent-soft opacity-70 blur-2xl transition-transform duration-500 group-hover:scale-125" />
           <div className="relative flex items-start justify-between gap-2">
-            <p className="text-xs font-medium text-muted sm:text-[13px]">{c.label}</p>
+            <p className="text-xs font-medium text-muted sm:text-[0.8125rem]">{c.label}</p>
             <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-accent to-brand-sky text-white shadow-md shadow-accent/25">
               <c.icon className="size-4" />
             </span>
           </div>
           <div className="relative mt-2 flex items-end justify-between gap-2">
-            <p className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-[30px]">{teamData || stats ? c.value : "—"}</p>
+            <p className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-[1.875rem]">{teamData || stats ? c.value : "—"}</p>
             {c.ring !== undefined && <ProgressRing value={c.ring} size={40} />}
           </div>
-          <p className="relative mt-0.5 truncate text-[11px] text-muted sm:text-xs">{c.hint}</p>
+          <p className="relative mt-0.5 truncate text-[0.6875rem] text-muted sm:text-xs">{c.hint}</p>
           <div className="relative mt-3 flex items-center gap-2">
             {c.delta}
-            {c.delta && <span className="hidden truncate text-[11px] text-subtle sm:inline">{c.deltaLabel}</span>}
+            {c.delta && <span className="hidden truncate text-[0.6875rem] text-subtle sm:inline">{c.deltaLabel}</span>}
           </div>
           {c.spark && c.spark.length > 1 && (
             <div className="relative -mx-1 mt-2 h-9">
@@ -292,14 +294,14 @@ function PendingCard() {
     <section className="card flex flex-col p-4 sm:p-5">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-display text-[15px] font-semibold">Pendientes del día</h3>
+          <h3 className="font-display text-[0.9375rem] font-semibold">Pendientes del día</h3>
           <p className="text-xs capitalize text-muted">{formatDayMonth(date)}</p>
         </div>
         {teamData?.isBusinessDay && pending.length > 0 && (
-          <span className="rounded-full bg-warning-soft px-2 py-1 text-[11px] font-bold text-warning-fg">{pending.length} sin registro</span>
+          <span className="rounded-full bg-warning-soft px-2 py-1 text-[0.6875rem] font-bold text-warning-fg">{pending.length} sin registro</span>
         )}
       </header>
-      <div className="scrollbar-thin mt-3 max-h-[300px] flex-1 space-y-1 overflow-y-auto">
+      <div className="scrollbar-thin mt-3 max-h-[18.75rem] flex-1 space-y-1 overflow-y-auto">
         {!teamData ? (
           Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12" />)
         ) : !teamData.isBusinessDay ? (
@@ -319,7 +321,7 @@ function PendingCard() {
                 <Avatar name={m.name} size="sm" status="warning" />
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">{m.name}</span>
-                  <span className="block truncate text-[11px] text-subtle">
+                  <span className="block truncate text-[0.6875rem] text-subtle">
                     {m.role} · {Math.round(m.allocation * 100)} %
                   </span>
                 </span>
@@ -337,7 +339,7 @@ function PendingCard() {
           ))
         )}
       </div>
-      <p className="mt-3 border-t border-line pt-3 text-[11px] text-subtle">
+      <p className="mt-3 border-t border-line pt-3 text-[0.6875rem] text-subtle">
         Jornada esperada = 8 h × % asignado · {hoursLabel(teamData?.totals.dayExpected ?? 0)} hoy
       </p>
     </section>

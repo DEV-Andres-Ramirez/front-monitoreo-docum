@@ -2,26 +2,16 @@
 
 import { X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useSyncExternalStore } from "react";
-
-const DESKTOP_QUERY = "(min-width: 640px)";
-
-function subscribe(callback: () => void) {
-  const media = window.matchMedia(DESKTOP_QUERY);
-  media.addEventListener("change", callback);
-  return () => media.removeEventListener("change", callback);
-}
+import { useEffect } from "react";
+import { useBreakpoint } from "./display";
 
 /** Pila de hojas abiertas: Escape solo cierra la de más arriba. */
 const openSheets: symbol[] = [];
 export const isSheetOpen = () => openSheets.length > 0;
 
+/** Escritorio = ancho efectivo ≥ sm (respeta la escala de la interfaz). */
 export function useIsDesktop() {
-  return useSyncExternalStore(
-    subscribe,
-    () => window.matchMedia(DESKTOP_QUERY).matches,
-    () => true,
-  );
+  return useBreakpoint("sm");
 }
 
 type SheetProps = {
@@ -37,7 +27,7 @@ type SheetProps = {
 };
 
 /** Panel lateral en escritorio / bottom sheet en móvil. */
-export function Sheet({ open, onClose, title, description, children, footer, level = 1, width = "sm:w-[580px]" }: SheetProps) {
+export function Sheet({ open, onClose, title, description, children, footer, level = 1, width = "sm:w-[36.25rem]" }: SheetProps) {
   const desktop = useIsDesktop();
 
   useEffect(() => {
@@ -64,7 +54,7 @@ export function Sheet({ open, onClose, title, description, children, footer, lev
       {open && (
         <div className={`fixed inset-0 ${level === 2 ? "z-[70]" : "z-50"}`} role="dialog" aria-modal="true">
           <motion.div
-            className="absolute inset-0 bg-[var(--overlay)] backdrop-blur-[3px]"
+            className="absolute inset-0 bg-[var(--overlay)] backdrop-blur-[0.1875rem]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, transition: { duration: 0.18 } }}
@@ -75,7 +65,7 @@ export function Sheet({ open, onClose, title, description, children, footer, lev
             animate={{ x: 0, y: 0 }}
             exit={{ ...hidden, transition: { duration: 0.22, ease: "easeIn" } }}
             transition={{ type: "spring", damping: 34, stiffness: 340 }}
-            className={`absolute inset-x-0 bottom-0 flex max-h-[94dvh] flex-col rounded-t-[28px] border-t border-line bg-surface shadow-pop sm:inset-y-2 sm:left-auto sm:right-2 sm:max-h-none sm:rounded-[28px] sm:border ${width}`}
+            className={`absolute inset-x-0 bottom-0 flex max-h-[94dvh] flex-col rounded-t-[1.75rem] border-t border-line bg-surface shadow-pop sm:inset-y-2 sm:left-auto sm:right-2 sm:max-h-none sm:rounded-[1.75rem] sm:border ${width}`}
           >
             <div className="mx-auto mt-2.5 h-1.5 w-12 rounded-full bg-line-strong sm:hidden" />
             <header className="flex items-start justify-between gap-4 border-b border-line px-5 pb-4 pt-4 sm:px-7 sm:pt-6">

@@ -97,7 +97,13 @@ El personal sale del Excel de planeación (`context/Planeacion_oct2026_Docum_Acu
 - **Tokens semánticos y tema:**
   - Nunca uses `bg-white`, `bg-slate-*` ni `text-slate-*`. Usa los tokens: `bg-background`, `bg-surface`, `bg-surface-2/3`, `bg-elevated`, `text-foreground`, `text-muted`, `text-subtle`, `border-line(-strong)`, `bg-accent`, `bg-accent-soft`, `text-accent-fg` (texto legible sobre superficies) y los de estado `good`/`warning`/`critical`/`info` (`-soft`/`-fg`).
   - Clases utilitarias: `.card` (superficie estándar), `.glass`, `.shimmer`, `.btn-glow`.
-  - Tema en `<html data-theme>`: script inline `THEME_INIT_SCRIPT` (sin parpadeo), `useTheme()`/`setTheme()` en `src/components/ui/theme.tsx`, variante Tailwind `dark:`.
+  - Tema en `<html data-theme>`: script inline `THEME_INIT_SCRIPT` (`src/lib/boot-scripts.ts`, sin parpadeo), `useTheme()`/`setTheme()` en `src/components/ui/theme.tsx`, variante Tailwind `dark:`.
+- **Escala de la interfaz (TV) y breakpoints. IMPORTANTE:**
+  - La escala (75 %–300 %) cambia el `font-size` de `<html>` (`DISPLAY_INIT_SCRIPT`, hooks en `src/components/ui/display.tsx`, controles en `display-controls.tsx`).
+  - **Todo debe medirse en `rem`:** nunca uses valores arbitrarios en `px` (`text-[11px]`, `w-[46px]`…); usa `text-[0.6875rem]`, etc.
+  - Los valores en px que se pasan por JS (alturas de gráficas, tamaños de Chart.js) se multiplican por `useUiScale()` o por `theme.px()` de `useChartTheme`.
+  - Los breakpoints `sm/md/lg/xl/2xl` están **redefinidos** en `globals.css` sobre `<html data-bp>`, que se calcula con el **ancho efectivo** (ventana ÷ escala). No agregues media queries de ancho propias. En JS usa `useBreakpoint()`, no `matchMedia`.
+  - Pantalla completa: `useFullscreen()` / `toggleFullscreen()`. Atajos: `+` / `−` / `0` (100 %) y `F`.
 - **Gráficas (Chart.js):**
   - Importa siempre `./setup` (registro mínimo y plugin `crosshair`; el plugin Legend **no** está registrado).
   - Colores desde `useChartTheme(projectKey)`.
@@ -109,7 +115,9 @@ El personal sale del Excel de planeación (`context/Planeacion_oct2026_Docum_Acu
   - En grillas responsivas usa `grid-cols-1` en la base (y `min-w-0`), o los canvas desbordan en móvil.
 - **Componentes UI propios y livianos** en `src/components/ui/`. No hay librería de componentes: reutiliza `Button`, `Segmented`, `Chip`, `Avatar`/`AvatarStack`, `TypeBadge`, `StateBadge`, `StatusPill`, `Kbd`, `EmptyState`, `ProgressRing`, `Skeleton`, `AnimatedNumber`, `Sheet` y `ThemeToggle`. Si usas `layoutId` de motion en un componente que se monta más de una vez, hazlo único con `useId()`.
 - **Animaciones con `motion/react`:** `layoutId` para píldoras, `AnimatePresence` para listas y paneles. Respetar `prefers-reduced-motion`; ya está cubierto en CSS.
-- **Diseño mobile-first:** en `< lg` hay barra superior compacta y tab bar inferior con "+" central; los paneles son bottom sheets en `< sm`. Prueba siempre a 390 px sin scroll horizontal.
+- **Diseño mobile-first:** en `< lg` hay barra superior compacta y tab bar inferior con "+" central; los paneles son bottom sheets en `< sm`.
+  - Prueba siempre a 390 px sin scroll horizontal.
+  - Prueba también con la escala al 200 %: con un ancho de 1920 px equivale a un diseño de 960 px.
 - **No usar `alert`/`confirm`/`prompt`:** la confirmación de borrado es en línea (`DeleteButton`).
 - **Validación de entrada** con zod (`src/lib/validators.ts`) en el servidor. El cliente solo hace validaciones de cortesía.
 - **Verificación antes de entregar:** `pnpm lint`, `pnpm build`, y `npx tsc --noEmit` si cambiaste rutas.

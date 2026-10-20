@@ -29,14 +29,14 @@ export function ThemeToggle({ compact = false, className }: { compact?: boolean;
             title={o.label}
             onClick={(e) => setTheme(o.value, { x: e.clientX, y: e.clientY })}
             className={clsx(
-              "relative flex flex-1 items-center justify-center gap-1.5 rounded-[10px] px-2 py-1.5 text-xs font-medium transition-colors",
+              "relative flex flex-1 items-center justify-center gap-1.5 rounded-[0.625rem] px-2 py-1.5 text-xs font-medium transition-colors",
               active ? "text-foreground" : "text-subtle hover:text-foreground",
             )}
           >
             {active && (
               <motion.span
                 layoutId={`theme-pill-${id}`}
-                className="absolute inset-0 rounded-[10px] bg-surface shadow-sm ring-1 ring-line"
+                className="absolute inset-0 rounded-[0.625rem] bg-surface shadow-sm ring-1 ring-line"
                 transition={{ type: "spring", stiffness: 500, damping: 36 }}
               />
             )}

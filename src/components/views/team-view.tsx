@@ -79,7 +79,7 @@ export function TeamView() {
             <div className="min-w-0">
               <p className="font-display text-2xl font-semibold tabular-nums leading-none">{teamData ? s.value : "—"}</p>
               <p className="mt-1 truncate text-xs font-medium text-foreground">{s.label}</p>
-              <p className="hidden truncate text-[11px] text-subtle sm:block">{s.hint}</p>
+              <p className="hidden truncate text-[0.6875rem] text-subtle sm:block">{s.hint}</p>
             </div>
           </motion.div>
         ))}

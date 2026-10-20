@@ -3,16 +3,14 @@
 // Tema claro / oscuro / sistema. El valor inicial lo aplica el script inline de layout.tsx
 // antes del primer pintado; este módulo lo mantiene sincronizado en el cliente.
 import { useSyncExternalStore } from "react";
+import { DARK_QUERY, THEME_EVENT, THEME_KEY } from "@/lib/boot-scripts";
 
 export type ThemePref = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
-const KEY = "docum:theme";
-const EVENT = "docum:theme-change";
-const MEDIA = "(prefers-color-scheme: dark)";
-
-/** Script que corre antes del primer pintado (inyectado en <head>). */
-export const THEME_INIT_SCRIPT = `(function(){try{var p=localStorage.getItem("${KEY}")||"system";var d=p==="dark"||(p==="system"&&matchMedia("${MEDIA}").matches);var r=document.documentElement;r.setAttribute("data-theme",d?"dark":"light");r.style.colorScheme=d?"dark":"light";}catch(e){}})()`;
+const KEY = THEME_KEY;
+const EVENT = THEME_EVENT;
+const MEDIA = DARK_QUERY;
 
 function readPref(): ThemePref {
   try {

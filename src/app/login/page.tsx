@@ -1,6 +1,7 @@
 import { Activity, BarChart3, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
 import Image from "next/image";
+import { DisplayControls } from "@/components/ui/display-controls";
 import { FadeUp } from "@/components/ui/fade-up";
 import { ThemeSwitchButton } from "@/components/ui/theme-toggle";
 import { LoginForm } from "./login-form";
@@ -61,14 +62,15 @@ export default function LoginPage() {
 
       {/* Formulario */}
       <section className="app-bg relative flex items-center justify-center px-4 py-10">
-        <div className="absolute right-4 top-4">
+        <div className="absolute right-4 top-4 flex items-center gap-2">
+          <DisplayControls />
           <ThemeSwitchButton />
         </div>
         <FadeUp className="relative w-full max-w-md">
           <div className="card p-8 shadow-pop sm:p-10">
             <div className="mb-8">
               <Image src="/linktic_logo.png" alt="LinkTic" width={600} height={390} priority className="mb-6 h-14 w-auto lg:hidden" />
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent-fg">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-[0.6875rem] font-semibold text-accent-fg">
                 <ShieldCheck className="size-3.5" /> Acceso restringido
               </span>
               <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight text-foreground">Bienvenido de nuevo</h1>
