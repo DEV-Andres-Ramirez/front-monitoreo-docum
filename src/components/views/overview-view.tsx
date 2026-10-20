@@ -15,6 +15,7 @@ import type { Item } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import { formatShort } from "@/lib/dates";
 import { DatasetGate } from "./dataset-gate";
+import { GoalPanel } from "./goal-panel";
 
 export function OverviewView() {
   return (
@@ -52,7 +53,12 @@ function Overview() {
   const trendNote = `Últimos 7 días · resaltado: ${period.label}`;
 
   if (!scoped.length) {
-    return <EmptyState variant="search" title="Sin ítems para estos filtros" description="Amplía el periodo, cambia la épica o selecciona otros colaboradores." />;
+    return (
+      <div className="space-y-5">
+        <GoalPanel />
+        <EmptyState variant="search" title="Sin ítems para estos filtros" description="Amplía el periodo, cambia la épica o el tag, o selecciona otros colaboradores." />
+      </div>
+    );
   }
 
   const tiles = [
@@ -110,6 +116,7 @@ function Overview() {
 
   return (
     <div className="space-y-5">
+      <GoalPanel />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
         {tiles.map((t, i) => (
           <motion.div

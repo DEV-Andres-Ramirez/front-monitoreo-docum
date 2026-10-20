@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarRange, Check, ChevronDown, Layers, RefreshCw, Search, SlidersHorizontal, Users, X } from "lucide-react";
+import { CalendarRange, Check, ChevronDown, Layers, RefreshCw, Search, SlidersHorizontal, Tag, Users, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Avatar, Segmented } from "@/components/ui/primitives";
 import { Popover } from "@/components/ui/popover";
@@ -234,6 +234,25 @@ export function EpicFilter({ className }: { className?: string }) {
   );
 }
 
+// ------------------------------------------------------------------ Tag
+/** Filtro por tag de Azure (solo en proyectos con meta por tags, p. ej. 348: Video / Informe). */
+export function TagFilter({ className }: { className?: string }) {
+  const { tags, filters, setTag } = useApp();
+  if (!tags.length) return null;
+  return (
+    <Segmented
+      className={className}
+      size="sm"
+      value={filters.tag ?? "all"}
+      onChange={(v) => setTag(v === "all" ? null : v)}
+      options={[
+        { value: "all", label: "Todos los tags", icon: Tag, title: `Sin filtro de tag (${tags.join(" · ")})` },
+        ...tags.map((t) => ({ value: t, label: t, title: `Solo ítems con el tag ${t}` })),
+      ]}
+    />
+  );
+}
+
 // ------------------------------------------------------------------ Estado de sincronización
 export function SyncChip({ compact = false }: { compact?: boolean }) {
   const { sync, syncNow, syncing, dataset, nextAutoSync } = useApp();
@@ -274,6 +293,7 @@ export function FilterBar() {
       <PeriodPicker />
       <PeopleFilter />
       <EpicFilter />
+      <TagFilter />
     </div>
   );
 }
@@ -289,6 +309,7 @@ export function MobileFiltersButton() {
         {period.label}
         {filters.people.length > 0 && ` · ${filters.people.length} pers.`}
         {epic && ` · ${epic}`}
+        {filters.tag && ` · ${filters.tag}`}
       </span>
     </button>
   );

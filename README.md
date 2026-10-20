@@ -25,6 +25,7 @@ El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Maste
     - **Comparación de los indicadores:** Hoy y Ayer, contra el día hábil anterior; las semanas, contra los mismos días de la semana anterior; el resto, contra el periodo anterior de igual duración.
   - **Colaboradores:** multiselección, más "Incluir fuera de la planeación".
   - **Épica:** en 348, "Todas las épicas · CORE · Temáticos"; en 005 se muestra solo su épica. Fuera de las épicas monitoreadas no se analiza nada.
+  - **Tag** (solo 348): "Todos los tags · Video · Informe". Aplica a todas las vistas. Las HU no llevan tags, así que con un tag elegido solo quedan sus tareas.
 - **Vistas:**
   - **Resumen** (`/`):
     - 6 KPIs con delta frente al periodo anterior: entregados, horas entregadas, en curso, vencidos, % a tiempo y cycle time;
@@ -49,6 +50,25 @@ El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Maste
 - **Tema** claro, oscuro o del sistema, sin parpadeo.
 - **⌘K** para buscar personas, ítems, periodos y acciones; `1–5` cambian de vista; `?` muestra la ayuda.
 - **Accesibilidad:** colores de estado validados para daltonismo, estados siempre con texto, vista de tabla en cada gráfica y `prefers-reduced-motion`.
+
+## Meta de cierre de Acueducto (solo 348)
+
+Compromiso con EAAB para las dos épicas sumadas (Certificación CORE y Certificación Temáticos):
+
+- **Cierre:** viernes 13 de noviembre de 2026.
+- **Productividad:** **24 tareas de Video y 24 de Informe por día hábil**, de lunes a viernes sin festivos de Colombia, desde el lunes 19-oct.
+- **Configuración:** `PROJECTS["348"].goal` en `src/lib/config.ts`. Si cambia la meta o la fecha, se edita ahí; no hay variables de entorno.
+- **Qué cuenta:** **todas** las tareas (tipo `Task`) con tag `Video` o `Informe` de ambas épicas, sin importar el colaborador. Incluye a quienes están fuera de la planeación; por ejemplo, las 398 de Informe son de David Vergara.
+- **Completada:** estado Entregado o Cerrado, en el día de su fecha de entrega real (o de resolución o cierre).
+- **Panel "Meta de cierre" (inicio del Resumen):**
+  - por tag y en total: % de avance (completadas ÷ total) con una marca de la meta a la fecha;
+  - hoy frente a 24, acumulado frente a la meta (24 × días hábiles desde el 19-oct, tope en el total);
+  - ritmo necesario (pendientes ÷ días hábiles restantes) y ritmo actual (promedio de los últimos 5 días hábiles);
+  - proyección de cierre y días que cumplieron la meta;
+  - gráfica **Avance diario vs. meta**: barras por tag con la línea de 24, cortada en fines de semana y festivos;
+  - gráfica **Avance acumulado vs. meta**, hasta el 13-nov.
+  - Respeta el filtro de tag, pero no los de personas ni épica (la meta es del proyecto).
+- **Días hábiles:** `isBusinessDay()` en `src/lib/dates.ts` excluye los festivos de Colombia (Ley Emiliani y Pascua). También se usan en la capacidad y en el "día hábil anterior".
 
 ## ⚠️ Regla de oro: Azure DevOps es SOLO LECTURA
 
@@ -124,9 +144,10 @@ pnpm dev               # http://localhost:3000
 | `0004_azure_sync.sql` | `azure_work_items`, `azure_revisions`, `azure_sync_runs`, `employee_aliases`, RPC `azure_dataset` |
 | `0005_azure_dataset_assigned.sql` | `azure_dataset(p, desde, hasta)` solo con ítems asignados (**legado**: se conserva para despliegues anteriores) |
 | `0006_dataset_monitored_epics.sql` | `azure_dataset(p, desde, hasta, épicas)`: solo el árbol de las épicas monitoreadas |
+| `0008_goal_tags.sql` | `azure_dataset` devuelve los tags; nuevo RPC `azure_goal_tasks` (tareas con tags de la meta, sin filtrar por periodo ni persona) |
 | `0007_dataset_backfilled_delivery.sql` | Un ítem entregado en el periodo cuenta aunque se haya creado después (fecha de entrega real registrada a posteriori); bordes ±1 día |
 
-**Estado (20-oct-2026):** las siete migraciones están aplicadas. Primera sincronización: 348 con 6.838 ítems y 25.874 revisiones (≈ 45 s); 005 con 627 ítems y 1.942 revisiones (≈ 7 s). Las incrementales tardan segundos.
+**Estado (20-oct-2026):** las ocho migraciones están aplicadas. Primera sincronización: 348 con 6.838 ítems y 25.874 revisiones (≈ 45 s); 005 con 627 ítems y 1.942 revisiones (≈ 7 s). Las incrementales tardan segundos.
 
 **Seguridad:**
 - RLS está activo en todas las tablas sin políticas: `anon`/`authenticated` no tienen acceso.
@@ -177,7 +198,7 @@ src/
     charts/     # Chart.js: flow-charts (throughput, CFD, burnup, cycle time, estados, estimado), chart-card, chart-theme
     dashboard/  # work-item-sheet (traza de estados), member-sheet, client-api (fetch + preferencias)
     ui/         # primitives, sheet, popover, theme, display (escala TV + pantalla completa)…
-supabase/migrations/   # 0001 → 0007
+supabase/migrations/   # 0001 → 0008
 scripts/               # generate-seed.py, apply-migrations.mjs
 context/               # Excel de planeación (contiene datos personales)
 ```

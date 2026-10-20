@@ -3,6 +3,18 @@
 export const PROJECT_KEYS = ["348", "005"] as const;
 export type ProjectKey = (typeof PROJECT_KEYS)[number];
 
+/**
+ * Meta de cierre comprometida con el cliente: tareas por tag por día hábil (lunes a viernes sin
+ * festivos) desde `start` hasta `deadline`. Cuenta TODAS las tareas de las épicas monitoreadas con
+ * esos tags, sin importar el colaborador ni la planeación.
+ */
+export type ProjectGoal = {
+  start: string;
+  deadline: string;
+  workItemType: string;
+  tags: { tag: string; daily: number }[];
+};
+
 export type ProjectMeta = {
   key: ProjectKey;
   name: string;
@@ -11,6 +23,7 @@ export type ProjectMeta = {
   /** Color de acento de la UI para este proyecto */
   accent: string;
   accentSoft: string;
+  goal?: ProjectGoal;
 };
 
 export const PROJECTS: Record<ProjectKey, ProjectMeta> = {
@@ -21,6 +34,16 @@ export const PROJECTS: Record<ProjectKey, ProjectMeta> = {
     epics: "Certificación CORE · Certificación Temáticos",
     accent: "#0090FF",
     accentSoft: "#E0F2FF",
+    // Compromiso con EAAB: 24 tareas de Video y 24 de Informe por día hábil; cierre el 13-nov
+    goal: {
+      start: "2026-10-19",
+      deadline: "2026-11-13",
+      workItemType: "Task",
+      tags: [
+        { tag: "Video", daily: 24 },
+        { tag: "Informe", daily: 24 },
+      ],
+    },
   },
   "005": {
     key: "005",

@@ -1,10 +1,11 @@
 // Métricas de flujo y desempeño sobre el modelo filtrado (TypeScript puro, cliente).
+import { isBusinessDay, isoLocalDate } from "@/lib/dates";
 import type { PeriodPreset } from "./period";
 import type { StateCategory } from "./types";
 import { DAY, capacityHours, categoryAt, endOfDay, type Item, type Model, type Person } from "./model";
 
-/** `epics`: épicas monitoreadas seleccionadas (vacío = todas las del proyecto). */
-export type Filters = { from: string; to: string; people: string[]; includeOthers: boolean; epics: number[] };
+/** `epics`: épicas monitoreadas seleccionadas (vacío = todas las del proyecto). `tag`: tag de Azure (null = todos). */
+export type Filters = { from: string; to: string; people: string[]; includeOthers: boolean; epics: number[]; tag: string | null };
 export type Range = { from: number; to: number };
 
 export const CATEGORIES: StateCategory[] = ["Proposed", "InProgress", "Resolved", "Completed"];
@@ -31,7 +32,7 @@ export function previousRange(r: Range, preset?: PeriodPreset): Range {
   if (preset === "today" || preset === "yesterday") {
     const d = new Date(r.from);
     do d.setDate(d.getDate() - 1);
-    while (d.getDay() === 0 || d.getDay() === 6);
+    while (!isBusinessDay(isoLocalDate(d.getTime())));
     return { from: d.getTime(), to: endOfDay(d.getTime()) };
   }
   if (preset === "thisWeek" || preset === "lastWeek") return { from: r.from - 7 * DAY, to: r.to - 7 * DAY };
@@ -60,14 +61,17 @@ export function visiblePeople(model: Model, f: Filters): Person[] {
 /** ¿El ítem cuelga de las épicas monitoreadas (y de la épica seleccionada, si hay filtro)? */
 export const inEpics = (i: Item, epics: number[]) => i.inMonitoredEpics && (!epics.length || (i.epicId !== null && epics.includes(i.epicId)));
 
-/** Ítems de trabajo dentro del alcance: épicas monitoreadas + personas seleccionadas. */
+/** ¿El ítem tiene el tag? (sin distinguir mayúsculas; null = sin filtro) */
+export const inTag = (i: Item, tag: string | null) => !tag || i.tagList.some((t) => t.toLowerCase() === tag.toLowerCase());
+
+/** Ítems de trabajo dentro del alcance: épicas monitoreadas + tag + personas seleccionadas. */
 export function scopedWork(model: Model, f: Filters): Item[] {
   const selected = new Set(f.people);
   return model.work.filter((i) => {
     const p = model.people.get(i.personKey!);
     if (!p || (!p.inRoster && !f.includeOthers)) return false;
     if (selected.size && !selected.has(p.key)) return false;
-    return inEpics(i, f.epics);
+    return inEpics(i, f.epics) && inTag(i, f.tag);
   });
 }
 

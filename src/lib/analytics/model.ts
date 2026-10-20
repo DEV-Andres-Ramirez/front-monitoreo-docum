@@ -1,5 +1,6 @@
 // Modelo de análisis (cliente): identidad, horas sin doble conteo, fechas plan/real y traza.
 import { JORNADA_HORAS } from "@/lib/config";
+import { isBusinessDay, isoLocalDate } from "@/lib/dates";
 import type { AzureItem, DatasetResponse, RosterMember, StateCategory, Transition } from "./types";
 
 export const DAY = 86_400_000;
@@ -24,6 +25,8 @@ export type Segment = { state: string; cat: StateCategory; from: number; to: num
 
 export type Item = AzureItem & {
   url: string;
+  /** Tags de Azure separados por ";" (sin espacios sobrantes) */
+  tagList: string[];
   isWork: boolean;
   personKey: string | null;
   /** Horas declaradas: Story Points / Effort / Estimación original (1 punto = 1 hora) */
@@ -214,6 +217,7 @@ export function buildModel(ds: DatasetResponse, now = Date.now()): Model {
     const item: Item = {
       ...raw,
       url: urlBase + raw.id,
+      tagList: (raw.tags ?? "").split(";").map((t) => t.trim()).filter(Boolean),
       isWork,
       personKey: isWork ? personOf(raw.email, raw.name) : null,
       hours,
@@ -286,10 +290,7 @@ export function capacityHours(p: Person, from: number, to: number) {
   const start = Math.max(from, p.startDate ? new Date(`${p.startDate}T00:00:00`).getTime() : from);
   const end = Math.min(to, p.endDate ? new Date(`${p.endDate}T23:59:59`).getTime() : to);
   let days = 0;
-  for (let t = start; t <= end; t += DAY) {
-    const dow = new Date(t).getDay();
-    if (dow !== 0 && dow !== 6) days += 1;
-  }
+  for (let t = start; t <= end; t += DAY) if (isBusinessDay(isoLocalDate(t))) days += 1;
   return days * JORNADA_HORAS * p.allocation;
 }
 

@@ -37,10 +37,66 @@ export function dayOfWeek(iso: string) {
   return toUTC(iso).getUTCDay();
 }
 
-/** Lunes a viernes. (Festivos de Colombia: pendiente en el roadmap.) */
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** Fecha ISO local (del navegador o del servidor) de una marca de tiempo. */
+export const isoLocalDate = (t: number) => {
+  const d = new Date(t);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
+/** Domingo de Pascua (algoritmo gregoriano anónimo). */
+function easterSunday(year: number) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+
+/** Ley Emiliani: el festivo se corre al lunes siguiente (si ya es lunes, se queda). */
+const nextMonday = (iso: string) => addDaysISO(iso, (8 - dayOfWeek(iso)) % 7);
+
+const holidayCache = new Map<number, Set<string>>();
+
+/** Festivos de Colombia de un año (fijos, trasladables por Ley Emiliani y los que dependen de la Pascua). */
+export function colombianHolidays(year: number): Set<string> {
+  const cached = holidayCache.get(year);
+  if (cached) return cached;
+  const y = (md: string) => `${year}-${md}`;
+  const easter = easterSunday(year);
+  const days = [
+    // Fijos
+    ...["01-01", "05-01", "07-20", "08-07", "12-08", "12-25"].map(y),
+    // Trasladables al lunes: Reyes, San José, San Pedro y San Pablo, Asunción, Día de la Raza, Todos los Santos, Independencia de Cartagena
+    ...["01-06", "03-19", "06-29", "08-15", "10-12", "11-01", "11-11"].map((md) => nextMonday(y(md))),
+    // Semana Santa
+    addDaysISO(easter, -3),
+    addDaysISO(easter, -2),
+    // Ascensión, Corpus Christi y Sagrado Corazón (trasladados al lunes)
+    nextMonday(addDaysISO(easter, 39)),
+    nextMonday(addDaysISO(easter, 60)),
+    nextMonday(addDaysISO(easter, 68)),
+  ];
+  const set = new Set(days);
+  holidayCache.set(year, set);
+  return set;
+}
+
+/** Lunes a viernes que no son festivo en Colombia. */
 export function isBusinessDay(iso: string) {
   const dow = dayOfWeek(iso);
-  return dow !== 0 && dow !== 6;
+  return dow !== 0 && dow !== 6 && !colombianHolidays(Number(iso.slice(0, 4))).has(iso);
 }
 
 /** Semana laboral lunes → domingo que contiene la fecha. */

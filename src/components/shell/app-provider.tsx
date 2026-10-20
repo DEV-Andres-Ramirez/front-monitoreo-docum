@@ -23,7 +23,7 @@ import { ShortcutsDialog } from "./shortcuts-dialog";
 // `epics` vacío = todas las épicas monitoreadas del proyecto (el antiguo `scope` guardado se ignora)
 // `v: 2` marca los filtros guardados con los periodos nuevos (Hoy / Ayer / semanas): los anteriores
 // conservan personas y épicas pero vuelven al periodo por defecto.
-type StoredFilters = { v?: number; preset: PeriodPreset; from: string; to: string; people: string[]; includeOthers: boolean; epics?: number[] };
+type StoredFilters = { v?: number; preset: PeriodPreset; from: string; to: string; people: string[]; includeOthers: boolean; epics?: number[]; tag?: string | null };
 type StoredIteration = { name: string; start: number; end: number; count: number };
 const DEFAULT_FILTERS: StoredFilters = { v: 2, preset: DEFAULT_PRESET, from: "", to: "", people: [], includeOthers: false, epics: [] };
 const NO_EPICS: EpicRef[] = [];
@@ -57,6 +57,9 @@ type AppContextValue = {
   /** Épicas monitoreadas del proyecto (las que se pueden filtrar) */
   epics: EpicRef[];
   setEpics: (ids: number[]) => void;
+  /** Tags filtrables del proyecto (los de su meta; vacío si no tiene) */
+  tags: string[];
+  setTag: (tag: string | null) => void;
   range: Range;
   prevRange: Range;
   dataset: { data?: DatasetResponse; error?: Error; isLoading: boolean; mutate: KeyedMutator<DatasetResponse> };
@@ -139,6 +142,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const data = dataset.data?.projectKey === projectKey ? dataset.data : undefined;
   const model = useMemo(() => (data ? buildModel(data) : undefined), [data]);
   const epics = model?.epics ?? NO_EPICS;
+  const tags = useMemo(() => PROJECTS[projectKey].goal?.tags.map((t) => t.tag) ?? [], [projectKey]);
 
   // El dataset trae siempre las épicas monitoreadas; el filtro descarta IDs que ya no estén configurados
   const filters: Filters = useMemo(
@@ -148,8 +152,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       people: stored.people,
       includeOthers: stored.includeOthers,
       epics: (stored.epics ?? []).filter((id) => epics.some((e) => e.id === id)),
+      tag: stored.tag && tags.includes(stored.tag) ? stored.tag : null,
     }),
-    [period.from, period.to, stored.people, stored.includeOthers, stored.epics, epics],
+    [period.from, period.to, stored.people, stored.includeOthers, stored.epics, epics, stored.tag, tags],
   );
 
   // Guarda las iteraciones conocidas (para resolver "Sprint actual" sin depender del periodo)
@@ -211,7 +216,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       try {
         const r = await api<AutoSyncResponse>("/api/sync/auto", { method: "POST" });
         const synced = PROJECT_KEYS.filter((k) => r.results[k]?.status === "ok");
-        await Promise.all(synced.map((k) => mutate((key) => typeof key === "string" && key.startsWith(`/api/projects/${k}/dataset`))));
+        await Promise.all(synced.map((k) => mutate((key) => typeof key === "string" && /^\/api\/projects\/[^/]+\/(dataset|goal)/.test(key) && key.startsWith(`/api/projects/${k}/`))));
         setNextAutoSync(nextCheck(r.nextAutoAt));
       } catch {
         setNextAutoSync(Date.now() + 10 * MINUTE);
@@ -230,7 +235,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const res = await api<{ items: number; revisions: number; status: string }>(`/api/projects/${projectKey}/sync${full ? "?full=1" : ""}`, {
           method: "POST",
         });
-        await dataset.mutate();
+        await Promise.all([dataset.mutate(), mutate(`/api/projects/${projectKey}/goal`)]);
         toast.success(res.status === "skipped" ? "Ya hay una sincronización en curso" : "Datos de Azure actualizados", {
           id,
           description: res.status === "ok" ? `${res.items} ítems y ${res.revisions} cambios leídos` : undefined,
@@ -242,7 +247,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         void refreshAutoSchedule();
       }
     },
-    [projectKey, dataset, refreshAutoSchedule],
+    [projectKey, dataset, mutate, refreshAutoSchedule],
   );
 
   const logout = useCallback(async () => {
@@ -311,6 +316,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       update({ includeOthers, people: includeOthers ? stored.people : stored.people.filter((k) => model?.people.get(k)?.inRoster) }),
     epics,
     setEpics: (ids) => update({ epics: ids }),
+    tags,
+    setTag: (tag) => update({ tag }),
     range,
     prevRange,
     dataset: { data, error: dataset.error, isLoading: !data && !dataset.error, mutate: dataset.mutate },

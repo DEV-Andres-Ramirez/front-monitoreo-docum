@@ -12,14 +12,14 @@ import { Sheet } from "@/components/ui/sheet";
 import { ThemeSwitchButton, ThemeToggle } from "@/components/ui/theme-toggle";
 import { PROJECTS, PROJECT_KEYS } from "@/lib/config";
 import { useApp } from "./app-provider";
-import { EpicFilter, MobileFiltersButton, PeoplePanel, PeriodPanel, SyncChip } from "./filter-bar";
+import { EpicFilter, MobileFiltersButton, PeoplePanel, PeriodPanel, SyncChip, TagFilter } from "./filter-bar";
 import { NAV, navFor } from "./nav";
 
 /** Barra superior + tab bar inferior + panel de filtros para pantallas < lg. */
 export function MobileNav() {
   const pathname = usePathname();
   const active = navFor(pathname);
-  const { projectKey, project, setProjectKey, setPaletteOpen, logout, syncNow, sync, syncing, setShortcutsOpen, filtersOpen, setFiltersOpen } = useApp();
+  const { projectKey, project, setProjectKey, setPaletteOpen, logout, syncNow, sync, syncing, setShortcutsOpen, filtersOpen, setFiltersOpen, tags } = useApp();
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const tabs = [NAV[0], NAV[1], null, NAV[2]];
@@ -125,6 +125,12 @@ export function MobileNav() {
             <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Épica</p>
             <EpicFilter />
           </div>
+          {tags.length > 0 && (
+            <div>
+              <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Tag</p>
+              <TagFilter />
+            </div>
+          )}
           <div>
             <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Colaboradores</p>
             <PeoplePanel />

@@ -1,7 +1,7 @@
 "use client";
 
 import { Command } from "cmdk";
-import { CalendarRange, FolderKanban, Layers, LogOut, Maximize, Monitor, Moon, RefreshCw, RotateCcw, Search, Sun, UserRound, Users, ZoomIn, ZoomOut } from "lucide-react";
+import { CalendarRange, FolderKanban, Layers, LogOut, Maximize, Monitor, Moon, RefreshCw, RotateCcw, Search, Sun, Tag, UserRound, Users, ZoomIn, ZoomOut } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { Avatar, Kbd, TypeBadge } from "@/components/ui/primitives";
@@ -83,6 +83,17 @@ export function CommandPalette() {
                     <Users className="size-4 text-muted" /> Ver todo el equipo
                   </Command.Item>
                 </Command.Group>
+
+                {app.tags.length > 0 && (
+                  <Command.Group heading="Tag">
+                    {[null, ...app.tags].map((t) => (
+                      <Command.Item key={t ?? "all"} value={`tag ${t ?? "todos"}`} onSelect={() => run(() => app.setTag(t))} keywords={["tag", "etiqueta", "filtro"]}>
+                        <Tag className="size-4 text-muted" /> {t ? `Solo ${t}` : "Todos los tags"}
+                        {app.filters.tag === t && <span className="ml-auto text-[0.6875rem] text-subtle">Actual</span>}
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                )}
 
                 {app.epics.length > 1 && (
                   <Command.Group heading="Épica">

@@ -31,6 +31,13 @@ Reglas de negocio (decididas con el usuario):
   - real = `InProgressDate` → entrega (`Custom.FechadeEntregaReal` ?? `ResolvedDate` ?? `CompletedDate`);
   - a tiempo si la entrega ≤ fin del día objetivo.
 - **Capacidad** = 8 h × % asignado × días hábiles vigentes; **utilización** = horas entregadas ÷ capacidad.
+- **Días hábiles** = lunes a viernes **sin festivos de Colombia** (`colombianHolidays()` / `isBusinessDay()` en `src/lib/dates.ts`).
+- **Meta de cierre (solo 348, `PROJECTS["348"].goal` en `config.ts`):**
+  - 24 tareas `Video` y 24 `Informe` por día hábil desde el 19-oct; cierre el 13-nov;
+  - cuenta **todas** las tareas con esos tags de ambas épicas, **sin** filtrar por persona ni planeación (decisión del usuario: las de Informe son de David Vergara, que no está en el Excel);
+  - completada = Entregado o Cerrado, en el día de su fecha de entrega real;
+  - la meta acumulada es diaria × días hábiles desde `start`, con tope en el total;
+  - lo cerrado antes de `start` cuenta como avance.
 
 ## 🚫 REGLA DE ORO: Azure DevOps es SOLO LECTURA
 
@@ -82,6 +89,8 @@ Reglas de negocio (decididas con el usuario):
   - `scopedWork()` / `inEpics()` en `metrics.ts` exigen `inMonitoredEpics` (defensa además del RPC) y aplican el filtro por épica;
   - `metrics.ts`: KPIs, throughput semanal, CFD, burnup, cycle time (P50/P85), antigüedad del WIP, `perPerson` y `workloadMatrix`. Recibe `now` explícito: no llames `Date.now()` en render;
   - `period.ts`: presets. Los rápidos son `today`, `yesterday`, `thisWeek` (`DEFAULT_PRESET`) y `lastWeek`, con semana de lunes a domingo. El resto (`MORE_PRESETS`) incluye "Sprint actual", deducido de las iteraciones conocidas guardadas en localStorage. `comparisonLabel()` describe el periodo con que se compara (`previousRange(range, preset)` en `metrics.ts`: Hoy y Ayer contra el día hábil anterior; semanas, desplazadas 7 días);
+  - `goal.ts`: `goalProgress(goal, tasks, today, tag)` calcula, por tag y en total, el avance, la serie diaria de `start` a `deadline`, el acumulado frente a la meta, el ritmo necesario y el actual (últimos 5 días hábiles cerrados) y la proyección. Los datos vienen de `GET /api/projects/[p]/goal` → RPC `azure_goal_tasks` (0008), no del dataset del periodo. Colores de tag fijos (violeta y magenta), validados con dataviz;
+  - filtro de tag: `Filters.tag` + `inTag()`. Las opciones salen de `goal.tags` del proyecto (348); `Item.tagList` son los tags separados por ";";
   - cubetas de tiempo: `throughput()` y `workloadMatrix()` aceptan `TimeUnit` (`"day" | "week"`). La preferencia es global (`docum:chart-unit`, por defecto `"day"`; `chartUnit` en `useApp()`);
   - `state-colors.ts`: colores por `StateCategory`, validados con dataviz (no cambiar el orden).
   - Usa siempre `StateCategory` (Proposed / InProgress / Resolved / Completed / Removed), **nunca el nombre del estado**: cada proceso tiene estados propios.
@@ -109,7 +118,7 @@ Reglas de negocio (decididas con el usuario):
   - RLS activo **sin políticas** y `revoke all … from anon, authenticated`;
   - RPC con `revoke execute … from public, anon, authenticated` + `grant … to service_role`;
   - tras cualquier DDL, revisar `get_advisors`.
-- **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004), `azure_dataset_assigned` (0005), `dataset_monitored_epics` (0006) y `dataset_backfilled_delivery` (0007).
+- **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004), `azure_dataset_assigned` (0005), `dataset_monitored_epics` (0006), `dataset_backfilled_delivery` (0007) y `goal_tags` (0008).
   - Se aplican con el MCP del proyecto (`.mcp.json`, ref `klrierizueihrenhcema`) o con `scripts/apply-migrations.mjs`.
   - **No** usar el conector `claude.ai Supabase` (es otra cuenta).
 - **Nueva planeación de personal:** reemplazar el Excel → `python3 scripts/generate-seed.py` → aplicar `0002_seed.sql` (upsert).
