@@ -374,7 +374,7 @@ function OutsidePlanning() {
           <div>
             <h3 className="font-display text-[0.9375rem] font-semibold">Fuera de la planeación</h3>
             <p className="mt-0.5 text-xs text-muted">
-              Asignados en Azure que no coinciden con el personal del Excel de este proyecto. Si es la misma persona con otro correo, vincúlala; si no, actívalos con
+              Tienen ítems en las épicas monitoreadas, pero no coinciden con el personal del Excel de este proyecto. Si es la misma persona con otro correo, vincúlala; si no, actívalos con
               &quot;Incluir fuera de la planeación&quot; en el filtro.
             </p>
           </div>

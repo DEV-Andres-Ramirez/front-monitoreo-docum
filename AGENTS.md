@@ -14,18 +14,18 @@ Lee también `README.md`: tiene el negocio, la sincronización, las variables y 
 
 ## Objetivo de negocio
 
-Tablero interno del **Scrum Master** (único usuario, común a ambos proyectos) para monitorear **automáticamente** el trabajo de cada colaborador. **No hay registro manual.** Todo se calcula desde Azure DevOps, cruzando **por correo** al personal del Excel de planeación con los ítems asignados de **todo el proyecto**:
+Tablero interno del **Scrum Master** (único usuario, común a ambos proyectos) para monitorear **automáticamente** el trabajo de cada colaborador. **No hay registro manual.** Todo se calcula desde Azure DevOps, cruzando **por correo** al personal del Excel de planeación de cada proyecto con los ítems asignados **que cuelgan de las épicas monitoreadas**. Las demás épicas del proyecto **no se analizan**:
 
-- **348 · SGDEA Acueducto (EAAB)**: org `LinkTic`, proyecto `348 - SGDEA ACUEDUCTO`. Épicas monitoreadas (filtro opcional): `539200` y `539569`.
-- **005 · Positiva SGDEA**: org `3tcapitalco`, proyecto `005 - POSITIVA SGDEA NEW`. Épica monitoreada: `578`.
+- **348 · SGDEA Acueducto (EAAB)**: org `LinkTic`, proyecto `348 - SGDEA ACUEDUCTO`. Épicas: `539200` Certificación CORE y `539569` Certificación Temáticos.
+- **005 · Positiva SGDEA**: org `3tcapitalco`, proyecto `005 - POSITIVA SGDEA NEW`. Épica: `578` Deuda Técnica y Contractual.
 
 Reglas de negocio (decididas con el usuario):
 - **1 punto de esfuerzo = 1 hora.**
   - Horas = `StoryPoints ?? Effort ?? OriginalEstimate`.
   - **Sin doble conteo:** si un padre tiene hijos con horas, suman los hijos.
   - Se compara contra `CompletedWork`.
-- **Personas:** se monitorea el **Excel de planeación** (`context/…xlsx` → `0002_seed.sql`, 55 personas). Los demás asignados aparecen como "Fuera de la planeación" y se pueden **vincular** (alias).
-- **Alcance:** HU, Tareas y Bugs de todo el proyecto (12 meses + abiertos), con filtro "solo épicas monitoreadas".
+- **Personas:** se monitorea el **Excel de planeación** de cada proyecto (`context/…xlsx` → `0002_seed.sql`, 55 personas). Quien tenga ítems en las épicas pero no esté en el Excel de ese proyecto aparece en "Fuera de la planeación" (no cuenta en los indicadores salvo `includeOthers`) y se puede **vincular** (alias).
+- **Alcance:** **solo** HU, Tareas y Bugs que cuelgan de las épicas monitoreadas (`AZURE_<p>_EPIC_IDS`). Hay un filtro por épica (en 348: Todas / CORE / Temáticos), pero nunca se sale de ellas.
 - **Gantt plan vs. real:**
   - plan = `StartDate`/`TargetDate` del ítem; si no existen, las fechas del **sprint**;
   - real = `InProgressDate` → entrega (`Custom.FechadeEntregaReal` ?? `ResolvedDate` ?? `CompletedDate`);
@@ -73,16 +73,18 @@ Reglas de negocio (decididas con el usuario):
   - **No hay cron ni variables nuevas.** Un cron de Vercel requeriría `CRON_SECRET` y, para correr cada hora, el plan Pro.
 - **Errores de Azure:** no uses `instanceof AzureHttpError` fuera de `azure.ts`; revisa `error.status`. En `next dev`, un módulo viejo en memoria (tras reescribir `azure.ts`) dejó la clase `undefined` y ocultó el error real. Si pasa, reinicia `pnpm dev`.
 - **Dataset:**
-  - el RPC `azure_dataset(p, from, to)` devuelve ítems **asignados** vivos en el periodo (`created ≤ to` y abiertos o `completed ≥ from`), sus **ancestros** y las **transiciones de estado** (filas donde cambia el estado);
+  - el RPC `azure_dataset(p, from, to, p_epics)` (0006) recorre el árbol de las épicas monitoreadas y devuelve los ítems **asignados** vivos en el periodo que cuelgan de ellas (`created ≤ to` y abiertos o `completed ≥ from`), sus **ancestros hasta la épica**, las **épicas** (siempre, para el filtro) y las **transiciones de estado** (filas donde cambia el estado);
+  - la sincronización copia todo el proyecto a propósito (detecta lo que entra o sale de las épicas); **el recorte se hace en el RPC**. La versión de 3 argumentos (0005) es legado: no la uses ni la borres sin coordinar los despliegues;
   - la UI pide desde el inicio del **periodo anterior**, para los deltas.
 - **Motor de análisis (cliente, TS puro)** en `src/lib/analytics/`:
-  - `model.ts`: `buildModel()` resuelve identidad (alias → correo exacto → parte local → tokens del nombre), horas sin doble conteo, fechas plan/real, puntualidad, vencidos, segmentos de estado, ancestros (feature, épica, `inMonitoredEpics`) e iteraciones;
+  - `model.ts`: `buildModel()` resuelve identidad (alias → correo exacto → parte local → tokens del nombre), horas sin doble conteo, fechas plan/real, puntualidad, vencidos, segmentos de estado, ancestros (feature, `epicId` = épica monitoreada de la que cuelga, `inMonitoredEpics`), `model.epics` (id + título) e iteraciones;
+  - `scopedWork()` / `inEpics()` en `metrics.ts` exigen `inMonitoredEpics` (defensa además del RPC) y aplican el filtro por épica;
   - `metrics.ts`: KPIs, throughput semanal, CFD, burnup, cycle time (P50/P85), antigüedad del WIP, `perPerson` y `workloadMatrix`. Recibe `now` explícito: no llames `Date.now()` en render;
   - `period.ts`: presets, con "Sprint actual" deducido de las iteraciones conocidas, guardadas en localStorage;
   - `state-colors.ts`: colores por `StateCategory`, validados con dataviz (no cambiar el orden).
   - Usa siempre `StateCategory` (Proposed / InProgress / Resolved / Completed / Removed), **nunca el nombre del estado**: cada proceso tiene estados propios.
 - **Estado global** en `AppProvider` (`src/components/shell/app-provider.tsx`):
-  - proyecto, periodo, filtros (`people`, `includeOthers`, `scope`), dataset (SWR, con polling mientras `sync.running`), `model`, `scoped` (ítems en el alcance), `people`, sincronización y paneles globales (`WorkItemSheet`, `MemberSheet`, `CommandPalette`, `ShortcutsDialog`).
+  - proyecto, periodo, filtros (`people`, `includeOthers`, `epics`: épicas seleccionadas, vacío = todas), dataset (SWR, con polling mientras `sync.running`), `model`, `scoped` (ítems en el alcance), `people`, sincronización y paneles globales (`WorkItemSheet`, `MemberSheet`, `CommandPalette`, `ShortcutsDialog`).
   - Las vistas usan `useApp()` y se envuelven en `<DatasetGate>`.
   - Los filtros se guardan por proyecto (`docum:filters:<p>`) con `useStored()` (`client-api.ts`).
 - **Acento por proyecto:** `<div data-project className="contents">` en el provider; los paneles nuevos van dentro.
@@ -104,7 +106,7 @@ Reglas de negocio (decididas con el usuario):
   - RLS activo **sin políticas** y `revoke all … from anon, authenticated`;
   - RPC con `revoke execute … from public, anon, authenticated` + `grant … to service_role`;
   - tras cualquier DDL, revisar `get_advisors`.
-- **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004) y `azure_dataset_assigned` (0005).
+- **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004), `azure_dataset_assigned` (0005) y `dataset_monitored_epics` (0006).
   - Se aplican con el MCP del proyecto (`.mcp.json`, ref `klrierizueihrenhcema`) o con `scripts/apply-migrations.mjs`.
   - **No** usar el conector `claude.ai Supabase` (es otra cuenta).
 - **Nueva planeación de personal:** reemplazar el Excel → `python3 scripts/generate-seed.py` → aplicar `0002_seed.sql` (upsert).

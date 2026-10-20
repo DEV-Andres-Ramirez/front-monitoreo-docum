@@ -9,7 +9,7 @@ import { LoginForm } from "./login-form";
 export const metadata: Metadata = { title: "Ingreso" };
 
 const FEATURES = [
-  { icon: ShieldCheck, title: "Automático desde Azure DevOps", text: "Ítems, estados y horas de cada colaborador, sin registros manuales y en solo lectura." },
+  { icon: ShieldCheck, title: "Automático desde Azure DevOps", text: "Ítems, estados y horas de cada colaborador en las épicas monitoreadas, sin registros manuales y en solo lectura." },
   { icon: CalendarRange, title: "Plan vs. real", text: "Gantt por colaborador con fecha de inicio, objetivo y entrega real." },
   { icon: BarChart3, title: "Analítica de flujo", text: "Entregas, cumplimiento, cycle time, alertas y traza de cada cambio de estado." },
 ];

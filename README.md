@@ -2,14 +2,14 @@
 
 Tablero interno de **monitoreo automático** del trabajo de cada colaborador en los proyectos de la línea Docum de LinkTic, calculado a partir de **Azure DevOps** (solo lectura):
 
-| Proyecto | Cliente | Azure DevOps (org / proyecto) | Épicas monitoreadas (filtro opcional) |
+| Proyecto | Cliente | Azure DevOps (org / proyecto) | Épicas monitoreadas (único alcance del tablero) |
 |---|---|---|---|
 | **348 · SGDEA Acueducto** | EAAB – Acueducto de Bogotá | `LinkTic` / `348 - SGDEA ACUEDUCTO` | `539200` Certificación CORE · `539569` Certificación Temáticos |
-| **005 · Positiva SGDEA** | Positiva · 3T Capital | `3tcapitalco` / `005 - POSITIVA SGDEA NEW` | `578` Deuda Docum |
+| **005 · Positiva SGDEA** | Positiva · 3T Capital | `3tcapitalco` / `005 - POSITIVA SGDEA NEW` | `578` Deuda Técnica y Contractual |
 
 ## ¿Para qué sirve?
 
-El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Master** (único usuario, común a ambos proyectos) **no registra nada a mano**. El tablero cruza **por correo** al personal del Excel de planeación con los ítems asignados en Azure DevOps (HU, Tareas y Bugs de todo el proyecto) y calcula automáticamente:
+El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Master** (único usuario, común a ambos proyectos) **no registra nada a mano**. El tablero cruza **por correo** al personal del Excel de planeación de cada proyecto con los ítems asignados en Azure DevOps (HU, Tareas y Bugs) **que cuelgan de las épicas monitoreadas** de ese proyecto. Lo que está en otras épicas no se analiza. Calcula automáticamente:
 
 - **Qué tiene asignado cada colaborador** y en qué estado está: por iniciar, en curso, entregado o cerrado.
 - **Horas:** 1 punto de esfuerzo = 1 hora. Se toman Story Points o Effort; si no hay, la Estimación original. **No hay doble conteo**: si una HU y sus tareas tienen valor, suman las tareas. Se compara con el "Trabajo completado" que reportan en Azure.
@@ -23,7 +23,7 @@ El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Maste
 - **Filtros globales**, en el header y en el botón "Filtros" de móvil; se recuerdan por proyecto:
   - **Periodo:** sprint actual, 14/30/90 días, este mes, trimestre o rango personalizado.
   - **Colaboradores:** multiselección, más "Incluir fuera de la planeación".
-  - **Ámbito:** todo el proyecto o solo las épicas monitoreadas.
+  - **Épica:** en 348, "Todas las épicas · CORE · Temáticos"; en 005 se muestra solo su épica. Fuera de las épicas monitoreadas no se analiza nada.
 - **Vistas:**
   - **Resumen** (`/`):
     - 6 KPIs con delta frente al periodo anterior: entregados, horas entregadas, en curso, vencidos, % a tiempo y cycle time;
@@ -38,7 +38,7 @@ El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Maste
     - **scorecards** (tarjetas o tabla) con utilización, puntualidad, cycle time y vencidos;
     - **carga semanal** (mapa de calor persona × semana);
     - gráficas de estado por persona y de estimado frente a reportado;
-    - sección **"Fuera de la planeación"**, para vincular manualmente correos de Azure que no coinciden.
+    - sección **"Fuera de la planeación"**: personas con ítems en las épicas que no están en el Excel de ese proyecto (p. ej. en 348, David Vergara y Jhostin Ladino). No cuentan en los indicadores salvo que se active "Incluir fuera de la planeación", y se pueden vincular si son la misma persona con otro correo.
   - **Backlog Azure** (`/backlog`): árbol Épica → Feature → HU → Tarea con estado, asignado, objetivo, entrega y horas acumuladas.
   - **Bitácora** (`/bitacora`): ingresos, sincronizaciones (con conteos o errores) y vinculaciones.
 - **Detalle de un ítem:** ruta Épica › Feature › HU, horas y su origen, plan frente a real, puntualidad, **línea de tiempo de estados** con duraciones e ítems hijos.
@@ -73,7 +73,7 @@ Está **prohibido** crear, modificar o borrar cualquier cosa en Azure DevOps.
    - La primera vez que se abre el tablero, si no hay datos, `GET /api/projects/[p]/dataset` hace la sincronización completa y espera. Fuera de ese caso, el dataset solo lee de Supabase.
 4. **Manual:** **"Sincronizar ahora"** (`POST /api/projects/[p]/sync`) y "Resincronizar todo" (`?full=1`).
    - En la Bitácora, cada corrida indica si fue automática, manual o inicial.
-5. **Lectura de la UI:** el RPC `azure_dataset(proyecto, desde, hasta)` devuelve los ítems asignados "vivos" en el periodo (más sus ancestros y las transiciones de estado). El motor de análisis (`src/lib/analytics/*`) calcula todo **en el navegador**, así que los filtros responden al instante.
+5. **Lectura de la UI:** el RPC `azure_dataset(proyecto, desde, hasta, épicas)` recorre el árbol de las épicas monitoreadas (`AZURE_<p>_EPIC_IDS`) y devuelve solo los ítems asignados "vivos" en el periodo que cuelgan de ellas, sus ancestros hasta la épica, las épicas mismas y las transiciones de estado. La sincronización copia todo el proyecto, para detectar lo que entra o sale de las épicas; el recorte se hace en este RPC. El motor de análisis (`src/lib/analytics/*`) calcula todo **en el navegador**, así que los filtros responden al instante.
 
 **Identidad (`src/lib/analytics/model.ts`):** un correo de Azure se vincula a un colaborador en este orden:
 1. alias manual;
@@ -110,7 +110,7 @@ pnpm dev               # http://localhost:3000
 | `AZURE_005_ORG` / `AZURE_005_PROJECT` / `AZURE_005_EPIC_IDS` / `AZURE_005_PAT` | Lectura del proyecto 005 (REST + Analytics) | ✅ |
 | `SUPABASE_ACCESS_TOKEN` | Token personal `sbp_…`, solo para tooling local | ❌ |
 
-> `AZURE_<p>_EPIC_IDS` solo alimenta el filtro "Épicas monitoreadas"; el análisis cubre todo el proyecto.
+> `AZURE_<p>_EPIC_IDS` define el **alcance** del tablero: solo se analiza lo que cuelga de esas épicas (348: `539200,539569` · 005: `578`).
 
 ## Base de datos (Supabase · `baas-monitoreo-docum`)
 
@@ -120,9 +120,10 @@ pnpm dev               # http://localhost:3000
 | `0002_seed.sql` | Personal del Excel (lo genera `python3 scripts/generate-seed.py`; idempotente) |
 | `0003_stats_and_restore.sql` | Funciones del registro manual (**legado**, sin uso) |
 | `0004_azure_sync.sql` | `azure_work_items`, `azure_revisions`, `azure_sync_runs`, `employee_aliases`, RPC `azure_dataset` |
-| `0005_azure_dataset_assigned.sql` | `azure_dataset` solo con ítems asignados (respuesta más liviana) |
+| `0005_azure_dataset_assigned.sql` | `azure_dataset(p, desde, hasta)` solo con ítems asignados (**legado**: se conserva para despliegues anteriores) |
+| `0006_dataset_monitored_epics.sql` | `azure_dataset(p, desde, hasta, épicas)`: solo el árbol de las épicas monitoreadas |
 
-**Estado (20-oct-2026):** las cinco migraciones están aplicadas. Primera sincronización: 348 con 6.838 ítems y 25.874 revisiones (≈ 45 s); 005 con 627 ítems y 1.942 revisiones (≈ 7 s). Las incrementales tardan segundos.
+**Estado (20-oct-2026):** las seis migraciones están aplicadas. Primera sincronización: 348 con 6.838 ítems y 25.874 revisiones (≈ 45 s); 005 con 627 ítems y 1.942 revisiones (≈ 7 s). Las incrementales tardan segundos.
 
 **Seguridad:**
 - RLS está activo en todas las tablas sin políticas: `anon`/`authenticated` no tienen acceso.
@@ -173,7 +174,7 @@ src/
     charts/     # Chart.js: flow-charts (throughput, CFD, burnup, cycle time, estados, estimado), chart-card, chart-theme
     dashboard/  # work-item-sheet (traza de estados), member-sheet, client-api (fetch + preferencias)
     ui/         # primitives, sheet, popover, theme, display (escala TV + pantalla completa)…
-supabase/migrations/   # 0001 → 0005
+supabase/migrations/   # 0001 → 0006
 scripts/               # generate-seed.py, apply-migrations.mjs
 context/               # Excel de planeación (contiene datos personales)
 ```

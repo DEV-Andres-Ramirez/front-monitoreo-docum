@@ -2,8 +2,8 @@
 import type { StateCategory } from "./types";
 import { DAY, capacityHours, categoryAt, endOfDay, type Item, type Model, type Person } from "./model";
 
-export type Scope = "project" | "epics";
-export type Filters = { from: string; to: string; people: string[]; includeOthers: boolean; scope: Scope };
+/** `epics`: épicas monitoreadas seleccionadas (vacío = todas las del proyecto). */
+export type Filters = { from: string; to: string; people: string[]; includeOthers: boolean; epics: number[] };
 export type Range = { from: number; to: number };
 
 export const CATEGORIES: StateCategory[] = ["Proposed", "InProgress", "Resolved", "Completed"];
@@ -34,15 +34,17 @@ export function visiblePeople(model: Model, f: Filters): Person[] {
     .sort((a, b) => Number(b.inRoster) - Number(a.inRoster) || a.name.localeCompare(b.name, "es"));
 }
 
-/** Ítems de trabajo dentro del alcance (personas seleccionadas + ámbito de épicas). */
+/** ¿El ítem cuelga de las épicas monitoreadas (y de la épica seleccionada, si hay filtro)? */
+export const inEpics = (i: Item, epics: number[]) => i.inMonitoredEpics && (!epics.length || (i.epicId !== null && epics.includes(i.epicId)));
+
+/** Ítems de trabajo dentro del alcance: épicas monitoreadas + personas seleccionadas. */
 export function scopedWork(model: Model, f: Filters): Item[] {
   const selected = new Set(f.people);
   return model.work.filter((i) => {
     const p = model.people.get(i.personKey!);
     if (!p || (!p.inRoster && !f.includeOthers)) return false;
     if (selected.size && !selected.has(p.key)) return false;
-    if (f.scope === "epics" && !i.inMonitoredEpics) return false;
-    return true;
+    return inEpics(i, f.epics);
   });
 }
 

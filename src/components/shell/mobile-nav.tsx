@@ -12,7 +12,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { ThemeSwitchButton, ThemeToggle } from "@/components/ui/theme-toggle";
 import { PROJECTS, PROJECT_KEYS } from "@/lib/config";
 import { useApp } from "./app-provider";
-import { MobileFiltersButton, PeoplePanel, PeriodPanel, ScopeToggle, SyncChip } from "./filter-bar";
+import { EpicFilter, MobileFiltersButton, PeoplePanel, PeriodPanel, SyncChip } from "./filter-bar";
 import { NAV, navFor } from "./nav";
 
 /** Barra superior + tab bar inferior + panel de filtros para pantallas < lg. */
@@ -122,8 +122,8 @@ export function MobileNav() {
         <div className="space-y-5">
           <PeriodPanel />
           <div>
-            <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Ámbito</p>
-            <ScopeToggle />
+            <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Épica</p>
+            <EpicFilter />
           </div>
           <div>
             <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Colaboradores</p>

@@ -82,10 +82,21 @@ export function CommandPalette() {
                   <Command.Item onSelect={() => run(() => app.setPeople([]))} keywords={["todos", "equipo", "limpiar filtro"]}>
                     <Users className="size-4 text-muted" /> Ver todo el equipo
                   </Command.Item>
-                  <Command.Item onSelect={() => run(() => app.setScope(app.filters.scope === "epics" ? "project" : "epics"))} keywords={["épicas", "ámbito", "alcance"]}>
-                    <Layers className="size-4 text-muted" /> {app.filters.scope === "epics" ? "Ver todo el proyecto" : "Solo épicas monitoreadas"}
-                  </Command.Item>
                 </Command.Group>
+
+                {app.epics.length > 1 && (
+                  <Command.Group heading="Épica">
+                    {[{ id: 0, title: "Todas las épicas monitoreadas" }, ...app.epics].map((e) => {
+                      const current = e.id === 0 ? app.filters.epics.length === 0 : app.filters.epics.length === 1 && app.filters.epics[0] === e.id;
+                      return (
+                        <Command.Item key={e.id} value={`épica ${e.title}`} onSelect={() => run(() => app.setEpics(e.id === 0 ? [] : [e.id]))} keywords={["épica", "alcance"]}>
+                          <Layers className="size-4 text-muted" /> {e.title}
+                          {current && <span className="ml-auto text-[0.6875rem] text-subtle">Actual</span>}
+                        </Command.Item>
+                      );
+                    })}
+                  </Command.Group>
+                )}
 
                 <Command.Group heading="Periodo">
                   {PRESETS.map((p) => (

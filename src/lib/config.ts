@@ -26,7 +26,7 @@ export const PROJECTS: Record<ProjectKey, ProjectMeta> = {
     key: "005",
     name: "Positiva SGDEA",
     client: "Positiva · 3T Capital",
-    epics: "Deuda Docum",
+    epics: "Deuda Técnica y Contractual",
     accent: "#13A538",
     accentSoft: "#E3F8E8",
   },

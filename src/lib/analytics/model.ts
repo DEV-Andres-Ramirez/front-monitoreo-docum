@@ -43,10 +43,13 @@ export type Item = AzureItem & {
   cycleTime: number | null;
   leadTime: number | null;
   segments: Segment[];
+  /** Épica monitoreada de la que cuelga (o la épica más cercana, si no cuelga de ninguna) */
   epicId: number | null;
   featureId: number | null;
   inMonitoredEpics: boolean;
 };
+
+export type EpicRef = { id: number; title: string };
 
 export type Model = {
   projectKey: string;
@@ -56,6 +59,8 @@ export type Model = {
   byId: Map<number, Item>;
   people: Map<string, Person>;
   epicIds: number[];
+  /** Épicas monitoreadas del proyecto (en el orden configurado) con su título de Azure */
+  epics: EpicRef[];
   iterations: { name: string; start: number; end: number; count: number }[];
 };
 
@@ -240,10 +245,16 @@ export function buildModel(ds: DatasetResponse, now = Date.now()): Model {
     for (let depth = 0; current && depth < 8; depth++) {
       if (current.type === "Feature" && item.featureId === null) item.featureId = current.id;
       if (current.type === "Epic" && item.epicId === null) item.epicId = current.id;
-      if (monitored.has(current.id)) item.inMonitoredEpics = true;
+      if (monitored.has(current.id)) {
+        item.inMonitoredEpics = true;
+        item.epicId = current.id;
+      }
       current = current.parentId ? byId.get(current.parentId) : undefined;
     }
-    if (monitored.has(item.id)) item.inMonitoredEpics = true;
+    if (monitored.has(item.id)) {
+      item.inMonitoredEpics = true;
+      item.epicId = item.id;
+    }
   }
 
   // Sprints (iteraciones con fechas) presentes en los datos
@@ -264,6 +275,7 @@ export function buildModel(ds: DatasetResponse, now = Date.now()): Model {
     byId,
     people,
     epicIds: ds.epicIds,
+    epics: ds.epicIds.map((id) => ({ id, title: byId.get(id)?.title ?? `Épica #${id}` })),
     iterations: [...iterMap.values()].sort((a, b) => a.start - b.start),
   };
 }

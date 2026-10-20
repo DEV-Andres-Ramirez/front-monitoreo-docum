@@ -7,7 +7,7 @@ import { CalendarRange, Check, ChevronDown, Layers, RefreshCw, Search, SlidersHo
 import { useMemo, useState } from "react";
 import { Avatar, Segmented } from "@/components/ui/primitives";
 import { Popover } from "@/components/ui/popover";
-import { normalizeText } from "@/lib/analytics/model";
+import { normalizeText, type EpicRef } from "@/lib/analytics/model";
 import { PRESET_LABEL, type PeriodPreset } from "@/lib/analytics/period";
 import { formatShort, formatTime } from "@/lib/dates";
 import { useApp } from "./app-provider";
@@ -195,18 +195,37 @@ export function PeopleFilter({ className }: { className?: string }) {
   );
 }
 
-// ------------------------------------------------------------------ Ámbito
-export function ScopeToggle({ className }: { className?: string }) {
-  const { filters, setScope } = useApp();
+// ------------------------------------------------------------------ Épica
+/** Nombre corto de cada épica: quita las palabras iniciales comunes ("Certificación CORE" → "CORE"). */
+export function epicShortLabels(epics: EpicRef[]) {
+  const words = epics.map((e) => e.title.split(/\s+/));
+  let common = 0;
+  while (epics.length > 1 && words.every((w) => w.length > common + 1 && w[common] === words[0][common])) common++;
+  return new Map(epics.map((e, i) => [e.id, words[i].slice(common).join(" ") || e.title]));
+}
+
+/** Filtro por épica monitoreada. Con una sola épica, solo la nombra (el tablero siempre se limita a ella). */
+export function EpicFilter({ className }: { className?: string }) {
+  const { epics, filters, setEpics } = useApp();
+  if (!epics.length) return null;
+  if (epics.length === 1) {
+    return (
+      <span className={clsx("inline-flex h-10 min-w-0 items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-3 text-xs font-medium text-muted", className)} title="Épica monitoreada">
+        <Layers className="size-4 shrink-0 text-accent-fg" />
+        <span className="truncate">Épica: {epics[0].title}</span>
+      </span>
+    );
+  }
+  const short = epicShortLabels(epics);
   return (
     <Segmented
       className={className}
       size="sm"
-      value={filters.scope}
-      onChange={setScope}
+      value={filters.epics.length === 1 ? String(filters.epics[0]) : "all"}
+      onChange={(v) => setEpics(v === "all" ? [] : [Number(v)])}
       options={[
-        { value: "project", label: "Todo el proyecto", title: "HU, tareas y bugs de todo el proyecto" },
-        { value: "epics", label: "Épicas monitoreadas", icon: Layers, title: "Solo lo que cuelga de las épicas configuradas" },
+        { value: "all", label: "Todas las épicas", icon: Layers, title: epics.map((e) => e.title).join(" · ") },
+        ...epics.map((e) => ({ value: String(e.id), label: short.get(e.id)!, title: `${e.title} (#${e.id})` })),
       ]}
     />
   );
@@ -251,21 +270,22 @@ export function FilterBar() {
     <div className="flex flex-wrap items-center gap-2">
       <PeriodPicker />
       <PeopleFilter />
-      <ScopeToggle />
+      <EpicFilter />
     </div>
   );
 }
 
 /** Botón que resume los filtros y abre el panel en móvil. */
 export function MobileFiltersButton() {
-  const { period, filters, setFiltersOpen } = useApp();
+  const { period, filters, epics, setFiltersOpen } = useApp();
+  const epic = filters.epics.length === 1 ? epicShortLabels(epics).get(filters.epics[0]) : undefined;
   return (
     <button onClick={() => setFiltersOpen(true)} className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm shadow-sm">
       <SlidersHorizontal className="size-4 shrink-0 text-accent-fg" />
       <span className="truncate">
         {period.label}
         {filters.people.length > 0 && ` · ${filters.people.length} pers.`}
-        {filters.scope === "epics" && " · épicas"}
+        {epic && ` · ${epic}`}
       </span>
     </button>
   );

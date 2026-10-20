@@ -8,7 +8,7 @@ import { useApp } from "@/components/shell/app-provider";
 import { Avatar, Chip, EmptyState, ProgressRing, TypeBadge } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
 import { useTheme } from "@/components/ui/theme";
-import { CATEGORIES, CATEGORY_LABEL, isAlive, perPerson } from "@/lib/analytics/metrics";
+import { CATEGORIES, CATEGORY_LABEL, inEpics, isAlive, perPerson } from "@/lib/analytics/metrics";
 import type { Person } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import type { StateCategory } from "@/lib/analytics/types";
@@ -47,8 +47,8 @@ function Body({ person }: { person: Person }) {
   const dark = resolved === "dark";
   const [cat, setCat] = useState<StateCategory | "all">("all");
   const items = useMemo(
-    () => model!.work.filter((i) => i.personKey === person.key && isAlive(i, range) && (filters.scope === "project" || i.inMonitoredEpics)),
-    [model, person.key, range, filters.scope],
+    () => model!.work.filter((i) => i.personKey === person.key && isAlive(i, range) && inEpics(i, filters.epics)),
+    [model, person.key, range, filters.epics],
   );
   const row = useMemo(() => perPerson([person], items, range, model!.now)[0], [person, items, range, model]);
   const listed = items.filter((i) => cat === "all" || i.cat === cat).sort((a, b) => (b.deliveredAt ?? b.createdAt) - (a.deliveredAt ?? a.createdAt));
@@ -100,7 +100,7 @@ function Body({ person }: { person: Person }) {
       </div>
 
       {items.length === 0 ? (
-        <EmptyState title="Sin ítems asignados en el periodo" description="Amplía el periodo o revisa el vínculo de su correo en Azure." />
+        <EmptyState title="Sin ítems en las épicas monitoreadas en este periodo" description="Amplía el periodo, revisa el filtro de épica o el vínculo de su correo en Azure." />
       ) : (
         <>
           <section>

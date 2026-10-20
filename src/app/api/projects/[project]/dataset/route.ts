@@ -14,7 +14,8 @@ export const maxDuration = 300;
 const MAX_RANGE_DAYS = 400;
 
 /**
- * Dataset de análisis del periodo [from, to]: ítems vivos + ancestros + transiciones de estado,
+ * Dataset de análisis del periodo [from, to], limitado a las épicas monitoreadas del proyecto
+ * (AZURE_<p>_EPIC_IDS): ítems vivos + ancestros hasta la épica + transiciones de estado,
  * personal de la planeación, colaboradores y alias. Solo lee de Supabase: la sincronización con
  * Azure es automática cada hora (POST /api/sync/auto) o manual (POST /api/projects/[p]/sync).
  */
@@ -31,6 +32,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/projects
 
   try {
     const cfg = azureConfig(project);
+    if (!cfg.epicIds.length) return errorResponse(new Error(`No hay épicas configuradas para el proyecto ${project} (AZURE_${project}_EPIC_IDS)`), 500);
     let status = await syncStatus(project);
     if (!status.lastAt && isSyncDue(status)) {
       // Primera vez: se espera la sincronización completa para no mostrar un tablero vacío.
@@ -40,7 +42,8 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/projects
     }
 
     const [rpc, members, employees, aliases] = await Promise.all([
-      db().rpc("azure_dataset", { p_project: project, p_from: from, p_to: to }),
+      // Solo lo que cuelga de las épicas monitoreadas del proyecto
+      db().rpc("azure_dataset", { p_project: project, p_from: from, p_to: to, p_epics: cfg.epicIds }),
       loadMembers(project),
       db().from("employees").select("id, full_name, email"),
       db().from("employee_aliases").select("alias_email, employee_id").eq("project_key", project),

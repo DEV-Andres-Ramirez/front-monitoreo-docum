@@ -10,8 +10,8 @@ import { WorkItemSheet } from "@/components/dashboard/work-item-sheet";
 import { toggleFullscreen } from "@/components/ui/display";
 import { changeScale } from "@/components/ui/display-controls";
 import { isSheetOpen } from "@/components/ui/sheet";
-import { periodRange, previousRange, scopedWork, visiblePeople, type Filters, type Range, type Scope } from "@/lib/analytics/metrics";
-import { buildModel, type Item, type Model, type Person } from "@/lib/analytics/model";
+import { periodRange, previousRange, scopedWork, visiblePeople, type Filters, type Range } from "@/lib/analytics/metrics";
+import { buildModel, type EpicRef, type Item, type Model, type Person } from "@/lib/analytics/model";
 import { resolvePreset, type PeriodPreset } from "@/lib/analytics/period";
 import type { DatasetResponse, SyncInfo } from "@/lib/analytics/types";
 import { PROJECT_KEYS, PROJECTS, type ProjectKey, type ProjectMeta } from "@/lib/config";
@@ -20,9 +20,11 @@ import { CommandPalette } from "./command-palette";
 import { NAV } from "./nav";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 
-type StoredFilters = { preset: PeriodPreset; from: string; to: string; people: string[]; includeOthers: boolean; scope: Scope };
+// `epics` vacío = todas las épicas monitoreadas del proyecto (el antiguo `scope` guardado se ignora)
+type StoredFilters = { preset: PeriodPreset; from: string; to: string; people: string[]; includeOthers: boolean; epics?: number[] };
 type StoredIteration = { name: string; start: number; end: number; count: number };
-const DEFAULT_FILTERS: StoredFilters = { preset: "30d", from: "", to: "", people: [], includeOthers: false, scope: "project" };
+const DEFAULT_FILTERS: StoredFilters = { preset: "30d", from: "", to: "", people: [], includeOthers: false, epics: [] };
+const NO_EPICS: EpicRef[] = [];
 const NO_ITERATIONS: StoredIteration[] = [];
 
 type AutoSyncResponse = { results: Record<ProjectKey, { status: "ok" | "skipped" | "error" }>; nextAutoAt: string | null };
@@ -43,7 +45,9 @@ type AppContextValue = {
   setPeople: (keys: string[]) => void;
   togglePerson: (key: string) => void;
   setIncludeOthers: (value: boolean) => void;
-  setScope: (scope: Scope) => void;
+  /** Épicas monitoreadas del proyecto (las que se pueden filtrar) */
+  epics: EpicRef[];
+  setEpics: (ids: number[]) => void;
   range: Range;
   prevRange: Range;
   dataset: { data?: DatasetResponse; error?: Error; isLoading: boolean; mutate: KeyedMutator<DatasetResponse> };
@@ -109,11 +113,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return resolvePreset(stored.preset === "custom" ? "30d" : stored.preset, today, iterations);
   }, [stored.preset, stored.from, stored.to, today, iterations]);
 
-  const filters: Filters = useMemo(
-    () => ({ from: period.from, to: period.to, people: stored.people, includeOthers: stored.includeOthers, scope: stored.scope }),
-    [period.from, period.to, stored.people, stored.includeOthers, stored.scope],
-  );
-  const range = useMemo(() => periodRange(filters), [filters]);
+  const range = useMemo(() => periodRange(period), [period]);
   const prevRange = useMemo(() => previousRange(range), [range]);
 
   // El dataset incluye el periodo anterior (para los deltas)
@@ -126,6 +126,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   });
   const data = dataset.data?.projectKey === projectKey ? dataset.data : undefined;
   const model = useMemo(() => (data ? buildModel(data) : undefined), [data]);
+  const epics = model?.epics ?? NO_EPICS;
+
+  // El dataset trae siempre las épicas monitoreadas; el filtro descarta IDs que ya no estén configurados
+  const filters: Filters = useMemo(
+    () => ({
+      from: period.from,
+      to: period.to,
+      people: stored.people,
+      includeOthers: stored.includeOthers,
+      epics: (stored.epics ?? []).filter((id) => epics.some((e) => e.id === id)),
+    }),
+    [period.from, period.to, stored.people, stored.includeOthers, stored.epics, epics],
+  );
 
   // Guarda las iteraciones conocidas (para resolver "Sprint actual" sin depender del periodo)
   useEffect(() => {
@@ -277,7 +290,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     togglePerson: (key) => update({ people: stored.people.includes(key) ? stored.people.filter((k) => k !== key) : [...stored.people, key] }),
     setIncludeOthers: (includeOthers) =>
       update({ includeOthers, people: includeOthers ? stored.people : stored.people.filter((k) => model?.people.get(k)?.inRoster) }),
-    setScope: (scope) => update({ scope }),
+    epics,
+    setEpics: (ids) => update({ epics: ids }),
     range,
     prevRange,
     dataset: { data, error: dataset.error, isLoading: !data && !dataset.error, mutate: dataset.mutate },
