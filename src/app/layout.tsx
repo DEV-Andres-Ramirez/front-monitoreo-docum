@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Outfit } from "next/font/google";
-import { Toaster } from "sonner";
+import { ThemedToaster } from "@/components/ui/themed-toaster";
+import { THEME_INIT_SCRIPT } from "@/components/ui/theme";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -19,24 +20,33 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Monitoreo Docum · LinkTic",
+  title: { default: "Monitoreo Docum · LinkTic", template: "%s · Monitoreo Docum" },
   description: "Tablero interno de control y traza de actividades diarias por colaborador — proyectos 348 Acueducto y 005 Positiva.",
   robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0090FF",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f3f6fb" },
+    { media: "(prefers-color-scheme: dark)", color: "#060b16" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="es-CO"
+      data-theme="light"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} h-full antialiased`}
     >
+      <head>
+        {/* Aplica el tema guardado antes del primer pintado (sin parpadeo). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">
         {children}
-        <Toaster position="top-center" richColors closeButton toastOptions={{ className: "font-sans" }} />
+        <ThemedToaster />
       </body>
     </html>
   );

@@ -18,24 +18,35 @@ El cliente solicitó monitoreo de lo que hace cada persona asignada. El **Scrum 
 
 Todo queda guardado en Supabase con **traza completa**: bitácora de auditoría con el antes y el después de cada cambio, borrado lógico, y registro de ingresos y salidas.
 
-### Funcionalidades (v1)
+### Funcionalidades (v2 · rediseño UI/UX)
 
-- **Login con token único** (variable `ACCESS_TOKEN`) y sesión firmada de 12 h.
-- **Selector de proyecto** 348 / 005. Cada uno tiene su personal, sus épicas y su color de acento.
-- **Navegación por fecha**, con "hoy" calculado en America/Bogota.
-- **KPIs del día:**
-  - horas registradas frente a las esperadas;
-  - colaboradores reportados y % de cobertura;
-  - número de actividades;
-  - horas de la semana.
-- **Pestaña Equipo:**
-  - una tarjeta por colaborador con su % de asignación, tipo (Fijo/Multiproyecto), barra de horas frente a la jornada esperada (8 h × % asignado) y estado *Sin registro / Parcial / Completo / Fuera de vigencia*;
-  - buscador y filtros.
-- **Detalle del colaborador:** línea de tiempo de sus actividades (semana, 30 o 90 días) y registro rápido.
-- **Formulario de actividad** con buscador de work items de Azure (por # o título, filtro por tipo). Primero aparecen los ítems **asignados a esa persona**.
-- **Pestaña Actividades:** listado por rango, filtrable por colaborador o texto, con edición, borrado (lógico) y **exportación CSV** (formato Excel en español).
-- **Sincronizar Azure:** refresca la caché del backlog. Es **solo lectura**.
-- Diseño responsivo: en móvil los paneles son bottom sheets y hay un botón flotante para registrar. Incluye animaciones con `motion` y respeta `prefers-reduced-motion`.
+- **Acceso:** login con token único (`ACCESS_TOKEN`) y sesión firmada de 12 h. La pantalla de ingreso tiene panel de marca, aviso de Bloq Mayús y selector de tema.
+- **App shell profesional:**
+  - **barra lateral** colapsable (escritorio) con selector de proyecto, navegación, estado de Azure, selector de tema y sesión;
+  - **barra inferior tipo app** en móvil, con botón central "+" para registrar;
+  - **tira semanal** (Lun→Dom) con un anillo de cobertura por día.
+- **Tema claro / oscuro / sistema:** sin parpadeo al cargar (script inline) y con transición circular al cambiar (View Transitions API).
+- **Vistas (rutas reales):**
+  - **Resumen** (`/`):
+    - 4 KPIs con delta frente al periodo anterior y *sparkline*;
+    - 4 gráficas con **Chart.js**: horas diarias frente a capacidad, cobertura de reporte, horas por colaborador (*bullet*), distribución por tipo de ítem (dona) y horas por Feature;
+    - tarjeta de **pendientes del día**.
+    - Cada gráfica tiene leyenda HTML y **vista de tabla** accesible.
+  - **Equipo** (`/equipo`): vistas **Tarjetas / Lista / Matriz**. La matriz es un *heatmap* persona × día de la semana con el valor escrito en cada celda; un clic abre el detalle o el registro de esa fecha.
+  - **Actividades** (`/actividades`): agrupadas por día con subtotales y filtros por rango, persona, tipo de ítem y texto. Incluye edición, borrado con **Deshacer** y exportación **CSV**.
+  - **Backlog Azure** (`/backlog`): árbol Épica → Feature → HU → Tarea con horas **propias y acumuladas**, personas que registraron y detalle por ítem. Es solo lectura.
+  - **Bitácora** (`/bitacora`): línea de tiempo de la auditoría (ingresos, registros, ediciones con comparación antes→después, borrados, restauraciones y sincronizaciones), con filtros y carga incremental.
+- **Productividad:**
+  - **paleta ⌘K** (`cmdk`) para buscar personas, HU, vistas y acciones;
+  - **atajos de teclado**: `N` nueva actividad, `T` hoy, `←/→` día, `1–5` vistas, `?` ayuda y `⌘↵` guardar;
+  - "Repetir última actividad" y resumen en vivo en el formulario.
+- **Formulario:** buscador de work items con teclado (↑↓ Enter). Primero aparecen los ítems **asignados a esa persona**; el servidor valida que pertenezcan a las épicas.
+- **Fines de semana:** no se exige reporte (esperado 0 h y estado "Fin de semana"), pero se puede registrar.
+- **Accesibilidad:**
+  - foco visible;
+  - estados siempre con ícono + texto;
+  - colores de gráficas validados para daltonismo;
+  - `prefers-reduced-motion` respetado.
 
 ## ⚠️ Regla de oro: Azure DevOps es SOLO LECTURA
 
@@ -48,7 +59,7 @@ Está **prohibido** crear, modificar o borrar cualquier cosa en Azure DevOps.
 ## Stack
 
 - **Next.js 16.4** (App Router, `src/`, Turbopack, `cacheComponents`, `proxy.ts`), **React 19.3**, **TypeScript**.
-- **Tailwind CSS v4** (tokens en `src/app/globals.css`), **motion** (animaciones), **lucide-react** (íconos), **sonner** (toasts), **SWR** (datos en el cliente), **zod** (validación), **jose** (JWT), **date-fns**.
+- **Tailwind CSS v4** (tokens semánticos claro/oscuro en `src/app/globals.css`), **motion** (animaciones), **Chart.js 4 + react-chartjs-2** (gráficas), **cmdk** (paleta ⌘K), **lucide-react** (íconos), **sonner** (toasts), **SWR** (datos en el cliente), **zod** (validación), **jose** (JWT), **date-fns**.
 - **Supabase (Postgres)**, accedido solo desde el servidor con la llave secreta.
 - **Azure DevOps REST API 7.1** (WIQL + Work Items), solo lectura.
 
@@ -81,6 +92,7 @@ pnpm dev            # http://localhost:3000
 Las migraciones viven en `supabase/migrations/`:
 
 - `0001_schema.sql`: tablas, índices, triggers, RLS.
+- `0003_stats_and_restore.sql`: funciones `activity_stats()` / `activity_totals()` (agregados en Postgres, solo ejecutables por `service_role`) y auditoría de `activity_restored`.
 - `0002_seed.sql`: colaboradores y asignaciones. Se **genera** desde el Excel de planeación:
   ```bash
   python3 scripts/generate-seed.py [ruta_excel]   # por defecto context/Planeacion_oct2026_Docum_Acueducto.xlsx
@@ -89,7 +101,7 @@ Las migraciones viven en `supabase/migrations/`:
 
 Para aplicarlas: con el MCP de Supabase del proyecto (`.mcp.json`), con `scripts/apply-migrations.mjs` o pegándolas en el **SQL Editor** del dashboard, en orden.
 
-**Estado actual (19-oct-2026):** `0001` y `0002` ya están aplicadas en `klrierizueihrenhcema`, con 55 colaboradores y 58 asignaciones (005: 49, 348: 9).
+**Estado actual (20-oct-2026):** `0001`, `0002` y `0003` ya están aplicadas en `klrierizueihrenhcema`, con 55 colaboradores y 58 asignaciones (005: 49, 348: 9).
 
 | Tabla | Contenido |
 |---|---|
@@ -97,7 +109,7 @@ Para aplicarlas: con el MCP de Supabase del proyecto (`.mcp.json`), con `scripts
 | `employees` | Colaboradores únicos (cédula única, nombre, correo) |
 | `project_members` | Asignación persona ↔ proyecto: cargo, % asignado, vigencia, Fijo/Multiproyecto |
 | `activity_logs` | Registro diario: fecha, horas, descripción, evidencia, work item (snapshot), `deleted_at` |
-| `audit_log` | Traza: `login_success`, `login_failed`, `logout`, `activity_created`, `activity_updated`, `activity_deleted`, `azure_refresh` (con `old_data`/`new_data`, IP y user-agent) |
+| `audit_log` | Traza: `login_success`, `login_failed`, `logout`, `activity_created`, `activity_updated`, `activity_deleted`, `activity_restored`, `azure_refresh` (con `old_data`/`new_data`, IP y user-agent) |
 
 **Seguridad:** RLS está activo en todas las tablas y sin políticas, así que `anon`/`authenticated` no tienen acceso. Solo el backend (llave secreta) lee y escribe. Los cambios en `activity_logs` se auditan con el trigger `audit_activity_changes()`.
 
@@ -121,28 +133,36 @@ Para aplicarlas: con el MCP de Supabase del proyecto (`.mcp.json`), con `scripts
 
 ```
 src/
-  proxy.ts                         # verificación optimista de sesión (→ /login o 401)
+  proxy.ts                           # verificación optimista de sesión (→ /login o 401)
   app/
-    layout.tsx, globals.css, icon.png
-    page.tsx                       # shell + <Dashboard/> (client) dentro de <Suspense>
-    login/                         # pantalla de ingreso por token
+    layout.tsx                       # fuentes, script de tema sin parpadeo, toaster
+    globals.css                      # tokens claro/oscuro, acento por proyecto ([data-project])
+    login/                           # ingreso por token (panel de marca + formulario)
+    (app)/                           # grupo con el app shell (Suspense + AppProvider)
+      layout.tsx, template.tsx       # shell y transición de entrada por vista
+      page.tsx                       # /            Resumen
+      equipo/ actividades/ backlog/ bitacora/
     api/
-      auth/login, auth/logout      # sesión + auditoría
-      projects/[project]/team      # equipo + horas del día/semana
-      projects/[project]/activities# GET rango · POST crear
-      projects/[project]/work-items# GET backlog Azure (cache) · POST sincronizar
-      activities/[id]              # PATCH editar · DELETE borrado lógico
+      auth/login, auth/logout        # sesión + auditoría
+      projects/[project]/team        # equipo + horas del día/semana
+      projects/[project]/stats       # analítica del rango (RPC activity_stats)
+      projects/[project]/activities  # GET rango (paginado, filtros) · POST crear
+      projects/[project]/work-items  # GET backlog Azure (cache) · POST sincronizar
+      activities/[id]                # PATCH editar · DELETE borrado lógico
+      activities/[id]/restore        # POST deshacer borrado
+      audit                          # GET bitácora paginada por cursor
   lib/
-    config.ts   # proyectos, jornada, zona horaria (compartido cliente/servidor)
-    session.ts  # JWT de sesión (jose)
-    auth.ts     # DAL: isAuthenticated() en Route Handlers
-    supabase.ts # cliente server-only con llave secreta
-    azure.ts    # cliente Azure SOLO LECTURA + getWorkItems() con 'use cache'
-    activities.ts, validators.ts, audit.ts, dates.ts, types.ts
+    config.ts, dates.ts, types.ts, work-item-types.ts   # compartidos cliente/servidor
+    session.ts, auth.ts              # JWT de sesión y DAL
+    supabase.ts, members.ts, stats.ts, activities.ts, audit.ts, validators.ts  # servidor
+    azure.ts                         # cliente Azure SOLO LECTURA + getWorkItems() con 'use cache'
   components/
-    dashboard/  # header, date-nav, kpi-cards, team-grid, member-drawer, activity-form, work-item-picker, activities-table…
-    ui/         # sheet, primitives (avatar, badges, chips, skeleton), animated-number, fade-up
-supabase/migrations/   # SQL versionado
-scripts/generate-seed.py
+    shell/      # app-provider (estado, atajos, paneles globales), sidebar, topbar, mobile-nav, week-strip, command-palette, shortcuts-dialog
+    views/      # overview, team (+ compliance-matrix), activities, backlog, audit
+    charts/     # setup (registro Chart.js + crosshair), chart-theme, chart-card, hours-charts, azure-charts
+    dashboard/  # activity-form, work-item-picker, member-drawer, work-item-sheet, activity-item, team-grid, client-api
+    ui/         # primitives (Button, Segmented, Chip, Avatar, badges, Kbd, EmptyState, ProgressRing), sheet, theme, theme-toggle…
+supabase/migrations/   # SQL versionado (0001 esquema · 0002 semilla · 0003 analítica/restauración)
+scripts/               # generate-seed.py, apply-migrations.mjs
 context/               # Excel de planeación de personal (insumo; contiene datos personales)
 ```

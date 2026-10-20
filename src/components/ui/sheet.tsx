@@ -12,6 +12,10 @@ function subscribe(callback: () => void) {
   return () => media.removeEventListener("change", callback);
 }
 
+/** Pila de hojas abiertas: Escape solo cierra la de más arriba. */
+const openSheets: symbol[] = [];
+export const isSheetOpen = () => openSheets.length > 0;
+
 export function useIsDesktop() {
   return useSyncExternalStore(
     subscribe,
@@ -33,16 +37,21 @@ type SheetProps = {
 };
 
 /** Panel lateral en escritorio / bottom sheet en móvil. */
-export function Sheet({ open, onClose, title, description, children, footer, level = 1, width = "sm:w-[560px]" }: SheetProps) {
+export function Sheet({ open, onClose, title, description, children, footer, level = 1, width = "sm:w-[580px]" }: SheetProps) {
   const desktop = useIsDesktop();
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const token = Symbol("sheet");
+    openSheets.push(token);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && openSheets[openSheets.length - 1] === token) onClose();
+    };
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKey);
     return () => {
+      openSheets.splice(openSheets.indexOf(token), 1);
       document.body.style.overflow = previous;
       window.removeEventListener("keydown", onKey);
     };
@@ -55,28 +64,28 @@ export function Sheet({ open, onClose, title, description, children, footer, lev
       {open && (
         <div className={`fixed inset-0 ${level === 2 ? "z-[70]" : "z-50"}`} role="dialog" aria-modal="true">
           <motion.div
-            className="absolute inset-0 bg-slate-900/35 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-[var(--overlay)] backdrop-blur-[3px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 0, transition: { duration: 0.18 } }}
             onClick={onClose}
           />
           <motion.aside
             initial={hidden}
             animate={{ x: 0, y: 0 }}
-            exit={hidden}
-            transition={{ type: "spring", damping: 32, stiffness: 320 }}
-            className={`absolute inset-x-0 bottom-0 flex max-h-[94dvh] flex-col rounded-t-3xl bg-white shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:rounded-l-3xl sm:rounded-tr-none ${width}`}
+            exit={{ ...hidden, transition: { duration: 0.22, ease: "easeIn" } }}
+            transition={{ type: "spring", damping: 34, stiffness: 340 }}
+            className={`absolute inset-x-0 bottom-0 flex max-h-[94dvh] flex-col rounded-t-[28px] border-t border-line bg-surface shadow-pop sm:inset-y-2 sm:left-auto sm:right-2 sm:max-h-none sm:rounded-[28px] sm:border ${width}`}
           >
-            <div className="mx-auto mt-2.5 h-1.5 w-12 rounded-full bg-slate-200 sm:hidden" />
+            <div className="mx-auto mt-2.5 h-1.5 w-12 rounded-full bg-line-strong sm:hidden" />
             <header className="flex items-start justify-between gap-4 border-b border-line px-5 pb-4 pt-4 sm:px-7 sm:pt-6">
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="font-display text-lg font-semibold leading-tight text-foreground sm:text-xl">{title}</div>
                 {description && <div className="mt-1 text-sm text-muted">{description}</div>}
               </div>
               <button
                 onClick={onClose}
-                className="rounded-full p-2 text-muted transition hover:rotate-90 hover:bg-slate-100 hover:text-foreground"
+                className="rounded-full p-2 text-muted transition hover:rotate-90 hover:bg-surface-3 hover:text-foreground"
                 aria-label="Cerrar"
               >
                 <X className="size-5" />

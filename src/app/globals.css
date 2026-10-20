@@ -1,90 +1,257 @@
 @import "tailwindcss";
 
+/* El tema se fija en <html data-theme="light|dark"> antes del primer pintado (ver layout.tsx). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* ------------------------------------------------------------------
-   Identidad LinkTic: azul cielo + verde hoja (tomados del logo)
-   --accent cambia según el proyecto activo (ver Dashboard).
+   Tokens semánticos — Identidad LinkTic (azul cielo + verde hoja)
 ------------------------------------------------------------------- */
 :root {
-  --background: #f4f8fc;
-  --foreground: #0f1b2d;
-  --muted: #5d6b7e;
-  --line: #e3eaf2;
-  --card: #ffffff;
+  --bg: #f3f6fb;
+  --surface: #ffffff;
+  --surface-2: #f5f8fc;
+  --surface-3: #edf2f8;
+  --elevated: #ffffff;
+  --fg: #0c1828;
+  --muted: #586a80;
+  --subtle: #8796aa;
+  --line: #e2e9f2;
+  --line-strong: #cfd9e6;
+  --overlay: rgb(9 16 30 / 0.42);
+  --shadow-card: 0 1px 2px rgb(16 32 64 / 0.04), 0 8px 24px -12px rgb(16 32 64 / 0.18);
+  --shadow-pop: 0 24px 60px -18px rgb(16 32 64 / 0.35);
+  --highlight: transparent;
+
   --brand-blue: #0090ff;
   --brand-sky: #00c2ff;
   --brand-green: #13a538;
   --brand-lime: #22d400;
-  --accent: var(--brand-blue);
-  --accent-soft: #e0f2ff;
+
+  --good: #0ca30c;
+  --good-soft: #e7f6e7;
+  --good-fg: #087008;
+  --warning: #fab219;
+  --warning-soft: #fff5de;
+  --warning-fg: #8a5a00;
+  --critical: #d03b3b;
+  --critical-soft: #fdeaea;
+  --critical-fg: #b02a2a;
+  --info-soft: #e7f1fe;
+  --info-fg: #1c5cab;
+
+  /* Acento por defecto (348); [data-project] lo cambia */
+  --accent: #0090ff;
+  --accent-fg: #0071ce;
+  --accent-soft: #e6f3ff;
+  --accent-contrast: #ffffff;
+}
+
+[data-theme="dark"] {
+  --bg: #060b16;
+  --surface: #0d1526;
+  --surface-2: #111b2f;
+  --surface-3: #16223a;
+  --elevated: #131e34;
+  --fg: #e7eef8;
+  --muted: #98a6ba;
+  --subtle: #66768e;
+  --line: #1c2840;
+  --line-strong: #283754;
+  --overlay: rgb(2 6 14 / 0.66);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 30px -14px rgb(0 0 0 / 0.7);
+  --shadow-pop: 0 30px 80px -20px rgb(0 0 0 / 0.85);
+  --highlight: rgb(255 255 255 / 0.04);
+
+  --good-soft: rgb(12 163 12 / 0.16);
+  --good-fg: #5ad65a;
+  --warning-soft: rgb(250 178 25 / 0.14);
+  --warning-fg: #f7c55a;
+  --critical-soft: rgb(208 59 59 / 0.18);
+  --critical-fg: #f08080;
+  --info-soft: rgb(57 135 229 / 0.16);
+  --info-fg: #8fbdf3;
+
+  --accent: #2f95f0;
+  --accent-fg: #6bb8ff;
+  --accent-soft: rgb(47 149 240 / 0.15);
+}
+
+[data-project="005"] {
+  --accent: #13a538;
+  --accent-fg: #0e7f2b;
+  --accent-soft: #e5f6ea;
+}
+[data-theme="dark"] [data-project="005"] {
+  --accent: #22ae52;
+  --accent-fg: #4fd27a;
+  --accent-soft: rgb(34 174 82 / 0.15);
+}
+[data-theme="dark"] [data-project="348"] {
+  --accent: #2f95f0;
+  --accent-fg: #6bb8ff;
+  --accent-soft: rgb(47 149 240 / 0.15);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-elevated: var(--elevated);
+  --color-foreground: var(--fg);
   --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
   --color-line: var(--line);
-  --color-card: var(--card);
+  --color-line-strong: var(--line-strong);
   --color-brand-blue: var(--brand-blue);
   --color-brand-sky: var(--brand-sky);
   --color-brand-green: var(--brand-green);
   --color-brand-lime: var(--brand-lime);
   --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
   --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-good-fg: var(--good-fg);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-fg: var(--warning-fg);
+  --color-critical: var(--critical);
+  --color-critical-soft: var(--critical-soft);
+  --color-critical-fg: var(--critical-fg);
+  --color-info-soft: var(--info-soft);
+  --color-info-fg: var(--info-fg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-display: var(--font-outfit);
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
 }
 
 html {
   color-scheme: light;
+  -webkit-tap-highlight-color: transparent;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--fg);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--brand-sky) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
-/* Transición suave del acento al cambiar de proyecto */
-.accent-transition {
-  transition:
-    background-color 0.5s ease,
-    color 0.5s ease,
-    border-color 0.5s ease;
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
-/* Fondo del tablero: malla suave de marca */
-.app-bg {
-  background:
-    radial-gradient(60rem 30rem at 110% -10%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%),
-    radial-gradient(50rem 30rem at -10% 10%, color-mix(in srgb, var(--brand-sky) 10%, transparent), transparent 60%),
-    var(--background);
-  transition: background 0.6s ease;
+/* ------------------------------------------------------------------
+   Superficies
+------------------------------------------------------------------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 1.25rem;
+  box-shadow: var(--shadow-card), inset 0 1px 0 var(--highlight);
 }
 
 .glass {
-  background: color-mix(in srgb, white 78%, transparent);
-  backdrop-filter: blur(14px) saturate(1.4);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+}
+
+/* Fondo de la app: malla de marca + grilla desvanecida + ruido */
+.app-bg {
+  background:
+    radial-gradient(70rem 36rem at 105% -12%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 60%),
+    radial-gradient(56rem 32rem at -12% 4%, color-mix(in srgb, var(--brand-sky) 8%, transparent), transparent 60%),
+    var(--bg);
+  transition: background 0.6s ease;
+}
+.app-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--fg) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--fg) 4%, transparent) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, black 30%, transparent 75%);
+  z-index: 0;
+}
+.noise::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  z-index: 0;
+}
+
+/* Texto con degradado de marca */
+.text-gradient {
+  background: linear-gradient(100deg, var(--fg) 20%, color-mix(in srgb, var(--accent) 80%, var(--fg)) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Botón primario con borde degradado animado */
+.btn-glow {
+  position: relative;
+  isolation: isolate;
+}
+.btn-glow::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--angle, 0deg), transparent 0 60%, rgb(255 255 255 / 0.85) 75%, transparent 90%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: spin-angle 4s linear infinite;
+  opacity: 0.55;
+  z-index: -1;
+}
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes spin-angle {
+  to {
+    --angle: 360deg;
+  }
 }
 
 /* Skeleton con brillo */
 .shimmer {
   position: relative;
   overflow: hidden;
-  background: #e8eef5;
+  background: var(--surface-3);
 }
 .shimmer::after {
   content: "";
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface) 70%, transparent), transparent);
   animation: shimmer 1.4s infinite;
 }
 @keyframes shimmer {
@@ -93,7 +260,7 @@ body {
   }
 }
 
-/* Blobs animados del login */
+/* Blobs animados (login) */
 @keyframes blob {
   0%,
   100% {
@@ -107,12 +274,55 @@ body {
   }
 }
 .animate-blob {
-  animation: blob 14s ease-in-out infinite;
+  animation: blob 16s ease-in-out infinite;
 }
 
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: #cdd7e3 transparent;
+  scrollbar-color: var(--line-strong) transparent;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Transición circular al cambiar de tema (View Transitions API) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* Paleta de comandos (cmdk) */
+[cmdk-group-heading] {
+  padding: 0.5rem 0.75rem 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--subtle);
+}
+[cmdk-item] {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--fg);
+  cursor: pointer;
+  user-select: none;
+}
+[cmdk-item][data-selected="true"] {
+  background: var(--accent-soft);
+}
+[cmdk-empty] {
+  padding: 2rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--muted);
 }
 
 @media (prefers-reduced-motion: reduce) {

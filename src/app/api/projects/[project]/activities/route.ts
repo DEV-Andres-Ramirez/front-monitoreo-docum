@@ -3,6 +3,7 @@ import { ACTIVITY_SELECT, toActivity, workItemSnapshot } from "@/lib/activities"
 import { errorResponse, isAuthenticated, unauthorizedResponse } from "@/lib/auth";
 import { isProjectKey } from "@/lib/config";
 import { ISO_DATE, todayISO, weekRange } from "@/lib/dates";
+import { selectAll } from "@/lib/stats";
 import { db } from "@/lib/supabase";
 import { activityCreateSchema, firstIssue } from "@/lib/validators";
 
@@ -16,23 +17,26 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/projects
   const from = ISO_DATE.test(params.get("from") ?? "") ? params.get("from")! : fallback.start;
   const to = ISO_DATE.test(params.get("to") ?? "") ? params.get("to")! : fallback.end;
   const employeeId = params.get("employeeId");
+  const workItemId = Number(params.get("workItemId")) || null;
 
   try {
-    let query = db()
-      .from("activity_logs")
-      .select(ACTIVITY_SELECT)
-      .eq("project_key", project)
-      .is("deleted_at", null)
-      .gte("work_date", from)
-      .lte("work_date", to)
-      .order("work_date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(2000);
-    if (employeeId) query = query.eq("employee_id", employeeId);
-
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-    return Response.json({ from, to, activities: data.map(toActivity) });
+    const rows = await selectAll((start, end) => {
+      let query = db()
+        .from("activity_logs")
+        .select(ACTIVITY_SELECT)
+        .eq("project_key", project)
+        .is("deleted_at", null)
+        .gte("work_date", from)
+        .lte("work_date", to)
+        .order("work_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .order("id") // desempate estable para paginar
+        .range(start, end);
+      if (employeeId) query = query.eq("employee_id", employeeId);
+      if (workItemId) query = query.eq("work_item_id", workItemId);
+      return query;
+    });
+    return Response.json({ from, to, activities: rows.map(toActivity) });
   } catch (error) {
     return errorResponse(error);
   }
