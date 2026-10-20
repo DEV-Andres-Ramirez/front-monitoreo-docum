@@ -51,7 +51,7 @@ export function trendRange(r: Range): Range {
   return { from: d.getTime(), to: r.to };
 }
 
-/** Personas visibles según el filtro (planeación ± otros). */
+/** Personas visibles según el filtro (personal del proyecto ± fuera de Global). */
 export function visiblePeople(model: Model, f: Filters): Person[] {
   return [...model.people.values()]
     .filter((p) => p.inRoster || f.includeOthers)

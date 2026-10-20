@@ -6,10 +6,10 @@ import { es } from "date-fns/locale";
 import { AlertTriangle, CheckCircle2, ChevronRight, CircleDot, Diamond } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useBreakpoint } from "@/components/ui/display";
-import { Avatar, TypeBadge } from "@/components/ui/primitives";
+import { Avatar, NoGlobalBadge, TypeBadge } from "@/components/ui/primitives";
 import { useTheme } from "@/components/ui/theme";
 import { CATEGORY_LABEL } from "@/lib/analytics/metrics";
-import { DAY, type Item, type Model, type Person } from "@/lib/analytics/model";
+import { DAY, isNoGlobal, personRoleLabel, type Item, type Model, type Person } from "@/lib/analytics/model";
 import { DELAY_COLOR, categoryColor } from "@/lib/analytics/state-colors";
 
 export type GanttZoom = "day" | "week" | "month";
@@ -110,7 +110,7 @@ export function Gantt({
         person = model.people.get(i.personKey!);
         key = i.personKey!;
         title = person?.name ?? "Sin asignar";
-        subtitle = person?.inRoster ? (person.role ?? "") : "Fuera de la planeación";
+        subtitle = person ? personRoleLabel(person) : "";
       } else if (groupBy === "feature") {
         const f = i.featureId ? model.byId.get(i.featureId) : undefined;
         key = String(i.featureId ?? "none");
@@ -247,7 +247,10 @@ export function Gantt({
                         className={clsx("min-w-0 flex-1 text-left", g.person && "hover:underline")}
                         disabled={!g.person}
                       >
-                        <span className="block truncate text-sm font-semibold">{g.title}</span>
+                        <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold">
+                          <span className="truncate">{g.title}</span>
+                          {g.person && isNoGlobal(g.person) && <NoGlobalBadge />}
+                        </span>
                         <span className="block truncate text-[0.6875rem] text-subtle">
                           {g.items.length} ítems{onTime !== null && ` · ${onTime} % a tiempo`}
                           {overdue > 0 && <span className="font-semibold text-critical-fg"> · {overdue} vencidos</span>}

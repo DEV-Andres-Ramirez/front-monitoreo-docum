@@ -7,7 +7,7 @@ import { es } from "date-fns/locale";
 import { useMemo } from "react";
 import { Bar, Chart, Doughnut, Line } from "react-chartjs-2";
 import { CATEGORIES, CATEGORY_LABEL, type PersonRow, type Range, type TimeUnit } from "@/lib/analytics/metrics";
-import type { Item } from "@/lib/analytics/model";
+import { isNoGlobal, type Item, type Person } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import type { StateCategory } from "@/lib/analytics/types";
 import { axes, baseOptions, tooltipStyle, verticalGradient, withAlpha, type ChartTheme } from "./chart-theme";
@@ -309,11 +309,13 @@ const short = (name: string) => {
   const p = name.split(/\s+/);
   return p.length >= 3 ? `${p[0]} ${p[p.length - 2]}` : name;
 };
+/** Etiqueta del eje: nombre corto, marcado si es miembro No Global */
+const personLabel = (p: Person) => (isNoGlobal(p) ? `${short(p.name)} (No Global)` : short(p.name));
 
 export function PersonStatesChart({ rows, theme, onSelect }: { rows: PersonRow[]; theme: ChartTheme; onSelect?: (key: string) => void }) {
   const data = useMemo<ChartData<"bar", number[], string>>(
     () => ({
-      labels: rows.map((r) => short(r.person.name)),
+      labels: rows.map((r) => personLabel(r.person)),
       datasets: CATEGORIES.map((cat) => ({
         label: CATEGORY_LABEL[cat],
         data: rows.map((r) => r.byCat[cat]),
@@ -348,7 +350,7 @@ export function PersonStatesChart({ rows, theme, onSelect }: { rows: PersonRow[]
         tooltip: {
           ...base.plugins?.tooltip,
           callbacks: {
-            title: (items) => rows[items[0].dataIndex].person.name,
+            title: (items) => `${rows[items[0].dataIndex].person.name}${isNoGlobal(rows[items[0].dataIndex].person) ? " · No Global" : ""}`,
             label: (i) => ` ${i.dataset.label}: ${i.raw}`,
             footer: (items) => `${rows[items[0].dataIndex].active} ítems activos`,
           },
@@ -363,7 +365,7 @@ export function PersonStatesChart({ rows, theme, onSelect }: { rows: PersonRow[]
 export function EstimateChart({ rows, theme }: { rows: PersonRow[]; theme: ChartTheme }) {
   const data = useMemo<ChartData<"bar", number[], string>>(
     () => ({
-      labels: rows.map((r) => short(r.person.name)),
+      labels: rows.map((r) => personLabel(r.person)),
       datasets: [
         {
           label: "Trabajo completado reportado",
@@ -403,7 +405,7 @@ export function EstimateChart({ rows, theme }: { rows: PersonRow[]; theme: Chart
         tooltip: {
           ...base.plugins?.tooltip,
           callbacks: {
-            title: (items) => rows[items[0].dataIndex].person.name,
+            title: (items) => `${rows[items[0].dataIndex].person.name}${isNoGlobal(rows[items[0].dataIndex].person) ? " · No Global" : ""}`,
             label: (i) => ` ${i.dataset.label}: ${fmtHours(Number(i.raw))}`,
             footer: (items) => {
               const r = rows[items[0].dataIndex];

@@ -6,11 +6,11 @@ import { es } from "date-fns/locale";
 import { AlertTriangle, CheckCircle2, CircleDot, ExternalLink, ShieldCheck } from "lucide-react";
 import { motion } from "motion/react";
 import { useApp } from "@/components/shell/app-provider";
-import { Avatar, EmptyState, TypeBadge } from "@/components/ui/primitives";
+import { Avatar, EmptyState, NoGlobalBadge, TypeBadge } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
 import { useTheme } from "@/components/ui/theme";
 import { CATEGORY_LABEL } from "@/lib/analytics/metrics";
-import { DAY, type Item } from "@/lib/analytics/model";
+import { DAY, isNoGlobal, personRoleLabel, type Item } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 
 const fmt = (t: number | null) => (t ? format(t, "EEE d MMM yyyy · HH:mm", { locale: es }) : "—");
@@ -98,9 +98,12 @@ function Detail({ item: i }: { item: Item }) {
         <button onClick={() => openPerson(person.key)} className="flex w-full items-center gap-3 rounded-2xl border border-line bg-surface-2 p-3 text-left transition hover:border-line-strong">
           <Avatar name={person.name} size="sm" />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold">{person.name}</span>
+            <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold">
+              <span className="truncate">{person.name}</span>
+              {isNoGlobal(person) && <NoGlobalBadge />}
+            </span>
             <span className="block truncate text-xs text-subtle">
-              {person.inRoster ? person.role : "Fuera de la planeación"} · asignado en Azure como {i.email}
+              {personRoleLabel(person)} · asignado en Azure como {i.email}
             </span>
           </span>
         </button>

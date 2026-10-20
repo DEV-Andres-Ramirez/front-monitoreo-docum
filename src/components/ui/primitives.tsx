@@ -139,6 +139,22 @@ export function StatusPill({
   );
 }
 
+// ---------------------------------------------------------------- No Global
+/** Etiqueta de un miembro del proyecto que no está en Global (la base de personal); igual cuenta en el análisis. */
+export function NoGlobalBadge({ className }: { className?: string }) {
+  return (
+    <span
+      title="No está en el personal de Global de este proyecto; se incluye en el análisis"
+      className={clsx(
+        "inline-flex shrink-0 items-center whitespace-nowrap rounded-md border border-info-fg/25 bg-info-soft px-1.5 py-px text-[0.625rem] font-semibold uppercase tracking-wide text-info-fg",
+        className,
+      )}
+    >
+      No Global
+    </span>
+  );
+}
+
 // ---------------------------------------------------------------- Chip & Segmented
 export function Chip({
   active,

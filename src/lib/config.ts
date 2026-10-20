@@ -6,7 +6,7 @@ export type ProjectKey = (typeof PROJECT_KEYS)[number];
 /**
  * Meta de cierre comprometida con el cliente: tareas por tag por día hábil (lunes a viernes sin
  * festivos) desde `start` hasta `deadline`. Cuenta TODAS las tareas de las épicas monitoreadas con
- * esos tags, sin importar el colaborador ni la planeación.
+ * esos tags, sin importar el colaborador ni si está en Global.
  */
 export type ProjectGoal = {
   start: string;

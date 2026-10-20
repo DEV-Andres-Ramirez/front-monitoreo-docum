@@ -11,15 +11,27 @@ export type Person = {
   name: string;
   email: string | null;
   employeeId: string | null;
+  /** Personal del proyecto (Global o No Global): cuenta en el análisis */
   inRoster: boolean;
+  /** Viene de Global (la base de personal). false en No Global y en personas fuera de Global */
+  inGlobal: boolean;
   role: string | null;
-  allocation: number; // 0 si no está en la planeación del proyecto
+  allocation: number; // 0 si no tiene % en Global (fuera de Global o No Global): sin capacidad
   assignmentType: string | null;
   startDate: string | null;
   endDate: string | null;
   azureEmails: string[];
-  matchedBy: "alias" | "email" | "usuario" | "nombre" | "planeación" | null;
+  matchedBy: "alias" | "email" | "usuario" | "nombre" | "global" | null;
 };
+
+/** Miembro del proyecto que no está en Global: cuenta en el análisis y se marca "No Global". */
+export const isNoGlobal = (p: Pick<Person, "inRoster" | "inGlobal">) => p.inRoster && !p.inGlobal;
+
+/** Subtítulo de una persona: cargo (± %) si es de Global; si no, de dónde sale. */
+export function personRoleLabel(p: Pick<Person, "inRoster" | "inGlobal" | "role" | "allocation">, { allocation = false } = {}) {
+  if (p.inGlobal) return allocation ? `${p.role ?? "Sin cargo"} · ${Math.round(p.allocation * 100)} %` : (p.role ?? "Sin cargo");
+  return p.inRoster ? "Sin cargo ni % en Global" : "Fuera de Global";
+}
 
 export type Segment = { state: string; cat: StateCategory; from: number; to: number | null };
 
@@ -154,6 +166,7 @@ export function buildModel(ds: DatasetResponse, now = Date.now()): Model {
         email: e?.email ?? null,
         employeeId: id,
         inRoster: !!r,
+        inGlobal: !!r?.inGlobal,
         role: r?.role ?? null,
         allocation: r?.allocation ?? 0,
         assignmentType: r?.assignmentType ?? null,
@@ -165,11 +178,11 @@ export function buildModel(ds: DatasetResponse, now = Date.now()): Model {
       people.set(key, p);
     }
     if (azureEmail && !p.azureEmails.includes(azureEmail)) p.azureEmails.push(azureEmail);
-    if (by && (!p.matchedBy || p.matchedBy === "planeación")) p.matchedBy = by;
+    if (by && (!p.matchedBy || p.matchedBy === "global")) p.matchedBy = by;
     return p;
   };
-  // Toda la planeación aparece, aunque no tenga ítems
-  for (const r of ds.roster) ensureEmployee(r.employeeId, "planeación");
+  // Todo el personal del proyecto (Global y No Global) aparece, aunque no tenga ítems
+  for (const r of ds.roster) ensureEmployee(r.employeeId, "global");
 
   const personCache = new Map<string, string>();
   const personOf = (email: string | null, name: string | null) => {
@@ -187,6 +200,7 @@ export function buildModel(ds: DatasetResponse, now = Date.now()): Model {
           email,
           employeeId: null,
           inRoster: false,
+          inGlobal: false,
           role: null,
           allocation: 0,
           assignmentType: null,
@@ -284,7 +298,7 @@ export function buildModel(ds: DatasetResponse, now = Date.now()): Model {
   };
 }
 
-/** Capacidad en horas de una persona de la planeación en [from, to] (8 h × % × días hábiles vigentes). */
+/** Capacidad en horas de una persona de Global en [from, to] (8 h × % × días hábiles vigentes). No Global: null. */
 export function capacityHours(p: Person, from: number, to: number) {
   if (!p.inRoster || !p.allocation) return null;
   const start = Math.max(from, p.startDate ? new Date(`${p.startDate}T00:00:00`).getTime() : from);

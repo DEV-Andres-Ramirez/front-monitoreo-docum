@@ -16,7 +16,7 @@ const MAX_RANGE_DAYS = 400;
 /**
  * Dataset de análisis del periodo [from, to], limitado a las épicas monitoreadas del proyecto
  * (AZURE_<p>_EPIC_IDS): ítems vivos + ancestros hasta la épica + transiciones de estado,
- * personal de la planeación, colaboradores y alias. Solo lee de Supabase: la sincronización con
+ * personal del proyecto (Global y No Global), colaboradores y alias. Solo lee de Supabase: la sincronización con
  * Azure es automática cada hora (POST /api/sync/auto) o manual (POST /api/projects/[p]/sync).
  */
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/projects/[project]/dataset">) {
@@ -71,6 +71,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/projects
         assignmentType: m.assignmentType,
         startDate: m.startDate,
         endDate: m.endDate,
+        inGlobal: m.inGlobal,
       })),
       employees: (employees.data ?? []).map((e) => ({ id: e.id, name: e.full_name, email: e.email })),
       aliases: (aliases.data ?? []).map((a) => ({ alias: a.alias_email, employeeId: a.employee_id })),

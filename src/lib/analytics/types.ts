@@ -38,15 +38,17 @@ export type AzureItem = {
 
 export type Transition = { id: number; state: string | null; cat: StateCategory; at: string };
 
+/** Personal del proyecto: Global (inGlobal) o No Global (sin cargo ni % en Global, igual cuenta en el análisis). */
 export type RosterMember = {
   employeeId: string;
   name: string;
   email: string | null;
-  role: string;
-  allocation: number;
+  role: string | null;
+  allocation: number | null;
   assignmentType: string;
   startDate: string | null;
   endDate: string | null;
+  inGlobal: boolean;
 };
 
 export type SyncInfo = {

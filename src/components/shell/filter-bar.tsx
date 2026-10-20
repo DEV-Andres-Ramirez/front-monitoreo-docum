@@ -5,9 +5,9 @@ import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { CalendarRange, Check, ChevronDown, Layers, RefreshCw, Search, SlidersHorizontal, Tag, Users, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Avatar, Segmented } from "@/components/ui/primitives";
+import { Avatar, NoGlobalBadge, Segmented } from "@/components/ui/primitives";
 import { Popover } from "@/components/ui/popover";
-import { normalizeText, type EpicRef } from "@/lib/analytics/model";
+import { isNoGlobal, normalizeText, personRoleLabel, type EpicRef } from "@/lib/analytics/model";
 import { MORE_PRESETS, PRESET_LABEL, QUICK_PRESETS, type PeriodPreset } from "@/lib/analytics/period";
 import { formatShort, formatTime } from "@/lib/dates";
 import { useApp } from "./app-provider";
@@ -142,8 +142,11 @@ export function PeoplePanel({ autoFocus = false }: { autoFocus?: boolean }) {
                 </span>
                 <Avatar name={p.name} size="xs" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm">{p.name}</span>
-                  <span className="block truncate text-[0.6875rem] text-subtle">{p.inRoster ? p.role : "Fuera de la planeación"}</span>
+                  <span className="flex min-w-0 items-center gap-1.5 text-sm">
+                    <span className="truncate">{p.name}</span>
+                    {isNoGlobal(p) && <NoGlobalBadge />}
+                  </span>
+                  <span className="block truncate text-[0.6875rem] text-subtle">{personRoleLabel(p)}</span>
                 </span>
                 <span className="rounded-md bg-surface-3 px-1.5 text-[0.6875rem] tabular-nums text-muted" title="Ítems abiertos">
                   {counts.get(p.key) ?? 0}
@@ -156,8 +159,8 @@ export function PeoplePanel({ autoFocus = false }: { autoFocus?: boolean }) {
       </ul>
       <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-surface-2 px-3 py-2 text-xs">
         <span>
-          <span className="block font-semibold text-foreground">Incluir fuera de la planeación</span>
-          <span className="text-subtle">Asignados en Azure que no están en el Excel</span>
+          <span className="block font-semibold text-foreground">Incluir fuera de Global</span>
+          <span className="text-subtle">Asignados en Azure que no están en Global</span>
         </span>
         <input type="checkbox" checked={filters.includeOthers} onChange={(e) => setIncludeOthers(e.target.checked)} className="size-4 accent-[var(--accent)]" />
       </label>

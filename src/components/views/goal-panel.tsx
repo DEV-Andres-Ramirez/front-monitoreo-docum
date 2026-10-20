@@ -65,7 +65,7 @@ export function GoalPanel() {
           </span>
         </header>
         <p className="px-4 pt-3 text-[0.6875rem] text-subtle sm:px-5">
-          Cuenta todas las tareas {tags.map((t) => t.tag).join(" / ")} de {epicNames || "las épicas monitoreadas"}, sin importar el colaborador (incluye a quienes están fuera de la planeación). Aquí no aplican los filtros
+          Cuenta todas las tareas {tags.map((t) => t.tag).join(" / ")} de {epicNames || "las épicas monitoreadas"}, sin importar el colaborador (incluye a quienes no están en Global). Aquí no aplican los filtros
           de personas ni de épica{filters.tag ? `; sí el de tag (${filters.tag})` : ""}. Completada = entregada o cerrada, según su fecha de entrega real.
         </p>
         <div className={clsx("grid grid-cols-1 gap-3 p-4 sm:p-5", tags.length > 1 && "md:grid-cols-3")}>

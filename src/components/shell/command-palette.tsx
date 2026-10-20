@@ -4,10 +4,11 @@ import { Command } from "cmdk";
 import { CalendarRange, FolderKanban, Layers, LogOut, Maximize, Monitor, Moon, RefreshCw, RotateCcw, Search, Sun, Tag, UserRound, Users, ZoomIn, ZoomOut } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
-import { Avatar, Kbd, TypeBadge } from "@/components/ui/primitives";
+import { Avatar, Kbd, NoGlobalBadge, TypeBadge } from "@/components/ui/primitives";
 import { toggleFullscreen } from "@/components/ui/display";
 import { changeScale } from "@/components/ui/display-controls";
 import { setTheme } from "@/components/ui/theme";
+import { isNoGlobal, personRoleLabel } from "@/lib/analytics/model";
 import { MORE_PRESETS, PRESET_LABEL, QUICK_PRESETS } from "@/lib/analytics/period";
 import { PROJECTS, PROJECT_KEYS } from "@/lib/config";
 import { useApp } from "./app-provider";
@@ -165,10 +166,15 @@ export function CommandPalette() {
                 {app.people.length > 0 && (
                   <Command.Group heading={`Colaboradores · ${app.people.length}`}>
                     {app.people.map((p) => (
-                      <Command.Item key={p.key} value={`persona ${p.name} ${p.role ?? ""} ${p.email ?? ""}`} onSelect={() => run(() => app.openPerson(p.key))}>
+                      <Command.Item
+                        key={p.key}
+                        value={`persona ${p.name} ${p.role ?? ""} ${p.email ?? ""} ${isNoGlobal(p) ? "no global" : ""}`}
+                        onSelect={() => run(() => app.openPerson(p.key))}
+                      >
                         <Avatar name={p.name} size="xs" />
                         <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                        <span className="truncate text-xs text-subtle">{p.inRoster ? p.role : "Fuera de la planeación"}</span>
+                        {isNoGlobal(p) && <NoGlobalBadge />}
+                        <span className="truncate text-xs text-subtle">{personRoleLabel(p)}</span>
                       </Command.Item>
                     ))}
                   </Command.Group>

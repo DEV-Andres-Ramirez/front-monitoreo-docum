@@ -9,7 +9,13 @@ Tablero interno de **monitoreo automático** del trabajo de cada colaborador en 
 
 ## ¿Para qué sirve?
 
-El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Master** (único usuario, común a ambos proyectos) **no registra nada a mano**. El tablero cruza **por correo** al personal del Excel de planeación de cada proyecto con los ítems asignados en Azure DevOps (HU, Tareas y Bugs) **que cuelgan de las épicas monitoreadas** de ese proyecto. Lo que está en otras épicas no se analiza. Calcula automáticamente:
+El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Master** (único usuario, común a ambos proyectos) **no registra nada a mano**. El tablero cruza **por correo** al personal de cada proyecto con los ítems asignados en Azure DevOps (HU, Tareas y Bugs) **que cuelgan de las épicas monitoreadas** de ese proyecto. Lo que está en otras épicas no se analiza.
+
+> **Global** es la base de personal (planeación) de LinkTic. En la interfaz siempre se dice "Global", **nunca "Excel"**. Hoy Global se carga desde el archivo de planeación en `context/` con `scripts/generate-seed.py`.
+>
+> El **personal del proyecto** es el de Global **más los miembros "No Global"**: personas que trabajan en las épicas sin estar en Global para ese proyecto. Cuentan en el análisis, pero no tienen cargo ni % (sin capacidad ni utilización) y llevan la etiqueta **No Global** junto al nombre. Hoy son, en 348, **David Felipe Vergara Bogota** (`david.vergara@linktic.com`) y **Jhostin Alexander Ladino Gonzalez** (`jhostin.ladino@linktic.com`).
+
+Calcula automáticamente:
 
 - **Qué tiene asignado cada colaborador** y en qué estado está: por iniciar, en curso, entregado o cerrado.
 - **Horas:** 1 punto de esfuerzo = 1 hora. Se toman Story Points o Effort; si no hay, la Estimación original. **No hay doble conteo**: si una HU y sus tareas tienen valor, suman las tareas. Se compara con el "Trabajo completado" que reportan en Azure.
@@ -23,7 +29,7 @@ El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Maste
 - **Filtros globales**, en el header y en el botón "Filtros" de móvil; se recuerdan por proyecto:
   - **Periodo:** atajos **Hoy, Ayer, Esta semana** (por defecto) y **Semana pasada**. En "Más periodos" están sprint actual, 14/30/90 días, este mes, trimestre o rango personalizado. La semana va de lunes a domingo.
     - **Comparación de los indicadores:** Hoy y Ayer, contra el día hábil anterior; las semanas, contra los mismos días de la semana anterior; el resto, contra el periodo anterior de igual duración.
-  - **Colaboradores:** multiselección, más "Incluir fuera de la planeación".
+  - **Colaboradores:** multiselección, más "Incluir fuera de Global".
   - **Épica:** en 348, "Todas las épicas · CORE · Temáticos"; en 005 se muestra solo su épica. Fuera de las épicas monitoreadas no se analiza nada.
   - **Tag** (solo 348): "Todos los tags · Video · Informe". Aplica a todas las vistas. Las HU no llevan tags, así que con un tag elegido solo quedan sus tareas.
 - **Vistas:**
@@ -41,7 +47,8 @@ El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Maste
     - **scorecards** (tarjetas o tabla) con utilización, puntualidad, cycle time y vencidos;
     - **carga** por día o por semana (mapa de calor persona × día/semana);
     - gráficas de estado por persona y de estimado frente a reportado;
-    - sección **"Fuera de la planeación"**: personas con ítems en las épicas que no están en el Excel de ese proyecto (p. ej. en 348, David Vergara y Jhostin Ladino). No cuentan en los indicadores salvo que se active "Incluir fuera de la planeación", y se pueden vincular si son la misma persona con otro correo.
+    - sección **"Fuera de Global"**: personas con ítems en las épicas que no son personal del proyecto (p. ej. en 005, Cristian Roa, Dario Lopez y Josimar Bonilla). No cuentan en los indicadores salvo que se active "Incluir fuera de Global", y se pueden vincular si son la misma persona con otro correo;
+    - los miembros **No Global** aparecen con su etiqueta en tarjetas, tabla, carga, gráficas, Gantt, detalle, filtro de personas y ⌘K.
   - **Backlog Azure** (`/backlog`): árbol Épica → Feature → HU → Tarea con estado, asignado, objetivo, entrega y horas acumuladas.
   - **Bitácora** (`/bitacora`): ingresos, sincronizaciones (con conteos o errores) y vinculaciones.
 - **Detalle de un ítem:** ruta Épica › Feature › HU, horas y su origen, plan frente a real, puntualidad, **línea de tiempo de estados** con duraciones e ítems hijos.
@@ -58,7 +65,7 @@ Compromiso con EAAB para las dos épicas sumadas (Certificación CORE y Certific
 - **Cierre:** viernes 13 de noviembre de 2026.
 - **Productividad:** **24 tareas de Video y 24 de Informe por día hábil**, de lunes a viernes sin festivos de Colombia, desde el lunes 19-oct.
 - **Configuración:** `PROJECTS["348"].goal` en `src/lib/config.ts`. Si cambia la meta o la fecha, se edita ahí; no hay variables de entorno.
-- **Qué cuenta:** **todas** las tareas (tipo `Task`) con tag `Video` o `Informe` de ambas épicas, sin importar el colaborador. Incluye a quienes están fuera de la planeación; por ejemplo, las 398 de Informe son de David Vergara.
+- **Qué cuenta:** **todas** las tareas (tipo `Task`) con tag `Video` o `Informe` de ambas épicas, sin importar el colaborador. Incluye a quienes no están en Global; por ejemplo, las 398 de Informe son de David Vergara (No Global).
 - **Completada:** estado Entregado o Cerrado, en el día de su fecha de entrega real (o de resolución o cierre).
 - **Panel "Meta de cierre" (inicio del Resumen):**
   - por tag y en total: % de avance (completadas ÷ total) con una marca de la meta a la fecha;
@@ -139,15 +146,16 @@ pnpm dev               # http://localhost:3000
 | Migración | Contenido |
 |---|---|
 | `0001_schema.sql` | Proyectos, colaboradores, asignaciones, `audit_log`, RLS (y `activity_logs`, legado) |
-| `0002_seed.sql` | Personal del Excel (lo genera `python3 scripts/generate-seed.py`; idempotente) |
+| `0002_seed.sql` | Personal de Global (lo genera `python3 scripts/generate-seed.py` desde el archivo de `context/`; idempotente; marca `in_global = true`) |
 | `0003_stats_and_restore.sql` | Funciones del registro manual (**legado**, sin uso) |
 | `0004_azure_sync.sql` | `azure_work_items`, `azure_revisions`, `azure_sync_runs`, `employee_aliases`, RPC `azure_dataset` |
 | `0005_azure_dataset_assigned.sql` | `azure_dataset(p, desde, hasta)` solo con ítems asignados (**legado**: se conserva para despliegues anteriores) |
 | `0006_dataset_monitored_epics.sql` | `azure_dataset(p, desde, hasta, épicas)`: solo el árbol de las épicas monitoreadas |
 | `0008_goal_tags.sql` | `azure_dataset` devuelve los tags; nuevo RPC `azure_goal_tasks` (tareas con tags de la meta, sin filtrar por periodo ni persona) |
+| `0009_no_global_members.sql` | `project_members.in_global`; cargo, % y cédula opcionales; agrega a David Vergara y Jhostin Ladino a 348 como No Global |
 | `0007_dataset_backfilled_delivery.sql` | Un ítem entregado en el periodo cuenta aunque se haya creado después (fecha de entrega real registrada a posteriori); bordes ±1 día |
 
-**Estado (20-oct-2026):** las ocho migraciones están aplicadas. Primera sincronización: 348 con 6.838 ítems y 25.874 revisiones (≈ 45 s); 005 con 627 ítems y 1.942 revisiones (≈ 7 s). Las incrementales tardan segundos.
+**Estado (20-oct-2026):** las nueve migraciones están aplicadas. Primera sincronización: 348 con 6.838 ítems y 25.874 revisiones (≈ 45 s); 005 con 627 ítems y 1.942 revisiones (≈ 7 s). Las incrementales tardan segundos.
 
 **Seguridad:**
 - RLS está activo en todas las tablas sin políticas: `anon`/`authenticated` no tienen acceso.
@@ -198,7 +206,7 @@ src/
     charts/     # Chart.js: flow-charts (throughput, CFD, burnup, cycle time, estados, estimado), chart-card, chart-theme
     dashboard/  # work-item-sheet (traza de estados), member-sheet, client-api (fetch + preferencias)
     ui/         # primitives, sheet, popover, theme, display (escala TV + pantalla completa)…
-supabase/migrations/   # 0001 → 0008
+supabase/migrations/   # 0001 → 0009
 scripts/               # generate-seed.py, apply-migrations.mjs
-context/               # Excel de planeación (contiene datos personales)
+context/               # archivo de planeación de Global (contiene datos personales)
 ```

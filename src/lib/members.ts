@@ -7,28 +7,32 @@ export type ProjectMemberRow = {
   employeeId: string;
   name: string;
   email: string | null;
-  role: string;
-  allocation: number;
+  /** null para los miembros No Global (sin cargo ni % en Global) */
+  role: string | null;
+  allocation: number | null;
   assignmentType: string;
+  /** false = miembro No Global: trabaja en el proyecto sin estar en Global, pero cuenta en el análisis */
+  inGlobal: boolean;
   startDate: string | null;
   endDate: string | null;
 };
 
 type Raw = {
   id: string;
-  role: string;
-  allocation: number | string;
+  role: string | null;
+  allocation: number | string | null;
+  in_global: boolean;
   start_date: string | null;
   end_date: string | null;
   assignment_type: string;
   employee: { id: string; full_name: string; email: string | null };
 };
 
-/** Asignaciones activas del proyecto con los datos del colaborador. */
+/** Asignaciones activas del proyecto (Global y No Global) con los datos del colaborador. */
 export async function loadMembers(project: ProjectKey): Promise<ProjectMemberRow[]> {
   const { data, error } = await db()
     .from("project_members")
-    .select("id, role, allocation, start_date, end_date, assignment_type, employee:employees!inner(id, full_name, email)")
+    .select("id, role, allocation, start_date, end_date, assignment_type, in_global, employee:employees!inner(id, full_name, email)")
     .eq("project_key", project)
     .eq("active", true);
   if (error) throw new Error(error.message);
@@ -38,8 +42,9 @@ export async function loadMembers(project: ProjectKey): Promise<ProjectMemberRow
     name: m.employee.full_name,
     email: m.employee.email,
     role: m.role,
-    allocation: Number(m.allocation),
+    allocation: m.allocation === null ? null : Number(m.allocation),
     assignmentType: m.assignment_type,
+    inGlobal: m.in_global,
     startDate: m.start_date,
     endDate: m.end_date,
   }));

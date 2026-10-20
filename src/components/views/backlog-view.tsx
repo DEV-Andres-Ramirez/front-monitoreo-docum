@@ -6,10 +6,10 @@ import { es } from "date-fns/locale";
 import { AlertTriangle, ChevronRight, ChevronsDownUp, ChevronsUpDown, ExternalLink, Search, ShieldCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useApp } from "@/components/shell/app-provider";
-import { Avatar, Chip, EmptyState, TypeBadge } from "@/components/ui/primitives";
+import { Avatar, Chip, EmptyState, NoGlobalBadge, TypeBadge } from "@/components/ui/primitives";
 import { useTheme } from "@/components/ui/theme";
 import { CATEGORIES, CATEGORY_LABEL, isAlive } from "@/lib/analytics/metrics";
-import { normalizeText, type Item } from "@/lib/analytics/model";
+import { isNoGlobal, normalizeText, type Item } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import type { StateCategory } from "@/lib/analytics/types";
 import { TYPE_ORDER, typeMeta } from "@/lib/work-item-types";
@@ -205,6 +205,7 @@ function Backlog() {
                           <>
                             <Avatar name={person.name} size="xs" />
                             <span className="truncate text-xs">{person.name.split(" ").slice(0, 2).join(" ")}</span>
+                            {isNoGlobal(person) && <NoGlobalBadge />}
                           </>
                         ) : (
                           <span className="text-xs text-subtle">{n.item.isWork ? "—" : `${n.count} ítems`}</span>

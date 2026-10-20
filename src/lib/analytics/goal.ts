@@ -1,5 +1,5 @@
 // Meta de cierre por tags (348: Video / Informe). TypeScript puro, se calcula en el cliente.
-// Cuenta TODAS las tareas de las épicas con esos tags (sin filtrar por persona ni planeación).
+// Cuenta TODAS las tareas de las épicas con esos tags (sin filtrar por persona ni por Global).
 import type { ProjectGoal } from "@/lib/config";
 import { addDaysISO, isBusinessDay } from "@/lib/dates";
 

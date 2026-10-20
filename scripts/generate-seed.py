@@ -57,8 +57,9 @@ def main():
         ",\n".join(f"  ({q(n)}, {q(d)}, {q(e)})" for d, (n, e) in employees.items()),
         "on conflict (document_id) do update set full_name = excluded.full_name, email = excluded.email;",
         "",
-        "insert into public.project_members (project_key, employee_id, role, allocation, start_date, end_date, assignment_type, active)",
-        "select v.project_key, e.id, v.role, v.allocation, v.start_date::date, v.end_date::date, v.assignment_type, true",
+        "-- in_global = true: la asignación viene de Global (los miembros No Global tienen false; ver 0009)",
+        "insert into public.project_members (project_key, employee_id, role, allocation, start_date, end_date, assignment_type, active, in_global)",
+        "select v.project_key, e.id, v.role, v.allocation, v.start_date::date, v.end_date::date, v.assignment_type, true, true",
         "from (values",
         ",\n".join(
             f"  ({q(k)}, {q(d)}, {q(r)}, {q(a)}, {q(s)}, {q(en)}, {q(t)})" for k, d, r, a, s, en, t in members
@@ -67,7 +68,7 @@ def main():
         "join public.employees e on e.document_id = v.document_id",
         "on conflict (project_key, employee_id) do update set",
         "  role = excluded.role, allocation = excluded.allocation, start_date = excluded.start_date,",
-        "  end_date = excluded.end_date, assignment_type = excluded.assignment_type, active = true;",
+        "  end_date = excluded.end_date, assignment_type = excluded.assignment_type, active = true, in_global = true;",
         "",
     ]
     OUT.write_text("\n".join(lines), encoding="utf-8")

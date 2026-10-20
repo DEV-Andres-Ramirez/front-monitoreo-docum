@@ -7,7 +7,7 @@ import { db } from "@/lib/supabase";
 
 /**
  * Meta de cierre del proyecto (si tiene): todas las tareas de las épicas monitoreadas con los tags
- * de la meta, sin filtrar por periodo, persona ni planeación. Solo lee de Supabase.
+ * de la meta, sin filtrar por periodo, persona ni Global. Solo lee de Supabase.
  */
 export async function GET(_request: NextRequest, ctx: RouteContext<"/api/projects/[project]/goal">) {
   if (!(await isAuthenticated())) return unauthorizedResponse();

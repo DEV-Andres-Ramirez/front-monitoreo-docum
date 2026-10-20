@@ -5,11 +5,11 @@ import { Mail } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Gantt } from "@/components/gantt/gantt";
 import { useApp } from "@/components/shell/app-provider";
-import { Avatar, Chip, EmptyState, ProgressRing, TypeBadge } from "@/components/ui/primitives";
+import { Avatar, Chip, EmptyState, NoGlobalBadge, ProgressRing, TypeBadge } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
 import { useTheme } from "@/components/ui/theme";
 import { CATEGORIES, CATEGORY_LABEL, inEpics, isAlive, perPerson } from "@/lib/analytics/metrics";
-import type { Person } from "@/lib/analytics/model";
+import { isNoGlobal, personRoleLabel, type Person } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import type { StateCategory } from "@/lib/analytics/types";
 
@@ -27,9 +27,16 @@ export function MemberSheet({ personKey, onClose }: { personKey: string | null; 
           <div className="flex items-center gap-3">
             <Avatar name={person.name} size="lg" />
             <div className="min-w-0">
-              <p className="truncate">{person.name}</p>
+              <p className="flex min-w-0 items-center gap-2">
+                <span className="truncate">{person.name}</span>
+                {isNoGlobal(person) && <NoGlobalBadge />}
+              </p>
               <p className="truncate font-sans text-sm font-normal text-muted">
-                {person.inRoster ? `${person.role} · ${Math.round(person.allocation * 100)} % · ${person.assignmentType}` : "Fuera de la planeación de este proyecto"}
+                {person.inGlobal
+                  ? `${personRoleLabel(person, { allocation: true })} · ${person.assignmentType}`
+                  : person.inRoster
+                    ? "Sin cargo ni % en Global · cuenta en el análisis del proyecto"
+                    : "Fuera de Global para este proyecto"}
               </p>
             </div>
           </div>
@@ -96,7 +103,7 @@ function Body({ person }: { person: Person }) {
           </a>
         )}
         {person.azureEmails.length > 0 && <span className="text-subtle">· En Azure: {person.azureEmails.join(", ")}</span>}
-        {person.matchedBy && person.matchedBy !== "planeación" && <span className="rounded-md bg-surface-3 px-1.5 py-0.5">vinculado por {person.matchedBy}</span>}
+        {person.matchedBy && person.matchedBy !== "global" && <span className="rounded-md bg-surface-3 px-1.5 py-0.5">vinculado por {person.matchedBy}</span>}
       </div>
 
       {items.length === 0 ? (

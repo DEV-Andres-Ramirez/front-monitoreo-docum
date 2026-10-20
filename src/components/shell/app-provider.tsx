@@ -66,7 +66,7 @@ type AppContextValue = {
   model?: Model;
   /** Ítems de trabajo dentro del alcance (personas + ámbito), sin recortar por periodo */
   scoped: Item[];
-  /** Personas visibles (planeación ± fuera de la planeación) */
+  /** Personas visibles (personal del proyecto ± fuera de Global) */
   people: Person[];
   sync?: SyncInfo;
   syncNow: (full?: boolean) => Promise<void>;

@@ -12,10 +12,10 @@ import { useChartTheme } from "@/components/charts/chart-theme";
 import { EstimateChart, PersonStatesChart } from "@/components/charts/flow-charts";
 import { api, useStored } from "@/components/dashboard/client-api";
 import { useApp } from "@/components/shell/app-provider";
-import { Avatar, Button, Chip, EmptyState, ProgressRing, Segmented } from "@/components/ui/primitives";
+import { Avatar, Button, Chip, EmptyState, NoGlobalBadge, ProgressRing, Segmented } from "@/components/ui/primitives";
 import { useUiScale } from "@/components/ui/display";
 import { CATEGORIES, CATEGORY_LABEL, perPerson, workloadMatrix, type PersonRow } from "@/lib/analytics/metrics";
-import { normalizeText, type Person } from "@/lib/analytics/model";
+import { isNoGlobal, normalizeText, personRoleLabel, type Person } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import { DatasetGate } from "./dataset-gate";
 
@@ -192,8 +192,11 @@ function PersonCard({ row: r, index, dark, onOpen }: { row: PersonRow; index: nu
       <div className="flex items-start gap-3">
         <Avatar name={r.person.name} status={r.overdue > 0 ? "critical" : r.wip > 0 ? "info" : "neutral"} />
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-semibold">{r.person.name}</h3>
-          <p className="truncate text-xs text-muted">{r.person.inRoster ? `${r.person.role} · ${Math.round(r.person.allocation * 100)} %` : "Fuera de la planeación"}</p>
+          <h3 className="flex min-w-0 items-center gap-1.5 font-semibold">
+            <span className="truncate">{r.person.name}</span>
+            {isNoGlobal(r.person) && <NoGlobalBadge />}
+          </h3>
+          <p className="truncate text-xs text-muted">{personRoleLabel(r.person, { allocation: true })}</p>
         </div>
         {r.utilization !== null && (
           <div className="relative grid place-items-center" title="Utilización: horas entregadas ÷ capacidad">
@@ -255,8 +258,11 @@ function PeopleTable({ rows, onOpen }: { rows: PersonRow[]; onOpen: (key: string
                   <div className="flex items-center gap-2.5">
                     <Avatar name={r.person.name} size="sm" />
                     <div className="min-w-0">
-                      <p className="truncate font-medium">{r.person.name}</p>
-                      <p className="truncate text-xs text-subtle">{r.person.inRoster ? r.person.role : "Fuera de la planeación"}</p>
+                      <p className="flex min-w-0 items-center gap-1.5 font-medium">
+                        <span className="truncate">{r.person.name}</span>
+                        {isNoGlobal(r.person) && <NoGlobalBadge />}
+                      </p>
+                      <p className="truncate text-xs text-subtle">{personRoleLabel(r.person)}</p>
                     </div>
                   </div>
                 </td>
@@ -334,6 +340,7 @@ function Heatmap({ people }: { people: Person[] }) {
                   <button onClick={() => openPerson(r.person.key)} className="flex max-w-[15rem] items-center gap-2.5 text-left">
                     <Avatar name={r.person.name} size="xs" />
                     <span className="truncate text-[0.8125rem] font-medium">{r.person.name}</span>
+                    {isNoGlobal(r.person) && <NoGlobalBadge />}
                   </button>
                 </td>
                 {r.cells.map((c, i) => (
@@ -357,7 +364,7 @@ function Heatmap({ people }: { people: Person[] }) {
   );
 }
 
-/** Asignados en Azure sin vínculo con la planeación del proyecto (con vinculación manual). */
+/** "Fuera de Global": asignados en Azure que no son personal del proyecto (con vinculación manual). */
 function OutsidePlanning() {
   const { model, projectKey, dataset } = useApp();
   const [linking, setLinking] = useState<string | null>(null);
@@ -394,10 +401,10 @@ function OutsidePlanning() {
             <UserPlus className="size-[1.125rem]" />
           </span>
           <div>
-            <h3 className="font-display text-[0.9375rem] font-semibold">Fuera de la planeación</h3>
+            <h3 className="font-display text-[0.9375rem] font-semibold">Fuera de Global</h3>
             <p className="mt-0.5 text-xs text-muted">
-              Tienen ítems en las épicas monitoreadas, pero no coinciden con el personal del Excel de este proyecto. Si es la misma persona con otro correo, vincúlala; si no, actívalos con
-              &quot;Incluir fuera de la planeación&quot; en el filtro.
+              Tienen ítems en las épicas monitoreadas, pero no coinciden con el personal de Global de este proyecto. Si es la misma persona con otro correo, vincúlala; si no, actívalos con
+              &quot;Incluir fuera de Global&quot; en el filtro.
             </p>
           </div>
         </div>
@@ -432,7 +439,7 @@ function OutsidePlanning() {
               </div>
             ) : (
               <span className="inline-flex items-center gap-1 rounded-full bg-surface-3 px-2 py-1 text-[0.6875rem] text-muted">
-                <AlertTriangle className="size-3" /> No está en la planeación de este proyecto
+                <AlertTriangle className="size-3" /> No está en Global para este proyecto
               </span>
             )}
           </li>

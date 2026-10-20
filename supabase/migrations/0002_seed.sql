@@ -59,8 +59,9 @@ insert into public.employees (full_name, document_id, email) values
   ('Nair Johana Russi', '1032411002', 'nair.russi@linktic.com')
 on conflict (document_id) do update set full_name = excluded.full_name, email = excluded.email;
 
-insert into public.project_members (project_key, employee_id, role, allocation, start_date, end_date, assignment_type, active)
-select v.project_key, e.id, v.role, v.allocation, v.start_date::date, v.end_date::date, v.assignment_type, true
+-- in_global = true: la asignación viene de Global (los miembros No Global tienen false; ver 0009)
+insert into public.project_members (project_key, employee_id, role, allocation, start_date, end_date, assignment_type, active, in_global)
+select v.project_key, e.id, v.role, v.allocation, v.start_date::date, v.end_date::date, v.assignment_type, true, true
 from (values
   ('005', '1019130887', 'Abogado mesa de ayuda', 1, '2026-08-01', '2026-10-31', 'Fijo'),
   ('005', '1012454567', 'Desarrollador Back End Senior', 1, '2026-03-01', '2026-12-31', 'Fijo'),
@@ -124,4 +125,4 @@ from (values
 join public.employees e on e.document_id = v.document_id
 on conflict (project_key, employee_id) do update set
   role = excluded.role, allocation = excluded.allocation, start_date = excluded.start_date,
-  end_date = excluded.end_date, assignment_type = excluded.assignment_type, active = true;
+  end_date = excluded.end_date, assignment_type = excluded.assignment_type, active = true, in_global = true;

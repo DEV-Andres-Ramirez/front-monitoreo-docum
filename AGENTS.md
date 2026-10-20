@@ -14,7 +14,7 @@ Lee también `README.md`: tiene el negocio, la sincronización, las variables y 
 
 ## Objetivo de negocio
 
-Tablero interno del **Scrum Master** (único usuario, común a ambos proyectos) para monitorear **automáticamente** el trabajo de cada colaborador. **No hay registro manual.** Todo se calcula desde Azure DevOps, cruzando **por correo** al personal del Excel de planeación de cada proyecto con los ítems asignados **que cuelgan de las épicas monitoreadas**. Las demás épicas del proyecto **no se analizan**:
+Tablero interno del **Scrum Master** (único usuario, común a ambos proyectos) para monitorear **automáticamente** el trabajo de cada colaborador. **No hay registro manual.** Todo se calcula desde Azure DevOps, cruzando **por correo** al personal de cada proyecto (Global + No Global) con los ítems asignados **que cuelgan de las épicas monitoreadas**. Las demás épicas del proyecto **no se analizan**:
 
 - **348 · SGDEA Acueducto (EAAB)**: org `LinkTic`, proyecto `348 - SGDEA ACUEDUCTO`. Épicas: `539200` Certificación CORE y `539569` Certificación Temáticos.
 - **005 · Positiva SGDEA**: org `3tcapitalco`, proyecto `005 - POSITIVA SGDEA NEW`. Épica: `578` Deuda Técnica y Contractual.
@@ -24,7 +24,10 @@ Reglas de negocio (decididas con el usuario):
   - Horas = `StoryPoints ?? Effort ?? OriginalEstimate`.
   - **Sin doble conteo:** si un padre tiene hijos con horas, suman los hijos.
   - Se compara contra `CompletedWork`.
-- **Personas:** se monitorea el **Excel de planeación** de cada proyecto (`context/…xlsx` → `0002_seed.sql`, 55 personas). Quien tenga ítems en las épicas pero no esté en el Excel de ese proyecto aparece en "Fuera de la planeación" (no cuenta en los indicadores salvo `includeOthers`) y se puede **vincular** (alias).
+- **Personas:** **Global** es la base de personal de LinkTic. En la UI **siempre se dice "Global", nunca "Excel" ni "planeación"**. Hoy se carga desde `context/…xlsx` → `0002_seed.sql` (55 personas, `in_global = true`).
+  - El **personal del proyecto** es Global **+ miembros No Global**: `project_members.in_global = false`, sin cargo ni % (sin capacidad), con la etiqueta `NoGlobalBadge` junto al nombre. Cuentan en el análisis como cualquier miembro (`Person.inRoster = true`, `inGlobal = false`, `isNoGlobal()` / `personRoleLabel()` en `model.ts`).
+  - Hoy, en 348: David Felipe Vergara Bogota y Jhostin Alexander Ladino Gonzalez (0009). Para agregar otro: insertar en `employees` (la cédula es opcional) y en `project_members` con `in_global = false`, `role` y `allocation` en null y `assignment_type = 'No Global'`.
+  - Quien tenga ítems en las épicas sin ser personal del proyecto aparece en "Fuera de Global" (no cuenta en los indicadores salvo `includeOthers`) y se puede **vincular** (alias).
 - **Alcance:** **solo** HU, Tareas y Bugs que cuelgan de las épicas monitoreadas (`AZURE_<p>_EPIC_IDS`). Hay un filtro por épica (en 348: Todas / CORE / Temáticos), pero nunca se sale de ellas.
 - **Gantt plan vs. real:**
   - plan = `StartDate`/`TargetDate` del ítem; si no existen, las fechas del **sprint**;
@@ -34,7 +37,7 @@ Reglas de negocio (decididas con el usuario):
 - **Días hábiles** = lunes a viernes **sin festivos de Colombia** (`colombianHolidays()` / `isBusinessDay()` en `src/lib/dates.ts`).
 - **Meta de cierre (solo 348, `PROJECTS["348"].goal` en `config.ts`):**
   - 24 tareas `Video` y 24 `Informe` por día hábil desde el 19-oct; cierre el 13-nov;
-  - cuenta **todas** las tareas con esos tags de ambas épicas, **sin** filtrar por persona ni planeación (decisión del usuario: las de Informe son de David Vergara, que no está en el Excel);
+  - cuenta **todas** las tareas con esos tags de ambas épicas, **sin** filtrar por persona ni por Global (decisión del usuario: las de Informe son de David Vergara, No Global);
   - completada = Entregado o Cerrado, en el día de su fecha de entrega real;
   - la meta acumulada es diaria × días hábiles desde `start`, con tope en el total;
   - lo cerrado antes de `start` cuenta como avance.
@@ -104,7 +107,7 @@ Reglas de negocio (decididas con el usuario):
 
 ## Modelo de datos (`supabase/migrations/`)
 
-- `projects`, `employees` (cédula única), `project_members` (cargo, % asignado, vigencia): el personal del Excel.
+- `projects`, `employees` (cédula única y opcional), `project_members` (cargo, % asignado, vigencia, `in_global`): el personal de Global y los miembros No Global.
 - `azure_work_items(project_key, id, type, title, state, state_category, parent_id, assigned_email, assigned_name, iteration_*, created/changed/activated/in_progress/resolved/completed/closed_at, start/target/delivery_date, story_points, effort, original_estimate, completed_work, remaining_work, lead/cycle_time_days, …)`.
 - `azure_revisions(project_key, work_item_id, revision, state, state_category, assigned_email, changed_at)`.
 - `azure_sync_runs` (traza de sincronizaciones) y `employee_aliases(project_key, alias_email, employee_id)`.
@@ -118,10 +121,10 @@ Reglas de negocio (decididas con el usuario):
   - RLS activo **sin políticas** y `revoke all … from anon, authenticated`;
   - RPC con `revoke execute … from public, anon, authenticated` + `grant … to service_role`;
   - tras cualquier DDL, revisar `get_advisors`.
-- **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004), `azure_dataset_assigned` (0005), `dataset_monitored_epics` (0006), `dataset_backfilled_delivery` (0007) y `goal_tags` (0008).
+- **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004), `azure_dataset_assigned` (0005), `dataset_monitored_epics` (0006), `dataset_backfilled_delivery` (0007), `goal_tags` (0008) y `no_global_members` (0009).
   - Se aplican con el MCP del proyecto (`.mcp.json`, ref `klrierizueihrenhcema`) o con `scripts/apply-migrations.mjs`.
   - **No** usar el conector `claude.ai Supabase` (es otra cuenta).
-- **Nueva planeación de personal:** reemplazar el Excel → `python3 scripts/generate-seed.py` → aplicar `0002_seed.sql` (upsert).
+- **Nueva carga de Global:** reemplazar el archivo de `context/` → `python3 scripts/generate-seed.py` → aplicar `0002_seed.sql`. Es un upsert con `in_global = true`, no borra a los No Global; si Global incluye a uno de ellos, deja de ser No Global.
 
 ## Convenciones
 
