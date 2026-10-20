@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ChevronDown, Keyboard, LogOut, MoreHorizontal, Plus, RefreshCw, Search } from "lucide-react";
+import { ChevronDown, Keyboard, LogOut, MoreHorizontal, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
@@ -12,14 +12,14 @@ import { Sheet } from "@/components/ui/sheet";
 import { ThemeSwitchButton, ThemeToggle } from "@/components/ui/theme-toggle";
 import { PROJECTS, PROJECT_KEYS } from "@/lib/config";
 import { useApp } from "./app-provider";
+import { MobileFiltersButton, PeoplePanel, PeriodPanel, ScopeToggle, SyncChip } from "./filter-bar";
 import { NAV, navFor } from "./nav";
-import { WeekStrip } from "./week-strip";
 
-/** Barra superior + tab bar inferior para pantallas < lg. */
+/** Barra superior + tab bar inferior + panel de filtros para pantallas < lg. */
 export function MobileNav() {
   const pathname = usePathname();
   const active = navFor(pathname);
-  const { projectKey, project, setProjectKey, setPaletteOpen, openRegister, logout, syncAzure, syncing, setShortcutsOpen } = useApp();
+  const { projectKey, project, setProjectKey, setPaletteOpen, logout, syncNow, sync, syncing, setShortcutsOpen, filtersOpen, setFiltersOpen } = useApp();
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const tabs = [NAV[0], NAV[1], null, NAV[2]];
@@ -75,7 +75,10 @@ export function MobileNav() {
           </button>
           <ThemeSwitchButton />
         </div>
-        <WeekStrip className="px-2 pb-2" />
+        <div className="flex items-center gap-2 px-4 pb-3">
+          <MobileFiltersButton />
+          <SyncChip compact />
+        </div>
       </header>
 
       {/* Tab bar inferior */}
@@ -93,14 +96,14 @@ export function MobileNav() {
                 {item.short}
               </Link>
             ) : (
-              <div key="fab" className="flex justify-center">
+              <div key="filters" className="flex justify-center">
                 <motion.button
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => openRegister(null)}
+                  onClick={() => setFiltersOpen(true)}
                   className="btn-glow -mt-6 grid size-14 place-items-center rounded-2xl bg-accent text-white shadow-xl shadow-accent/40"
-                  aria-label="Registrar actividad"
+                  aria-label="Filtros"
                 >
-                  <Plus className="size-6" />
+                  <SlidersHorizontal className="size-6" />
                 </motion.button>
               </div>
             ),
@@ -115,15 +118,24 @@ export function MobileNav() {
         </div>
       </nav>
 
+      <Sheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtros" description="Aplican a todas las vistas">
+        <div className="space-y-5">
+          <PeriodPanel />
+          <div>
+            <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Ámbito</p>
+            <ScopeToggle />
+          </div>
+          <div>
+            <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Colaboradores</p>
+            <PeoplePanel />
+          </div>
+        </div>
+      </Sheet>
+
       <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Más opciones">
         <div className="space-y-2">
           {NAV.slice(3).map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setMoreOpen(false)}
-              className="flex items-center gap-3 rounded-2xl border border-line bg-surface-2 p-3"
-            >
+            <Link key={item.href} href={item.href} onClick={() => setMoreOpen(false)} className="flex items-center gap-3 rounded-2xl border border-line bg-surface-2 p-3">
               <span className="grid size-10 place-items-center rounded-xl bg-accent-soft text-accent-fg">
                 <item.icon className="size-5" />
               </span>
@@ -138,8 +150,8 @@ export function MobileNav() {
           <p className="px-1 pt-3 text-[0.6875rem] font-semibold uppercase tracking-wider text-subtle">Pantalla</p>
           <DisplayControls size="lg" />
           <div className="grid grid-cols-2 gap-2 pt-3">
-            <button onClick={syncAzure} disabled={syncing} className="flex items-center justify-center gap-2 rounded-xl border border-line py-2.5 text-sm font-semibold">
-              <RefreshCw className={clsx("size-4", syncing && "animate-spin")} /> Azure
+            <button onClick={() => void syncNow()} disabled={syncing || sync?.running} className="flex items-center justify-center gap-2 rounded-xl border border-line py-2.5 text-sm font-semibold">
+              <RefreshCw className={clsx("size-4", (syncing || sync?.running) && "animate-spin")} /> Sincronizar
             </button>
             <button
               onClick={() => {

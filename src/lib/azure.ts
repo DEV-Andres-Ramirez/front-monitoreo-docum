@@ -1,31 +1,20 @@
 // =====================================================================
 // Cliente Azure DevOps — REGLA DE ORO: SOLO LECTURA.
 // Está prohibido crear, modificar o borrar cualquier cosa en Azure DevOps.
-// Toda llamada pasa por azureRead(), que solo permite:
-//   · GET (cualquier recurso de lectura)
-//   · POST a /_apis/wit/wiql (consulta WIQL; es de lectura, Azure la expone como POST)
+// Toda llamada pasa por azureRequest(), que solo permite:
+//   · GET a dev.azure.com/{org}/… (REST de lectura)
+//   · GET a analytics.dev.azure.com/{org}/{project}/_odata/… (Azure Analytics, OData)
+//   · POST a dev.azure.com/{org}/{project}/_apis/wit/wiql (consulta WIQL; es de lectura)
 // No agregar PATCH/PUT/DELETE ni otros POST. Los PAT solo tienen permisos de lectura.
 // =====================================================================
 import "server-only";
-import { cacheLife, cacheTag } from "next/cache";
 import type { ProjectKey } from "./config";
 
 const API_VERSION = "7.1";
+const ODATA_VERSION = "v4.0-preview";
+const ALLOWED_HOSTS = new Set(["dev.azure.com", "analytics.dev.azure.com"]);
 
-type AzureConfig = { org: string; project: string; epicIds: number[]; pat: string };
-
-export type WorkItem = {
-  id: number;
-  title: string;
-  type: string;
-  state: string;
-  assignedTo: string | null;
-  assignedEmail: string | null;
-  parentId: number | null;
-  url: string;
-};
-
-export type WorkItemsResult = { items: WorkItem[]; fetchedAt: string };
+export type AzureConfig = { org: string; project: string; epicIds: number[]; pat: string };
 
 export function azureConfig(key: ProjectKey): AzureConfig {
   const org = process.env[`AZURE_${key}_ORG`];
@@ -35,18 +24,35 @@ export function azureConfig(key: ProjectKey): AzureConfig {
     .split(",")
     .map((v) => Number(v.trim()))
     .filter((v) => Number.isInteger(v) && v > 0);
-  if (!org || !project || !pat || epicIds.length === 0) {
+  if (!org || !project || !pat) {
     throw new Error(`Azure DevOps no está configurado para el proyecto ${key}`);
   }
   return { org, project, epicIds, pat };
 }
 
-async function azureRead<T>(cfg: AzureConfig, path: string, wiql?: string): Promise<T> {
+export class AzureHttpError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
+}
+
+/** Único punto de salida hacia Azure. Valida host, método y ruta antes de llamar. */
+async function azureRequest<T>(cfg: AzureConfig, url: string, wiql?: string): Promise<T> {
+  const target = new URL(url);
   const isWiql = wiql !== undefined;
-  if (isWiql && !/^[^?]*\/_apis\/wit\/wiql\?/.test(path)) {
+  if (target.protocol !== "https:" || !ALLOWED_HOSTS.has(target.host)) {
+    throw new Error(`REGLA DE ORO: host no permitido (${target.host})`);
+  }
+  if (target.host === "analytics.dev.azure.com" && (isWiql || !target.pathname.includes("/_odata/"))) {
+    throw new Error("REGLA DE ORO: Analytics solo admite consultas OData por GET");
+  }
+  if (isWiql && !/\/_apis\/wit\/wiql$/.test(target.pathname)) {
     throw new Error("REGLA DE ORO: solo se permiten consultas WIQL como POST hacia Azure DevOps");
   }
-  const res = await fetch(`https://dev.azure.com/${encodeURIComponent(cfg.org)}/${path}`, {
+  const res = await fetch(target, {
     method: isWiql ? "POST" : "GET",
     headers: {
       Authorization: `Basic ${Buffer.from(`:${cfg.pat}`).toString("base64")}`,
@@ -54,68 +60,39 @@ async function azureRead<T>(cfg: AzureConfig, path: string, wiql?: string): Prom
       ...(isWiql ? { "Content-Type": "application/json" } : {}),
     },
     body: isWiql ? JSON.stringify({ query: wiql }) : undefined,
+    cache: "no-store",
   });
   if (!res.ok) {
-    throw new Error(`Azure DevOps respondió ${res.status} (${cfg.project})`);
+    const detail = (await res.text().catch(() => "")).slice(0, 300);
+    throw new AzureHttpError(`Azure DevOps respondió ${res.status} (${cfg.project}) ${detail}`, res.status);
   }
   return res.json() as Promise<T>;
 }
 
-type WiqlLinksResponse = { workItemRelations: { target: { id: number } }[] };
-type WorkItemsResponse = {
-  value: { id: number; fields: Record<string, unknown> }[];
-};
+/** REST de lectura (GET) o WIQL (POST de consulta) bajo dev.azure.com/{org}/… */
+export function azureRead<T>(cfg: AzureConfig, path: string, wiql?: string) {
+  return azureRequest<T>(cfg, `https://dev.azure.com/${encodeURIComponent(cfg.org)}/${path}`, wiql);
+}
 
 /**
- * Árbol completo (épicas → features → HU → tareas) de las épicas configuradas.
- * Cacheado en el servidor; "Sincronizar Azure" invalida la etiqueta `azure-<key>`.
+ * Consulta Azure Analytics (OData) y recorre todas las páginas (@odata.nextLink).
+ * `query` es la parte después de /_odata/v4.0-preview/, p. ej. "WorkItems?$select=…".
  */
-export async function getWorkItems(key: ProjectKey): Promise<WorkItemsResult> {
-  "use cache";
-  cacheTag(`azure-${key}`);
-  cacheLife("minutes");
-
-  const cfg = azureConfig(key);
-  const projectPath = encodeURIComponent(cfg.project);
-  const links = await azureRead<WiqlLinksResponse>(
-    cfg,
-    `${projectPath}/_apis/wit/wiql?api-version=${API_VERSION}`,
-    `SELECT [System.Id] FROM WorkItemLinks
-     WHERE [Source].[System.Id] IN (${cfg.epicIds.join(",")})
-       AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'
-     MODE (Recursive)`,
-  );
-
-  // El orden de la respuesta recursiva es el del árbol: se conserva.
-  const ids = [...new Set(links.workItemRelations.map((r) => r.target.id))];
-  const fields = "System.Id,System.Title,System.WorkItemType,System.State,System.AssignedTo,System.Parent";
-  const byId = new Map<number, WorkItem>();
-
-  for (let i = 0; i < ids.length; i += 200) {
-    const chunk = ids.slice(i, i + 200).join(",");
-    const data = await azureRead<WorkItemsResponse>(
-      cfg,
-      `_apis/wit/workitems?ids=${chunk}&fields=${fields}&api-version=${API_VERSION}`,
-    );
-    for (const w of data.value) {
-      const f = w.fields;
-      const assigned = f["System.AssignedTo"] as { displayName?: string; uniqueName?: string } | undefined;
-      byId.set(w.id, {
-        id: w.id,
-        title: String(f["System.Title"] ?? ""),
-        type: String(f["System.WorkItemType"] ?? ""),
-        state: String(f["System.State"] ?? ""),
-        assignedTo: assigned?.displayName ?? null,
-        assignedEmail: assigned?.uniqueName?.toLowerCase() ?? null,
-        parentId: (f["System.Parent"] as number | undefined) ?? null,
-        url: `https://dev.azure.com/${encodeURIComponent(cfg.org)}/${projectPath}/_workitems/edit/${w.id}`,
-      });
-    }
+export async function analyticsRead<T>(cfg: AzureConfig, query: string): Promise<T[]> {
+  const base = `https://analytics.dev.azure.com/${encodeURIComponent(cfg.org)}/${encodeURIComponent(cfg.project)}/_odata/${ODATA_VERSION}/`;
+  const rows: T[] = [];
+  let next: string | undefined = base + query;
+  for (let page = 0; next && page < 200; page++) {
+    const data: { value: T[]; "@odata.nextLink"?: string } = await azureRequest(cfg, next);
+    rows.push(...data.value);
+    next = data["@odata.nextLink"];
   }
+  return rows;
+}
 
-  const items = ids
-    .map((id) => byId.get(id))
-    .filter((w): w is WorkItem => !!w && w.state !== "Removed");
+export const API = { version: API_VERSION };
 
-  return { items, fetchedAt: new Date().toISOString() };
+/** URL pública de un work item (para abrirlo en Azure, solo lectura). */
+export function workItemUrl(cfg: Pick<AzureConfig, "org" | "project">, id: number) {
+  return `https://dev.azure.com/${encodeURIComponent(cfg.org)}/${encodeURIComponent(cfg.project)}/_workitems/edit/${id}`;
 }

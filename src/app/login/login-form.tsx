@@ -71,7 +71,7 @@ export function LoginForm() {
           placeholder="Ingresa tu token único"
           aria-invalid={!!error}
           aria-describedby="token-help"
-          className="h-13 w-full bg-transparent py-3.5 text-base text-foreground outline-none placeholder:text-subtle"
+          className="h-13 w-full bg-transparent py-3.5 text-base text-foreground outline-none placeholder:text-subtle focus-visible:outline-none"
         />
         <button
           type="button"

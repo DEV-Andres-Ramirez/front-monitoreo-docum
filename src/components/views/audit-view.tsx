@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowRight, LogIn, LogOut, PencilLine, PlusCircle, RefreshCw, ShieldAlert, Trash2, Undo2, type LucideIcon } from "lucide-react";
+import { ArrowRight, CloudDownload, CloudOff, Link2, Link2Off, LogIn, LogOut, PencilLine, PlusCircle, RefreshCw, ShieldAlert, Trash2, Undo2, type LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 import useSWRInfinite from "swr/infinite";
@@ -20,15 +20,18 @@ const ACTION_META: Record<string, { label: string; icon: LucideIcon; tone: Statu
   activity_deleted: { label: "Actividad eliminada", icon: Trash2, tone: "critical" },
   activity_restored: { label: "Actividad restaurada", icon: Undo2, tone: "good" },
   azure_refresh: { label: "Sincronización de Azure (solo lectura)", icon: RefreshCw, tone: "neutral" },
+  azure_sync: { label: "Sincronización con Azure (solo lectura)", icon: CloudDownload, tone: "info" },
+  azure_sync_failed: { label: "Falló la sincronización con Azure", icon: CloudOff, tone: "critical" },
+  alias_linked: { label: "Correo de Azure vinculado", icon: Link2, tone: "good" },
+  alias_unlinked: { label: "Vínculo de correo eliminado", icon: Link2Off, tone: "neutral" },
 };
 
 const FILTERS: { key: string; label: string; actions: string[] }[] = [
   { key: "todos", label: "Todo", actions: [] },
-  { key: "registros", label: "Registros", actions: ["activity_created"] },
-  { key: "ediciones", label: "Ediciones", actions: ["activity_updated"] },
-  { key: "borrados", label: "Borrados y restauraciones", actions: ["activity_deleted", "activity_restored"] },
+  { key: "azure", label: "Sincronizaciones", actions: ["azure_sync", "azure_sync_failed", "azure_refresh"] },
   { key: "sesiones", label: "Sesiones", actions: ["login_success", "login_failed", "logout"] },
-  { key: "azure", label: "Azure", actions: ["azure_refresh"] },
+  { key: "vinculos", label: "Vinculaciones", actions: ["alias_linked", "alias_unlinked"] },
+  { key: "legado", label: "Registro manual (legado)", actions: ["activity_created", "activity_updated", "activity_deleted", "activity_restored"] },
 ];
 
 const TONE_ICON: Record<StatusTone, string> = {
@@ -55,12 +58,12 @@ function browser(ua: string | null) {
 }
 
 export function AuditView() {
-  const { projectKey, today, members } = useApp();
+  const { projectKey, today, model } = useApp();
   const [days, setDays] = useState<"7" | "30" | "90">("7");
   const [filter, setFilter] = useState("todos");
   const actions = FILTERS.find((f) => f.key === filter)?.actions ?? [];
   const from = addDaysISO(today, -(Number(days) - 1));
-  const names = useMemo(() => new Map(members.map((m) => [m.employeeId, m.name])), [members]);
+  const names = useMemo(() => new Map([...(model?.people.values() ?? [])].filter((p) => p.employeeId).map((p) => [p.employeeId!, p.name])), [model]);
 
   const { data, size, setSize, isLoading, isValidating } = useSWRInfinite<AuditResponse>(
     (index, prev) => {
@@ -200,6 +203,19 @@ function AuditRow({ entry, index, names }: { entry: AuditEntry; index: number; n
           </ul>
         )}
 
+        {(entry.action === "azure_sync" || entry.action === "azure_sync_failed") && (
+          <p className="mt-1 text-xs text-muted">
+            {data.mode === "full" ? "Sincronización completa" : "Sincronización incremental"}
+            {data.items !== undefined && ` · ${Number(data.items).toLocaleString("es-CO")} ítems y ${Number(data.revisions).toLocaleString("es-CO")} cambios leídos`}
+            {typeof data.error === "string" && <span className="block text-critical-fg">{data.error}</span>}
+          </p>
+        )}
+        {(entry.action === "alias_linked" || entry.action === "alias_unlinked") && (
+          <p className="mt-1 text-xs text-muted">
+            {String(data.alias ?? "")}
+            {data.employeeId ? ` → ${names.get(String(data.employeeId)) ?? "colaborador"}` : ""}
+          </p>
+        )}
         {!isActivity && (entry.ip || entry.userAgent) && (
           <p className="mt-1 text-xs text-subtle">
             {[browser(entry.userAgent), entry.ip ? `IP ${entry.ip}` : null].filter(Boolean).join(" · ")}

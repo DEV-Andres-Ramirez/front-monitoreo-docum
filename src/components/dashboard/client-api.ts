@@ -1,7 +1,6 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { mutate } from "swr";
 import { isProjectKey, type ProjectKey } from "@/lib/config";
 
 export class ApiError extends Error {
@@ -31,47 +30,69 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const fetcher = <T,>(url: string) => api<T>(url);
 
-/** Revalida equipo y actividades del proyecto tras crear/editar/borrar. */
-export function refreshProjectData(projectKey: ProjectKey) {
-  return mutate(
-    (key) => typeof key === "string" && key.startsWith(`/api/projects/${projectKey}/`) && !key.includes("/work-items"),
-  );
-}
+// ------------------------------------------------------------------ Preferencias en localStorage
+// Valores persistidos con useSyncExternalStore (sin desajustes de hidratación).
+// `fallback` debe ser una constante de módulo (referencia estable).
+const EVENT = "docum:stored-change";
+const cache = new Map<string, { raw: string | null; value: unknown }>();
+const memory = new Map<string, string>();
 
-// --- Proyecto activo persistido en localStorage (sin desajustes de hidratación) ---
-const STORAGE_KEY = "docum:project";
-const EVENT = "docum:project-change";
-
-function subscribe(callback: () => void) {
-  window.addEventListener("storage", callback);
-  window.addEventListener(EVENT, callback);
+function subscribe(cb: () => void) {
+  window.addEventListener("storage", cb);
+  window.addEventListener(EVENT, cb);
   return () => {
-    window.removeEventListener("storage", callback);
-    window.removeEventListener(EVENT, callback);
+    window.removeEventListener("storage", cb);
+    window.removeEventListener(EVENT, cb);
   };
 }
 
-let memory: string | null = null;
-
-function read() {
+function readRaw(key: string) {
   try {
-    return localStorage.getItem(STORAGE_KEY) ?? memory;
+    return localStorage.getItem(key) ?? memory.get(key) ?? null;
   } catch {
-    return memory;
+    return memory.get(key) ?? null;
   }
 }
 
-export function useProjectKey(): [ProjectKey, (key: ProjectKey) => void] {
-  const stored = useSyncExternalStore(subscribe, read, () => null);
-  const key: ProjectKey = stored && isProjectKey(stored) ? stored : "348";
-  const set = (next: ProjectKey) => {
-    memory = next;
+export function readStored<T>(key: string, fallback: T): T {
+  const raw = readRaw(key);
+  const hit = cache.get(key);
+  if (hit && hit.raw === raw) return hit.value as T;
+  let value: T = fallback;
+  if (raw !== null) {
     try {
-      localStorage.setItem(STORAGE_KEY, next);
+      value = JSON.parse(raw) as T;
     } catch {
-      /* almacenamiento bloqueado: se mantiene en memoria */
+      value = fallback;
     }
-    window.dispatchEvent(new Event(EVENT));
-  };
-  return [key, set];
+  }
+  cache.set(key, { raw, value });
+  return value;
+}
+
+export function writeStored<T>(key: string, value: T) {
+  const raw = JSON.stringify(value);
+  memory.set(key, raw);
+  try {
+    localStorage.setItem(key, raw);
+  } catch {
+    /* almacenamiento bloqueado: queda en memoria */
+  }
+  window.dispatchEvent(new Event(EVENT));
+}
+
+export function useStored<T>(key: string, fallback: T): [T, (value: T) => void] {
+  const value = useSyncExternalStore(
+    subscribe,
+    () => readStored(key, fallback),
+    () => fallback,
+  );
+  return [value, (next: T) => writeStored(key, next)];
+}
+
+const PROJECT_FALLBACK = "348";
+
+export function useProjectKey(): [ProjectKey, (key: ProjectKey) => void] {
+  const [stored, set] = useStored<string>("docum:project-key", PROJECT_FALLBACK);
+  return [isProjectKey(stored) ? stored : "348", set];
 }

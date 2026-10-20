@@ -10,18 +10,9 @@ const GROUPS: { title: string; items: { keys: string[]; label: string }[] }[] = 
   {
     title: "General",
     items: [
-      { keys: ["⌘", "K"], label: "Paleta de comandos" },
-      { keys: ["N"], label: "Registrar actividad" },
+      { keys: ["⌘", "K"], label: "Buscar personas, ítems y acciones" },
       { keys: ["?"], label: "Ver atajos" },
       { keys: ["Esc"], label: "Cerrar panel" },
-    ],
-  },
-  {
-    title: "Fecha",
-    items: [
-      { keys: ["←"], label: "Día anterior" },
-      { keys: ["→"], label: "Día siguiente" },
-      { keys: ["T"], label: "Ir a hoy" },
     ],
   },
   { title: "Vistas", items: NAV.map((n) => ({ keys: [n.key], label: n.label })) },
@@ -34,7 +25,6 @@ const GROUPS: { title: string; items: { keys: string[]; label: string }[] }[] = 
       { keys: ["0"], label: "Tamaño al 100 %" },
     ],
   },
-  { title: "Formulario", items: [{ keys: ["⌘", "↵"], label: "Guardar actividad" }, { keys: ["↑", "↓"], label: "Moverse entre HU / tareas" }] },
 ];
 
 export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {

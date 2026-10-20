@@ -15,6 +15,10 @@ const ACTIONS = new Set([
   "activity_deleted",
   "activity_restored",
   "azure_refresh",
+  "azure_sync",
+  "azure_sync_failed",
+  "alias_linked",
+  "alias_unlinked",
 ]);
 
 type Row = {

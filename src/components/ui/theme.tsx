@@ -35,6 +35,8 @@ function apply(pref: ThemePref) {
 
 function subscribe(callback: () => void) {
   const media = window.matchMedia(MEDIA);
+  // El sistema pudo cambiar entre el script inline y la hidratación (p. ej. en un iframe)
+  if (readPref() === "system") apply("system");
   const onMedia = () => {
     if (readPref() === "system") apply("system");
     callback();

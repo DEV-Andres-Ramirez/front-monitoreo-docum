@@ -10,123 +10,132 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Guía para agentes · Monitoreo Docum (LinkTic)
 
-Lee también `README.md`: tiene el detalle de negocio, las variables de entorno y el despliegue.
+Lee también `README.md`: tiene el negocio, la sincronización, las variables y el despliegue.
 
 ## Objetivo de negocio
 
-Tablero interno con el que el **Scrum Master** (único usuario, común a ambos proyectos) registra cada día lo que hizo cada colaborador en dos proyectos monitoreados por solicitud del cliente:
+Tablero interno del **Scrum Master** (único usuario, común a ambos proyectos) para monitorear **automáticamente** el trabajo de cada colaborador. **No hay registro manual.** Todo se calcula desde Azure DevOps, cruzando **por correo** al personal del Excel de planeación con los ítems asignados de **todo el proyecto**:
 
-- **348 · SGDEA Acueducto (EAAB)**: Azure org `LinkTic`, proyecto `348 - SGDEA ACUEDUCTO`, épicas `539200` (Certificación CORE) y `539569` (Certificación Temáticos).
-- **005 · Positiva SGDEA**: Azure org `3tcapitalco`, proyecto `005 - POSITIVA SGDEA NEW`, épica `578` (Deuda Docum).
+- **348 · SGDEA Acueducto (EAAB)**: org `LinkTic`, proyecto `348 - SGDEA ACUEDUCTO`. Épicas monitoreadas (filtro opcional): `539200` y `539569`.
+- **005 · Positiva SGDEA**: org `3tcapitalco`, proyecto `005 - POSITIVA SGDEA NEW`. Épica monitoreada: `578`.
 
-Cada registro guarda colaborador, fecha, horas, descripción, evidencia opcional (un enlace) y el **work item de Azure** (HU, tarea, feature…) al que se asocia. Ese work item debe estar bajo las épicas configuradas. El fin es tener **traza y control** de todas las actividades por persona y proyecto.
-
-El personal sale del Excel de planeación (`context/Planeacion_oct2026_Docum_Acueducto.xlsx`, hojas `005 Docum` y `348 Acueducto`). Corte de oct-2026: 49 personas en 005 y 9 en 348; 55 únicas, porque 3 están en ambos.
+Reglas de negocio (decididas con el usuario):
+- **1 punto de esfuerzo = 1 hora.**
+  - Horas = `StoryPoints ?? Effort ?? OriginalEstimate`.
+  - **Sin doble conteo:** si un padre tiene hijos con horas, suman los hijos.
+  - Se compara contra `CompletedWork`.
+- **Personas:** se monitorea el **Excel de planeación** (`context/…xlsx` → `0002_seed.sql`, 55 personas). Los demás asignados aparecen como "Fuera de la planeación" y se pueden **vincular** (alias).
+- **Alcance:** HU, Tareas y Bugs de todo el proyecto (12 meses + abiertos), con filtro "solo épicas monitoreadas".
+- **Gantt plan vs. real:**
+  - plan = `StartDate`/`TargetDate` del ítem; si no existen, las fechas del **sprint**;
+  - real = `InProgressDate` → entrega (`Custom.FechadeEntregaReal` ?? `ResolvedDate` ?? `CompletedDate`);
+  - a tiempo si la entrega ≤ fin del día objetivo.
+- **Capacidad** = 8 h × % asignado × días hábiles vigentes; **utilización** = horas entregadas ÷ capacidad.
 
 ## 🚫 REGLA DE ORO: Azure DevOps es SOLO LECTURA
 
 - **Nunca** crear, actualizar ni borrar nada en Azure DevOps: work items, comentarios, links, tags, etc.
-- Todo acceso pasa por `azureRead()` en `src/lib/azure.ts`. Solo admite `GET` y el `POST` de consulta WIQL a `/_apis/wit/wiql`. No añadir otros métodos ni endpoints de escritura, y no saltarse esa función.
-- Los PAT (`AZURE_<key>_PAT`) solo tienen *Work Items (Read)*, *Project and Team (Read)* y *Analytics (Read)*.
-- Lo que haya que "guardar" vive en Supabase. Del work item solo se copia un *snapshot* (`work_item_type/title/state/url`) en el momento del registro.
+- Toda llamada pasa por `azureRequest()` en `src/lib/azure.ts`, que valida host, método y ruta:
+  - **GET** a `dev.azure.com`;
+  - **GET** a `analytics.dev.azure.com/{org}/{project}/_odata/…`;
+  - **POST** solo a `/_apis/wit/wiql` (consulta).
+  - No agregues otros métodos o endpoints, ni hagas `fetch` directo a Azure.
+- Los PAT tienen *Work Items (Read)*, *Project and Team (Read)* y *Analytics (Read)*.
+- Lo único que se escribe va a **Supabase**: la copia sincronizada, los alias y la bitácora.
 
 ## Arquitectura
 
-- **Next.js 16.4.2** con `cacheComponents: true` y `partialPrefetching: true` (ver `next.config.ts`).
-  - El middleware ahora es `src/proxy.ts`.
-  - `cookies()` y `new Date()` no pueden ejecutarse durante el prerender: van en Route Handlers o detrás de `<Suspense>`. Por eso `src/app/(app)/layout.tsx` envuelve el shell en Suspense (fallback `ShellSkeleton`).
-  - `'use cache'` solo funciona en funciones helper, no en el cuerpo de un Route Handler. Para invalidar desde un Route Handler se usa `revalidateTag(tag, { expire: 0 })`; `updateTag` solo vale en Server Actions.
-  - Tipos de ruta: `RouteContext<'/api/...'>` es global. Si tsc se queja de rutas nuevas, ejecutar `npx next typegen`.
+- **Next.js 16.4.2** con `cacheComponents` y `partialPrefetching`:
+  - El middleware es `src/proxy.ts`.
+  - `cookies()` y `new Date()` van en Route Handlers o detrás de `<Suspense>` (el shell vive en `src/app/(app)/layout.tsx`).
+  - `after()` (de `next/server`) ejecuta trabajo tras responder.
+  - `RouteContext<'/api/...'>` es global; si cambian las rutas, ejecuta `npx next typegen`.
 - **Autenticación:**
-  1. `POST /api/auth/login` compara el token con `ACCESS_TOKEN` (`timingSafeEqual` sobre sha256).
-  2. Si coincide, emite un JWT HS256 (`jose`, `SESSION_SECRET`) en la cookie httpOnly `docum_session` (12 h).
-  3. `proxy.ts` redirige a `/login` (páginas) o responde 401 (API).
-  4. **Cada Route Handler vuelve a validar** con `isAuthenticated()` (`src/lib/auth.ts`). Mantener ese patrón en endpoints nuevos.
-- **App shell y rutas** (grupo `src/app/(app)/`): `/` Resumen, `/equipo`, `/actividades`, `/backlog` y `/bitacora`.
-  - Cada `page.tsx` es un shell estático que renderiza una vista cliente de `src/components/views/`.
-  - `template.tsx` anima la entrada de cada vista.
-- **Estado global:** `AppProvider` (`src/components/shell/app-provider.tsx`) es la única fuente de:
-  - proyecto, fecha seleccionada y "hoy";
-  - SWR de `team`, `week` (stats de la semana) y `work-items`;
-  - acciones (`openRegister`, `openEdit`, `openMember`, `openWorkItem`, `syncAzure`, `logout`);
-  - atajos de teclado.
-  - Además monta **una sola vez** los paneles globales: `ActivityForm`, `MemberDrawer`, `WorkItemSheet`, `CommandPalette` y `ShortcutsDialog`.
-  - Las vistas usan `useApp()`; no dupliques ese estado.
-- **Acento por proyecto:** `AppProvider` envuelve todo en `<div data-project className="contents">` y `globals.css` define `--accent*` por `[data-project]` y tema. Cualquier panel nuevo debe montarse dentro de ese contenedor.
-- **Datos:**
-  - Los Route Handlers se consumen con **SWR** (`fetcher`/`api` en `client-api.ts`). Tras mutar se llama `refreshProjectData(projectKey)`, que revalida también `stats`.
-  - Las respuestas `team`/`stats` incluyen `projectKey`, y la UI descarta datos de otro proyecto (por `keepPreviousData`).
-  - **Analítica en Postgres:** `stats` y `team` usan las funciones `activity_stats()`/`activity_totals()` (migración 0003) para no chocar con el tope de **1000 filas** de PostgREST. Para listados largos usa `selectAll()` (`src/lib/stats.ts`), que pagina por bloques.
-  - Las preferencias de UI (proyecto, tema, menú colapsado, layout de Equipo) viven en localStorage con `useSyncExternalStore`, sin desajustes de hidratación.
-- **Supabase:** `db()` (`src/lib/supabase.ts`, `server-only`) usa `SUPABASE_SECRET_KEY`. **Nunca** exponer esa llave ni crear un cliente Supabase en el navegador.
-- **Azure:**
-  - `getWorkItems(key)` hace una WIQL recursiva (`WorkItemLinks … Hierarchy-Forward MODE (Recursive)`) y luego `GET wit/workitems?ids=` en lotes de 200.
-  - Está cacheado con `'use cache'` + `cacheTag('azure-<key>')` + `cacheLife('minutes')`.
-  - El botón "Sincronizar" invalida la etiqueta.
-  - Al crear o editar una actividad, el servidor valida que el work item pertenezca al árbol (`workItemSnapshot`).
-- **Fechas:**
-  - Se manejan como `YYYY-MM-DD`, y "hoy" se calcula en `America/Bogota` (`src/lib/dates.ts`).
-  - La semana va de lunes a domingo.
-  - Jornada esperada: `JORNADA_HORAS (8) × allocation` (`src/lib/config.ts`), **solo en días hábiles** (`isBusinessDay`). En fin de semana el esperado es 0 y el estado es "Fin de semana". Los festivos de Colombia aún no están contemplados.
+  - `POST /api/auth/login` (`timingSafeEqual`) emite un JWT HS256 en la cookie `docum_session` (12 h).
+  - `proxy.ts` hace la verificación optimista.
+  - **Cada Route Handler** valida con `isAuthenticated()`.
+- **Sincronización** (`src/lib/azure-sync.ts`):
+  - Lee Azure Analytics OData (`WorkItems` + `WorkItemRevisions`, con paginación por `@odata.nextLink`) y hace upsert en `azure_work_items` / `azure_revisions` por lotes de 500.
+  - Completa = 12 meses + abiertos. Incremental = `ChangedDate ≥ marca de agua − 10 min`.
+  - Candado de 5 min con `azure_sync_runs.status = running`.
+  - El campo `Custom_FechadeEntregaReal` solo existe en 348; si OData responde 400, se reintenta sin él.
+  - `normalizeEmail()` limpia el prefijo `oidconflict_upnreuse_…_` y pasa a minúsculas.
+- **Disparo:** `GET /api/projects/[p]/dataset`:
+  - si no hay datos, ejecuta la sincronización completa y espera;
+  - si los datos tienen más de 15 min, responde y sincroniza con `after()` (`maxDuration = 300`).
+  - `POST /api/projects/[p]/sync[?full=1]` hace la sincronización manual.
+  - **No hay cron ni variables nuevas.**
+- **Dataset:**
+  - el RPC `azure_dataset(p, from, to)` devuelve ítems **asignados** vivos en el periodo (`created ≤ to` y abiertos o `completed ≥ from`), sus **ancestros** y las **transiciones de estado** (filas donde cambia el estado);
+  - la UI pide desde el inicio del **periodo anterior**, para los deltas.
+- **Motor de análisis (cliente, TS puro)** en `src/lib/analytics/`:
+  - `model.ts`: `buildModel()` resuelve identidad (alias → correo exacto → parte local → tokens del nombre), horas sin doble conteo, fechas plan/real, puntualidad, vencidos, segmentos de estado, ancestros (feature, épica, `inMonitoredEpics`) e iteraciones;
+  - `metrics.ts`: KPIs, throughput semanal, CFD, burnup, cycle time (P50/P85), antigüedad del WIP, `perPerson` y `workloadMatrix`. Recibe `now` explícito: no llames `Date.now()` en render;
+  - `period.ts`: presets, con "Sprint actual" deducido de las iteraciones conocidas, guardadas en localStorage;
+  - `state-colors.ts`: colores por `StateCategory`, validados con dataviz (no cambiar el orden).
+  - Usa siempre `StateCategory` (Proposed / InProgress / Resolved / Completed / Removed), **nunca el nombre del estado**: cada proceso tiene estados propios.
+- **Estado global** en `AppProvider` (`src/components/shell/app-provider.tsx`):
+  - proyecto, periodo, filtros (`people`, `includeOthers`, `scope`), dataset (SWR, con polling mientras `sync.running`), `model`, `scoped` (ítems en el alcance), `people`, sincronización y paneles globales (`WorkItemSheet`, `MemberSheet`, `CommandPalette`, `ShortcutsDialog`).
+  - Las vistas usan `useApp()` y se envuelven en `<DatasetGate>`.
+  - Los filtros se guardan por proyecto (`docum:filters:<p>`) con `useStored()` (`client-api.ts`).
+- **Acento por proyecto:** `<div data-project className="contents">` en el provider; los paneles nuevos van dentro.
+- **Supabase:** `db()` es server-only con la llave secreta. **Nunca** crear un cliente en el navegador.
 
 ## Modelo de datos (`supabase/migrations/`)
 
-- `projects(key PK '348'|'005')`
-- `employees(id, full_name, document_id UNIQUE, email)`
-- `project_members(project_key, employee_id, role, allocation 0–1, start_date, end_date, assignment_type, active)`, con UNIQUE(project_key, employee_id).
-- `activity_logs(id, project_key, employee_id, work_date, hours 0–24, description, evidence_url http(s), work_item_id, work_item_type/title/state/url, created_at, updated_at, deleted_at)`. **El borrado es lógico**: no usar `DELETE` físico.
-- `audit_log(action, entity, entity_id, project_key, old_data, new_data, ip, user_agent)`:
-  - el trigger `audit_activity_changes()` registra `activity_created/updated/deleted/restored`;
-  - la app registra `login_success/login_failed/logout/azure_refresh` (`src/lib/audit.ts`).
-- Funciones `activity_stats(project, from, to) → jsonb` (memberDays + workItems agregados) y `activity_totals(...)`: `stable`, `search_path = ''`, `execute` solo para `service_role`.
-- RLS está activo en todas las tablas **sin políticas**: solo el backend accede. Si se agregan tablas, mantener RLS activo y `revoke all … from anon, authenticated`. Las funciones nuevas: `revoke execute … from public, anon, authenticated`.
-- **Borrar = lógico + Deshacer:** `DELETE /api/activities/[id]` fija `deleted_at` y `POST /api/activities/[id]/restore` lo revierte (lo usa el toast "Deshacer").
-
-### Cambios de esquema o de personal
-
-1. Crear `supabase/migrations/000N_descripcion.sql` (idempotente cuando sea posible) y aplicarlo con el MCP de Supabase del proyecto (`.mcp.json`, project_ref `klrierizueihrenhcema`). **No** usar el conector personal `claude.ai Supabase`, que es otra cuenta. Si el MCP no está disponible, usar `node --env-file=.env scripts/apply-migrations.mjs 000N_x.sql` con `SUPABASE_ACCESS_TOKEN`. Ya están aplicadas: `init_schema` (0001), `seed_personal_oct2026` (0002) y `stats_and_restore` (0003).
-2. Nueva planeación de personal: reemplazar el Excel en `context/`, ejecutar `python3 scripts/generate-seed.py` y aplicar `0002_seed.sql` (hace upsert por cédula y por proyecto+persona).
-3. Revisar `get_advisors` (security) después de cualquier DDL.
+- `projects`, `employees` (cédula única), `project_members` (cargo, % asignado, vigencia): el personal del Excel.
+- `azure_work_items(project_key, id, type, title, state, state_category, parent_id, assigned_email, assigned_name, iteration_*, created/changed/activated/in_progress/resolved/completed/closed_at, start/target/delivery_date, story_points, effort, original_estimate, completed_work, remaining_work, lead/cycle_time_days, …)`.
+- `azure_revisions(project_key, work_item_id, revision, state, state_category, assigned_email, changed_at)`.
+- `azure_sync_runs` (traza de sincronizaciones) y `employee_aliases(project_key, alias_email, employee_id)`.
+- `audit_log`, con las acciones:
+  - `login_success|failed`, `logout`;
+  - `azure_sync`, `azure_sync_failed`;
+  - `alias_linked|unlinked`;
+  - y las `activity_*` del legado.
+- **Legado (sin uso, no borrar):** `activity_logs`, el trigger `audit_activity_changes` y las funciones `activity_stats` / `activity_totals` (0003).
+- **Seguridad de las tablas nuevas:**
+  - RLS activo **sin políticas** y `revoke all … from anon, authenticated`;
+  - RPC con `revoke execute … from public, anon, authenticated` + `grant … to service_role`;
+  - tras cualquier DDL, revisar `get_advisors`.
+- **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004) y `azure_dataset_assigned` (0005).
+  - Se aplican con el MCP del proyecto (`.mcp.json`, ref `klrierizueihrenhcema`) o con `scripts/apply-migrations.mjs`.
+  - **No** usar el conector `claude.ai Supabase` (es otra cuenta).
+- **Nueva planeación de personal:** reemplazar el Excel → `python3 scripts/generate-seed.py` → aplicar `0002_seed.sql` (upsert).
 
 ## Convenciones
 
-- Idioma de la UI, los comentarios y los mensajes de error: **español**. Formato numérico `es-CO`.
-- **Identidad visual:**
-  - azul `#0090FF` / `#00C2FF` y verde `#13A538` / `#22D400`, tomados del logo (`public/linktic_logo.png`, `public/linktic_icon.png`);
-  - tipografías: `font-display` (Outfit) para títulos y Geist para el texto.
-- **Tokens semánticos y tema:**
-  - Nunca uses `bg-white`, `bg-slate-*` ni `text-slate-*`. Usa los tokens: `bg-background`, `bg-surface`, `bg-surface-2/3`, `bg-elevated`, `text-foreground`, `text-muted`, `text-subtle`, `border-line(-strong)`, `bg-accent`, `bg-accent-soft`, `text-accent-fg` (texto legible sobre superficies) y los de estado `good`/`warning`/`critical`/`info` (`-soft`/`-fg`).
-  - Clases utilitarias: `.card` (superficie estándar), `.glass`, `.shimmer`, `.btn-glow`.
-  - Tema en `<html data-theme>`: script inline `THEME_INIT_SCRIPT` (`src/lib/boot-scripts.ts`, sin parpadeo), `useTheme()`/`setTheme()` en `src/components/ui/theme.tsx`, variante Tailwind `dark:`.
-- **Escala de la interfaz (TV) y breakpoints. IMPORTANTE:**
-  - La escala (75 %–300 %) cambia el `font-size` de `<html>` (`DISPLAY_INIT_SCRIPT`, hooks en `src/components/ui/display.tsx`, controles en `display-controls.tsx`).
-  - **Todo debe medirse en `rem`:** nunca uses valores arbitrarios en `px` (`text-[11px]`, `w-[46px]`…); usa `text-[0.6875rem]`, etc.
-  - Los valores en px que se pasan por JS (alturas de gráficas, tamaños de Chart.js) se multiplican por `useUiScale()` o por `theme.px()` de `useChartTheme`.
-  - Los breakpoints `sm/md/lg/xl/2xl` están **redefinidos** en `globals.css` sobre `<html data-bp>`, que se calcula con el **ancho efectivo** (ventana ÷ escala). No agregues media queries de ancho propias. En JS usa `useBreakpoint()`, no `matchMedia`.
-  - Pantalla completa: `useFullscreen()` / `toggleFullscreen()`. Atajos: `+` / `−` / `0` (100 %) y `F`.
+- UI, comentarios y errores en **español**; números en formato `es-CO`.
+- **Tokens semánticos:**
+  - usa `bg-surface`, `text-muted`, `border-line`, `bg-accent`, `text-accent-fg`, `good|warning|critical|info(-soft|-fg)`… y nunca `bg-white` ni `slate-*`;
+  - clases utilitarias: `.card`, `.glass`, `.shimmer`, `.btn-glow`;
+  - tema en `<html data-theme>` (`THEME_INIT_SCRIPT` en `src/lib/boot-scripts.ts`).
+- **Escala TV y breakpoints (IMPORTANTE):**
+  - Todo en `rem` (prohibido `-[Npx]`).
+  - Los valores en px que pasan por JS se multiplican por `useUiScale()` o `theme.px()`.
+  - `sm…2xl` están **redefinidos** sobre `<html data-bp>` (ancho efectivo = ventana ÷ escala). En JS usa `useBreakpoint()`, no `matchMedia` ni media queries propias.
+- **Foco:** el outline global aplica a botones, enlaces y roles. Los `input`/`textarea`/`select` no tienen outline: usan su propio anillo (`focus:ring`, `focus-within:ring`). Así se evita el borde doble que hubo en el login.
+- **Popovers:** usa `Popover` (`src/components/ui/popover.tsx`). **Nunca** pongas `<input type=date>` invisibles superpuestos sobre otros controles; esa fue la causa del bug del calendario sobre el botón "−".
 - **Gráficas (Chart.js):**
-  - Importa siempre `./setup` (registro mínimo y plugin `crosshair`; el plugin Legend **no** está registrado).
-  - Colores desde `useChartTheme(projectKey)`.
-  - Envuelve cada gráfica en `ChartCard` (leyenda HTML con tokens, alternar **gráfica ↔ tabla**, estados de carga y vacío, `summary` accesible).
-  - Reglas:
-    - un solo eje Y (nunca doble eje);
-    - el texto nunca va en el color de la serie;
-    - categóricos en orden fijo: los tipos de Azure usan `TYPE_ORDER`/`TYPE_META` de `src/lib/work-item-types.ts`, validados con el validador de dataviz en claro y oscuro (no reordenar).
-  - En grillas responsivas usa `grid-cols-1` en la base (y `min-w-0`), o los canvas desbordan en móvil.
-- **Componentes UI propios y livianos** en `src/components/ui/`. No hay librería de componentes: reutiliza `Button`, `Segmented`, `Chip`, `Avatar`/`AvatarStack`, `TypeBadge`, `StateBadge`, `StatusPill`, `Kbd`, `EmptyState`, `ProgressRing`, `Skeleton`, `AnimatedNumber`, `Sheet` y `ThemeToggle`. Si usas `layoutId` de motion en un componente que se monta más de una vez, hazlo único con `useId()`.
-- **Animaciones con `motion/react`:** `layoutId` para píldoras, `AnimatePresence` para listas y paneles. Respetar `prefers-reduced-motion`; ya está cubierto en CSS.
-- **Diseño mobile-first:** en `< lg` hay barra superior compacta y tab bar inferior con "+" central; los paneles son bottom sheets en `< sm`.
-  - Prueba siempre a 390 px sin scroll horizontal.
-  - Prueba también con la escala al 200 %: con un ancho de 1920 px equivale a un diseño de 960 px.
-- **No usar `alert`/`confirm`/`prompt`:** la confirmación de borrado es en línea (`DeleteButton`).
-- **Validación de entrada** con zod (`src/lib/validators.ts`) en el servidor. El cliente solo hace validaciones de cortesía.
-- **Verificación antes de entregar:** `pnpm lint`, `pnpm build`, y `npx tsc --noEmit` si cambiaste rutas.
+  - importa `./setup`, que registra Bar, Line, Scatter y Doughnut (sin Legend);
+  - colores desde `useChartTheme` y `categoryColor()`;
+  - cada gráfica va en `ChartCard`, con leyenda HTML y vista de tabla;
+  - un solo eje Y, y el texto nunca va en el color de la serie.
+- **Gantt** (`src/components/gantt/gantt.tsx`):
+  - HTML/CSS en rem, con la línea de tiempo estirada al ancho disponible (ResizeObserver);
+  - columna de nombres fija (21 rem, o 12 rem en angosto);
+  - 25 ítems por grupo con "mostrar más".
+- **UI propia** en `src/components/ui/` (`Button`, `Segmented`, `Chip`, `Avatar`, `TypeBadge`, `Kbd`, `EmptyState`, `ProgressRing`, `Sheet`, `Popover`…). Un `layoutId` de motion debe ser único con `useId()` si el componente se monta dos veces.
+- **Verificación antes de entregar:**
+  - `pnpm lint`, `npx tsc --noEmit`, `pnpm build`;
+  - 390 px sin scroll horizontal;
+  - 200 % de escala;
+  - claro y oscuro.
 
-## Roadmap sugerido (no implementado)
+## Roadmap sugerido
 
-- Festivos de Colombia en el cálculo de días hábiles (Ley Emiliani).
-- Alertas de colaboradores sin registro, como un resumen diario por correo o Teams.
-- Registro masivo para varias personas y plantillas de actividades recurrentes.
-- Exportación a PDF/Excel del Resumen con las gráficas.
-- Gestión de personal desde la UI: altas, bajas y cambios de % sin pasar por el Excel.
-- Usuarios múltiples con roles, en lugar del token único.
+- Festivos de Colombia en los días hábiles (capacidad).
+- Cron diario opcional en Vercel (requeriría `CRON_SECRET`), además de la sincronización bajo demanda.
+- Alertas automáticas (vencidos o estancados) por correo o Teams.
+- Exportación del Resumen y del Gantt a PDF o Excel.
+- Gestión del personal y de los alias desde la UI, con historial.
+- Multiusuario con roles.

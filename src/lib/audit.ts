@@ -1,10 +1,10 @@
 // Traza de eventos de la aplicación (login, logout, sincronización de Azure).
-// Los cambios de actividades los audita un trigger de Postgres (audit_activity_changes).
+// Las sincronizaciones con Azure se registran desde src/lib/azure-sync.ts (azure_sync / azure_sync_failed).
 import "server-only";
 import { db } from "./supabase";
 
 type AuditEvent = {
-  action: "login_success" | "login_failed" | "logout" | "azure_refresh";
+  action: "login_success" | "login_failed" | "logout" | "azure_refresh" | "alias_linked" | "alias_unlinked";
   entity?: string;
   entityId?: string;
   projectKey?: string;

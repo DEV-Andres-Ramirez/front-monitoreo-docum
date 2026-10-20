@@ -1,174 +1,172 @@
 # Monitoreo Docum · LinkTic
 
-Tablero interno de **control y traza diaria de actividades** por colaborador para los proyectos de la línea Docum de LinkTic:
+Tablero interno de **monitoreo automático** del trabajo de cada colaborador en los proyectos de la línea Docum de LinkTic, calculado a partir de **Azure DevOps** (solo lectura):
 
-| Proyecto | Cliente | Azure DevOps (org / proyecto) | Épicas monitoreadas |
+| Proyecto | Cliente | Azure DevOps (org / proyecto) | Épicas monitoreadas (filtro opcional) |
 |---|---|---|---|
 | **348 · SGDEA Acueducto** | EAAB – Acueducto de Bogotá | `LinkTic` / `348 - SGDEA ACUEDUCTO` | `539200` Certificación CORE · `539569` Certificación Temáticos |
 | **005 · Positiva SGDEA** | Positiva · 3T Capital | `3tcapitalco` / `005 - POSITIVA SGDEA NEW` | `578` Deuda Docum |
 
 ## ¿Para qué sirve?
 
-El cliente solicitó monitoreo de lo que hace cada persona asignada. El **Scrum Master** (único usuario, el mismo para ambos proyectos) usa el tablero a diario para registrar, por cada colaborador:
+El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Master** (único usuario, común a ambos proyectos) **no registra nada a mano**. El tablero cruza **por correo** al personal del Excel de planeación con los ítems asignados en Azure DevOps (HU, Tareas y Bugs de todo el proyecto) y calcula automáticamente:
 
-- **Qué hizo** (descripción de la actividad).
-- **Cuántas horas** invirtió (en pasos de 0,25 h).
-- **A qué HU, tarea o recurso de Azure DevOps** corresponde. Debe pertenecer a las épicas configuradas del proyecto.
-- **Evidencia** opcional: un enlace http(s).
+- **Qué tiene asignado cada colaborador** y en qué estado está: por iniciar, en curso, entregado o cerrado.
+- **Horas:** 1 punto de esfuerzo = 1 hora. Se toman Story Points o Effort; si no hay, la Estimación original. **No hay doble conteo**: si una HU y sus tareas tienen valor, suman las tareas. Se compara con el "Trabajo completado" que reportan en Azure.
+- **Tiempos:** creación → cierre (*lead time*), en curso → cerrado (*cycle time*) y la **traza completa de cambios de estado**, con la duración en cada uno.
+- **Plan vs. real:** fecha de inicio y fecha objetivo (del ítem o, si no las tiene, del sprint) frente al inicio real y la **entrega real** (campo "Fecha de entrega real" si existe, si no "Entregado" o el cierre). De ahí salen la puntualidad, los vencidos y los días de retraso.
+- **Capacidad y utilización:** capacidad = 8 h × % asignado × días hábiles vigentes; utilización = horas entregadas ÷ capacidad.
 
-Todo queda guardado en Supabase con **traza completa**: bitácora de auditoría con el antes y el después de cada cambio, borrado lógico, y registro de ingresos y salidas.
+## Funcionalidades (v3 · monitoreo automático)
 
-### Funcionalidades (v2 · rediseño UI/UX)
-
-- **Acceso:** login con token único (`ACCESS_TOKEN`) y sesión firmada de 12 h. La pantalla de ingreso tiene panel de marca, aviso de Bloq Mayús y selector de tema.
-- **App shell profesional:**
-  - **barra lateral** colapsable (escritorio) con selector de proyecto, navegación, estado de Azure, selector de tema y sesión;
-  - **barra inferior tipo app** en móvil, con botón central "+" para registrar;
-  - **tira semanal** (Lun→Dom) con un anillo de cobertura por día.
-- **Tema claro / oscuro / sistema:** sin parpadeo al cargar (script inline) y con transición circular al cambiar (View Transitions API).
-- **Modo TV / pantallas grandes:** botones **− / % / +** para ajustar el tamaño de toda la interfaz, de 75 % a 300 % (clic en el % = 100 %), y botón de **pantalla completa**.
-  - Están en la barra superior, en la barra compacta, en "Más" (móvil), en el login y en ⌘K.
-  - Atajos: `+`, `−`, `0` y `F`.
-  - El tamaño elegido se recuerda en ese navegador y se aplica antes del primer pintado.
-  - Al agrandar, el diseño se reacomoda como con el zoom del navegador. Las gráficas se redibujan nítidas (no se estiran).
-- **Vistas (rutas reales):**
+- **Acceso:** login con token único (`ACCESS_TOKEN`) y sesión firmada de 12 h.
+- **Filtros globales**, en el header y en el botón "Filtros" de móvil; se recuerdan por proyecto:
+  - **Periodo:** sprint actual, 14/30/90 días, este mes, trimestre o rango personalizado.
+  - **Colaboradores:** multiselección, más "Incluir fuera de la planeación".
+  - **Ámbito:** todo el proyecto o solo las épicas monitoreadas.
+- **Vistas:**
   - **Resumen** (`/`):
-    - 4 KPIs con delta frente al periodo anterior y *sparkline*;
-    - 4 gráficas con **Chart.js**: horas diarias frente a capacidad, cobertura de reporte, horas por colaborador (*bullet*), distribución por tipo de ítem (dona) y horas por Feature;
-    - tarjeta de **pendientes del día**.
-    - Cada gráfica tiene leyenda HTML y **vista de tabla** accesible.
-  - **Equipo** (`/equipo`): vistas **Tarjetas / Lista / Matriz**. La matriz es un *heatmap* persona × día de la semana con el valor escrito en cada celda; un clic abre el detalle o el registro de esa fecha.
-  - **Actividades** (`/actividades`): agrupadas por día con subtotales y filtros por rango, persona, tipo de ítem y texto. Incluye edición, borrado con **Deshacer** y exportación **CSV**.
-  - **Backlog Azure** (`/backlog`): árbol Épica → Feature → HU → Tarea con horas **propias y acumuladas**, personas que registraron y detalle por ítem. Es solo lectura.
-  - **Bitácora** (`/bitacora`): línea de tiempo de la auditoría (ingresos, registros, ediciones con comparación antes→después, borrados, restauraciones y sincronizaciones), con filtros y carga incremental.
-- **Productividad:**
-  - **paleta ⌘K** (`cmdk`) para buscar personas, HU, vistas y acciones;
-  - **atajos de teclado**: `N` nueva actividad, `T` hoy, `←/→` día, `1–5` vistas, `F` pantalla completa, `+`/`−`/`0` tamaño, `?` ayuda y `⌘↵` guardar;
-  - "Repetir última actividad" y resumen en vivo en el formulario.
-- **Formulario:** buscador de work items con teclado (↑↓ Enter). Primero aparecen los ítems **asignados a esa persona**; el servidor valida que pertenezcan a las épicas.
-- **Fines de semana:** no se exige reporte (esperado 0 h y estado "Fin de semana"), pero se puede registrar.
-- **Accesibilidad:**
-  - foco visible;
-  - estados siempre con ícono + texto;
-  - colores de gráficas validados para daltonismo;
-  - `prefers-reduced-motion` respetado.
+    - 6 KPIs con delta frente al periodo anterior: entregados, horas entregadas, en curso, vencidos, % a tiempo y cycle time;
+    - **entregas por semana**, distribución por estado y **flujo acumulado (CFD)**;
+    - **burnup** de horas y **dispersión de cycle time** con P50/P85;
+    - tarjeta de **alertas**: vencidos y trabajo estancado.
+  - **Cronograma** (`/cronograma`): **diagrama de Gantt**.
+    - Agrupado por colaborador, feature o sprint.
+    - Cada ítem muestra la barra **planeada** (inicio → objetivo), la barra **real** coloreada por estado, el ◆ de la fecha objetivo, el ● de la entrega real y el **tramo de retraso** en rojo.
+    - Incluye línea de "hoy", bandas de sprint, zoom día/semana/mes, orden, filtros por tipo y "solo con retraso".
+  - **Colaboradores** (`/colaboradores`):
+    - **scorecards** (tarjetas o tabla) con utilización, puntualidad, cycle time y vencidos;
+    - **carga semanal** (mapa de calor persona × semana);
+    - gráficas de estado por persona y de estimado frente a reportado;
+    - sección **"Fuera de la planeación"**, para vincular manualmente correos de Azure que no coinciden.
+  - **Backlog Azure** (`/backlog`): árbol Épica → Feature → HU → Tarea con estado, asignado, objetivo, entrega y horas acumuladas.
+  - **Bitácora** (`/bitacora`): ingresos, sincronizaciones (con conteos o errores) y vinculaciones.
+- **Detalle de un ítem:** ruta Épica › Feature › HU, horas y su origen, plan frente a real, puntualidad, **línea de tiempo de estados** con duraciones e ítems hijos.
+- **Detalle de un colaborador:** utilización, KPIs, **mini-Gantt** e ítems por estado.
+- **Pantalla para TV:** tamaño de 75 % a 300 % (− / % / +) y pantalla completa. Atajos `+`, `−`, `0` y `F`.
+- **Tema** claro, oscuro o del sistema, sin parpadeo.
+- **⌘K** para buscar personas, ítems, periodos y acciones; `1–5` cambian de vista; `?` muestra la ayuda.
+- **Accesibilidad:** colores de estado validados para daltonismo, estados siempre con texto, vista de tabla en cada gráfica y `prefers-reduced-motion`.
 
 ## ⚠️ Regla de oro: Azure DevOps es SOLO LECTURA
 
 Está **prohibido** crear, modificar o borrar cualquier cosa en Azure DevOps.
 
 - Los PAT solo tienen permisos de lectura: *Work Items (Read)*, *Project and Team (Read)* y *Analytics (Read)*.
-- Todo acceso pasa por `azureRead()` en `src/lib/azure.ts`, que solo permite `GET` y el `POST` de consulta WIQL (`/_apis/wit/wiql`).
-- La traza se guarda en Supabase. Del work item solo se copia un *snapshot* (tipo, título, estado, URL) al registrar.
+- Todo acceso pasa por `azureRequest()` en `src/lib/azure.ts`. Solo admite:
+  - **GET** a `dev.azure.com` (REST de lectura);
+  - **GET** a `analytics.dev.azure.com/…/_odata/` (Azure Analytics);
+  - el **POST de consulta WIQL**.
+- La copia sincronizada vive en Supabase. Lo único que el tablero escribe son los **alias** de correo y la bitácora, ambos en su propia base.
+
+## Cómo funciona la sincronización
+
+1. **Lectura:** `src/lib/azure-sync.ts` consulta **Azure Analytics (OData)**, con paginación, en dos frentes:
+   - `WorkItems`: tipos Epic, Feature, User Story, Task, Bug, PBI e Issue, con estado, *StateCategory*, fechas, esfuerzo, sprint y asignado;
+   - `WorkItemRevisions`: el historial de estados.
+   - La primera vez trae 12 meses más todo lo abierto. Después es **incremental** desde la última marca de agua.
+2. **Escritura en la base propia:** se hace *upsert* en `azure_work_items` y `azure_revisions`, y la corrida queda en `azure_sync_runs` y en `audit_log`.
+3. **Disparo automático (sin cron, sin variables nuevas):** al abrir el tablero, `GET /api/projects/[p]/dataset` responde de inmediato. Si los datos tienen más de 15 min, sincroniza en segundo plano con `after()` y la UI se actualiza sola. También están **"Sincronizar ahora"** y `POST /api/projects/[p]/sync?full=1` para resincronizar todo.
+4. **Lectura de la UI:** el RPC `azure_dataset(proyecto, desde, hasta)` devuelve los ítems asignados "vivos" en el periodo (más sus ancestros y las transiciones de estado). El motor de análisis (`src/lib/analytics/*`) calcula todo **en el navegador**, así que los filtros responden al instante.
+
+**Identidad (`src/lib/analytics/model.ts`):** un correo de Azure se vincula a un colaborador en este orden:
+1. alias manual;
+2. correo exacto;
+3. misma parte local (`juan.perez@3tcapital.co` = `juan.perez@linktic.com`);
+4. todos los tokens del nombre (p. ej. "Jhonatan Rocha" → "Jhonatan Rocha Rojas").
+
+Los prefijos `oidconflict_upnreuse_…_` se limpian.
 
 ## Stack
 
-- **Next.js 16.4** (App Router, `src/`, Turbopack, `cacheComponents`, `proxy.ts`), **React 19.3**, **TypeScript**.
-- **Tailwind CSS v4** (tokens semánticos claro/oscuro en `src/app/globals.css`), **motion** (animaciones), **Chart.js 4 + react-chartjs-2** (gráficas), **cmdk** (paleta ⌘K), **lucide-react** (íconos), **sonner** (toasts), **SWR** (datos en el cliente), **zod** (validación), **jose** (JWT), **date-fns**.
+- **Next.js 16.4** (App Router, `src/`, Turbopack, `cacheComponents`, `proxy.ts`, `after()`), **React 19.3**, **TypeScript**.
+- **Tailwind CSS v4** (tokens claro/oscuro, breakpoints sobre el ancho efectivo), **motion**, **Chart.js 4 + react-chartjs-2**, **cmdk**, **lucide-react**, **sonner**, **SWR**, **zod**, **jose** y **date-fns**.
 - **Supabase (Postgres)**, accedido solo desde el servidor con la llave secreta.
-- **Azure DevOps REST API 7.1** (WIQL + Work Items), solo lectura.
+- **Azure DevOps**: Analytics OData v4.0-preview y REST 7.1, en solo lectura.
 
 ## Puesta en marcha local
 
 ```bash
 pnpm install
-# variables: copiar la plantilla y completar
-cp .env.example .env
-pnpm dev            # http://localhost:3000
+cp .env.example .env   # completar valores
+pnpm dev               # http://localhost:3000
 ```
 
-### Variables de entorno
+### Variables de entorno (sin cambios desde la v1)
 
 | Variable | Uso | ¿Vercel? |
 |---|---|---|
 | `ACCESS_TOKEN` | Token único de ingreso del Scrum Master | ✅ |
 | `SESSION_SECRET` | Firma de la cookie de sesión (`openssl rand -hex 32`) | ✅ |
 | `SUPABASE_URL` | `https://klrierizueihrenhcema.supabase.co` | ✅ |
-| `SUPABASE_SECRET_KEY` | Llave secreta `sb_secret_…` (Dashboard → Settings → API Keys). **Solo servidor** | ✅ |
-| `AZURE_348_ORG` / `AZURE_348_PROJECT` / `AZURE_348_EPIC_IDS` / `AZURE_348_PAT` | Conexión de solo lectura al proyecto 348 | ✅ |
-| `AZURE_005_ORG` / `AZURE_005_PROJECT` / `AZURE_005_EPIC_IDS` / `AZURE_005_PAT` | Conexión de solo lectura al proyecto 005 | ✅ |
-| `SUPABASE_ACCESS_TOKEN` | Token personal `sbp_…`, solo para tooling local (migraciones) | ❌ |
+| `SUPABASE_SECRET_KEY` | Llave secreta `sb_secret_…`. **Solo servidor** | ✅ |
+| `AZURE_348_ORG` / `AZURE_348_PROJECT` / `AZURE_348_EPIC_IDS` / `AZURE_348_PAT` | Lectura del proyecto 348 (REST + Analytics) | ✅ |
+| `AZURE_005_ORG` / `AZURE_005_PROJECT` / `AZURE_005_EPIC_IDS` / `AZURE_005_PAT` | Lectura del proyecto 005 (REST + Analytics) | ✅ |
+| `SUPABASE_ACCESS_TOKEN` | Token personal `sbp_…`, solo para tooling local | ❌ |
 
-> `.env*` está en `.gitignore`. Solo se versiona `.env.example` (sin secretos).
-> Para cambiar las épicas monitoreadas basta con editar `AZURE_<proyecto>_EPIC_IDS` (IDs separados por coma).
+> `AZURE_<p>_EPIC_IDS` solo alimenta el filtro "Épicas monitoreadas"; el análisis cubre todo el proyecto.
 
-## Base de datos (Supabase · proyecto `baas-monitoreo-docum`)
+## Base de datos (Supabase · `baas-monitoreo-docum`)
 
-Las migraciones viven en `supabase/migrations/`:
-
-- `0001_schema.sql`: tablas, índices, triggers, RLS.
-- `0003_stats_and_restore.sql`: funciones `activity_stats()` / `activity_totals()` (agregados en Postgres, solo ejecutables por `service_role`) y auditoría de `activity_restored`.
-- `0002_seed.sql`: colaboradores y asignaciones. Se **genera** desde el Excel de planeación:
-  ```bash
-  python3 scripts/generate-seed.py [ruta_excel]   # por defecto context/Planeacion_oct2026_Docum_Acueducto.xlsx
-  ```
-  Es idempotente (`on conflict … do update`), así que sirve para cargar las planeaciones de nuevos meses.
-
-Para aplicarlas: con el MCP de Supabase del proyecto (`.mcp.json`), con `scripts/apply-migrations.mjs` o pegándolas en el **SQL Editor** del dashboard, en orden.
-
-**Estado actual (20-oct-2026):** `0001`, `0002` y `0003` ya están aplicadas en `klrierizueihrenhcema`, con 55 colaboradores y 58 asignaciones (005: 49, 348: 9).
-
-| Tabla | Contenido |
+| Migración | Contenido |
 |---|---|
-| `projects` | `348`, `005` (nombre, cliente, color) |
-| `employees` | Colaboradores únicos (cédula única, nombre, correo) |
-| `project_members` | Asignación persona ↔ proyecto: cargo, % asignado, vigencia, Fijo/Multiproyecto |
-| `activity_logs` | Registro diario: fecha, horas, descripción, evidencia, work item (snapshot), `deleted_at` |
-| `audit_log` | Traza: `login_success`, `login_failed`, `logout`, `activity_created`, `activity_updated`, `activity_deleted`, `activity_restored`, `azure_refresh` (con `old_data`/`new_data`, IP y user-agent) |
+| `0001_schema.sql` | Proyectos, colaboradores, asignaciones, `audit_log`, RLS (y `activity_logs`, legado) |
+| `0002_seed.sql` | Personal del Excel (lo genera `python3 scripts/generate-seed.py`; idempotente) |
+| `0003_stats_and_restore.sql` | Funciones del registro manual (**legado**, sin uso) |
+| `0004_azure_sync.sql` | `azure_work_items`, `azure_revisions`, `azure_sync_runs`, `employee_aliases`, RPC `azure_dataset` |
+| `0005_azure_dataset_assigned.sql` | `azure_dataset` solo con ítems asignados (respuesta más liviana) |
 
-**Seguridad:** RLS está activo en todas las tablas y sin políticas, así que `anon`/`authenticated` no tienen acceso. Solo el backend (llave secreta) lee y escribe. Los cambios en `activity_logs` se auditan con el trigger `audit_activity_changes()`.
+**Estado (20-oct-2026):** las cinco migraciones están aplicadas. Primera sincronización: 348 con 6.838 ítems y 25.874 revisiones (≈ 45 s); 005 con 627 ítems y 1.942 revisiones (≈ 7 s). Las incrementales tardan segundos.
+
+**Seguridad:**
+- RLS está activo en todas las tablas sin políticas: `anon`/`authenticated` no tienen acceso.
+- Las RPC son ejecutables solo por `service_role`.
+- Las tablas del registro manual (`activity_logs`) se conservan por trazabilidad; ya no se usan.
 
 ## Despliegue en Vercel
 
-1. Importar el repositorio en Vercel (framework Next.js; pnpm se detecta solo).
-2. En **Settings → Environment Variables**, cargar todas las variables marcadas con ✅. Los valores van **sin comillas**.
-3. Desplegar. La sesión usa una cookie `secure` en producción, así que se necesita HTTPS (Vercel lo da por defecto).
+1. Importar el repositorio (Next.js + pnpm).
+2. Cargar las variables marcadas con ✅, **sin comillas**.
+3. Desplegar. Las rutas `dataset` y `sync` declaran `maxDuration = 300` para la primera sincronización completa; las siguientes son incrementales.
 
 ## Scripts
 
 | Comando | Descripción |
 |---|---|
-| `pnpm dev` | Servidor de desarrollo |
-| `pnpm build` / `pnpm start` | Build y servidor de producción |
-| `pnpm lint` | ESLint |
-| `python3 scripts/generate-seed.py` | Regenera la semilla desde el Excel |
-| `node --env-file=.env scripts/apply-migrations.mjs [archivo.sql]` | Aplica migraciones vía Management API (requiere `SUPABASE_ACCESS_TOKEN`); alternativa al MCP |
+| `pnpm dev` / `pnpm build` / `pnpm start` / `pnpm lint` | Desarrollo, build, producción y lint |
+| `python3 scripts/generate-seed.py [excel]` | Regenera la semilla del personal |
+| `node --env-file=.env scripts/apply-migrations.mjs [archivo.sql]` | Aplica migraciones vía Management API (alternativa al MCP) |
 
 ## Estructura
 
 ```
 src/
-  proxy.ts                           # verificación optimista de sesión (→ /login o 401)
+  proxy.ts                               # sesión (→ /login o 401)
   app/
-    layout.tsx                       # fuentes, script de tema sin parpadeo, toaster
-    globals.css                      # tokens claro/oscuro, acento por proyecto ([data-project])
-    login/                           # ingreso por token (panel de marca + formulario)
-    (app)/                           # grupo con el app shell (Suspense + AppProvider)
-      layout.tsx, template.tsx       # shell y transición de entrada por vista
-      page.tsx                       # /            Resumen
-      equipo/ actividades/ backlog/ bitacora/
+    layout.tsx, globals.css               # scripts de arranque (tema, escala), tokens, breakpoints efectivos
+    login/                                # ingreso por token
+    (app)/                                # app shell (Suspense + AppProvider)
+      page.tsx                            # /               Resumen
+      cronograma/ colaboradores/ backlog/ bitacora/
     api/
-      auth/login, auth/logout        # sesión + auditoría
-      projects/[project]/team        # equipo + horas del día/semana
-      projects/[project]/stats       # analítica del rango (RPC activity_stats)
-      projects/[project]/activities  # GET rango (paginado, filtros) · POST crear
-      projects/[project]/work-items  # GET backlog Azure (cache) · POST sincronizar
-      activities/[id]                # PATCH editar · DELETE borrado lógico
-      activities/[id]/restore        # POST deshacer borrado
-      audit                          # GET bitácora paginada por cursor
+      auth/login, auth/logout
+      projects/[project]/dataset          # dataset de análisis + sincronización automática (after)
+      projects/[project]/sync             # estado / sincronizar ahora / resincronizar todo
+      aliases                             # vincular / desvincular correo de Azure ↔ colaborador
+      audit                               # bitácora paginada
   lib/
-    config.ts, dates.ts, types.ts, work-item-types.ts   # compartidos cliente/servidor
-    boot-scripts.ts                  # scripts de <head>: tema y escala/breakpoints antes del primer pintado
-    session.ts, auth.ts              # JWT de sesión y DAL
-    supabase.ts, members.ts, stats.ts, activities.ts, audit.ts, validators.ts  # servidor
-    azure.ts                         # cliente Azure SOLO LECTURA + getWorkItems() con 'use cache'
+    azure.ts                              # cliente Azure SOLO LECTURA (REST + Analytics OData)
+    azure-sync.ts                         # sincronización Analytics → Supabase
+    analytics/                            # types, model (identidad, horas, fechas, traza), metrics, period, state-colors
+    config.ts, dates.ts, boot-scripts.ts, work-item-types.ts, session.ts, auth.ts, supabase.ts, members.ts, audit.ts, types.ts
   components/
-    shell/      # app-provider (estado, atajos, paneles globales), sidebar, topbar, mobile-nav, week-strip, command-palette, shortcuts-dialog
-    views/      # overview, team (+ compliance-matrix), activities, backlog, audit
-    charts/     # setup (registro Chart.js + crosshair), chart-theme, chart-card, hours-charts, azure-charts
-    dashboard/  # activity-form, work-item-picker, member-drawer, work-item-sheet, activity-item, team-grid, client-api
-    ui/         # primitives (Button, Segmented, Chip, Avatar, badges, Kbd, EmptyState, ProgressRing), sheet, theme, theme-toggle, display (escala + pantalla completa), display-controls…
-supabase/migrations/   # SQL versionado (0001 esquema · 0002 semilla · 0003 analítica/restauración)
+    shell/      # app-provider (filtros globales, dataset, atajos), topbar, filter-bar, sidebar, mobile-nav, command-palette…
+    views/      # overview, schedule (Gantt), people, backlog, audit, dataset-gate
+    gantt/      # Gantt plan vs. real (HTML/CSS en rem)
+    charts/     # Chart.js: flow-charts (throughput, CFD, burnup, cycle time, estados, estimado), chart-card, chart-theme
+    dashboard/  # work-item-sheet (traza de estados), member-sheet, client-api (fetch + preferencias)
+    ui/         # primitives, sheet, popover, theme, display (escala TV + pantalla completa)…
+supabase/migrations/   # 0001 → 0005
 scripts/               # generate-seed.py, apply-migrations.mjs
-context/               # Excel de planeación de personal (insumo; contiene datos personales)
+context/               # Excel de planeación (contiene datos personales)
 ```

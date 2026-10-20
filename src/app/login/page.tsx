@@ -1,4 +1,4 @@
-import { Activity, BarChart3, ShieldCheck } from "lucide-react";
+import { BarChart3, CalendarRange, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import { DisplayControls } from "@/components/ui/display-controls";
@@ -9,9 +9,9 @@ import { LoginForm } from "./login-form";
 export const metadata: Metadata = { title: "Ingreso" };
 
 const FEATURES = [
-  { icon: Activity, title: "Traza diaria por colaborador", text: "Horas, evidencia y actividad de cada persona, día a día." },
-  { icon: ShieldCheck, title: "Azure DevOps en solo lectura", text: "Cada registro se asocia a una HU o tarea de las épicas, sin tocar Azure." },
-  { icon: BarChart3, title: "Analítica y auditoría", text: "Cobertura, cumplimiento y bitácora completa de cambios." },
+  { icon: ShieldCheck, title: "Automático desde Azure DevOps", text: "Ítems, estados y horas de cada colaborador, sin registros manuales y en solo lectura." },
+  { icon: CalendarRange, title: "Plan vs. real", text: "Gantt por colaborador con fecha de inicio, objetivo y entrega real." },
+  { icon: BarChart3, title: "Analítica de flujo", text: "Entregas, cumplimiento, cycle time, alertas y traza de cada cambio de estado." },
 ];
 
 export default function LoginPage() {
@@ -36,7 +36,7 @@ export default function LoginPage() {
           <FadeUp delay={0.1}>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7fd8ff]">Línea Docum · Uso interno</p>
             <h2 className="mt-4 font-display text-5xl font-semibold leading-[1.05] tracking-tight">
-              Control diario de actividades,{" "}
+              Monitoreo automático del equipo,{" "}
               <span className="bg-gradient-to-r from-[#00c2ff] via-[#38a8ff] to-[#3ddc5a] bg-clip-text text-transparent">con traza completa.</span>
             </h2>
             <p className="mt-5 max-w-md text-base text-white/65">Proyectos 348 · SGDEA Acueducto y 005 · Positiva SGDEA, en un solo tablero para el Scrum Master.</p>

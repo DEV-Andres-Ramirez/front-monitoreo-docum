@@ -17,8 +17,9 @@ import { NAV, navFor } from "./nav";
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname();
   const active = navFor(pathname);
-  const { projectKey, setProjectKey, teamData, workItems, syncAzure, syncing, logout, setShortcutsOpen } = useApp();
-  const pending = teamData && teamData.isBusinessDay ? teamData.members.filter((m) => m.inRange && m.dayHours === 0).length : 0;
+  const { projectKey, setProjectKey, scoped, model, sync, syncNow, syncing, logout, setShortcutsOpen } = useApp();
+  const overdue = scoped.filter((i) => i.overdue).length;
+  const running = syncing || sync?.running;
 
   return (
     <motion.aside
@@ -107,13 +108,15 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
               )}
               <item.icon className="relative size-[1.125rem] shrink-0" />
               {!collapsed && <span className="relative flex-1">{item.label}</span>}
-              {!collapsed && item.href === "/equipo" && pending > 0 && (
-                <span className="relative rounded-full bg-warning-soft px-2 py-0.5 text-[0.625rem] font-bold tabular-nums text-warning-fg">{pending}</span>
+              {!collapsed && item.href === "/cronograma" && overdue > 0 && (
+                <span className="relative rounded-full bg-critical-soft px-2 py-0.5 text-[0.625rem] font-bold tabular-nums text-critical-fg" title={`${overdue} ítems vencidos`}>
+                  {overdue}
+                </span>
               )}
-              {!collapsed && item.href !== "/equipo" && (
+              {!collapsed && item.href !== "/cronograma" && (
                 <Kbd className="relative opacity-0 transition-opacity group-hover:opacity-100">{item.key}</Kbd>
               )}
-              {collapsed && item.href === "/equipo" && pending > 0 && <span className="absolute right-2 top-2 size-2 rounded-full bg-warning" />}
+              {collapsed && item.href === "/cronograma" && overdue > 0 && <span className="absolute right-2 top-2 size-2 rounded-full bg-critical" />}
             </Link>
           );
         })}
@@ -128,24 +131,20 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             <span className="ml-auto rounded-md bg-surface-3 px-1.5 py-0.5 text-[0.625rem] font-semibold text-muted">Solo lectura</span>
           </div>
           <p className="mt-1.5 flex items-center gap-1.5 text-[0.6875rem] text-muted">
-            <span
-              className={clsx(
-                "size-1.5 rounded-full",
-                workItems.error ? "bg-critical" : workItems.data ? "bg-good" : "animate-pulse bg-warning",
-              )}
-            />
-            {workItems.error
-              ? "Sin conexión con Azure"
-              : workItems.data
-                ? `${workItems.data.items.length} ítems · ${formatDistanceToNow(new Date(workItems.data.fetchedAt), { locale: es, addSuffix: true })}`
-                : "Leyendo backlog…"}
+            <span className={clsx("size-1.5 rounded-full", running ? "animate-pulse bg-warning" : sync?.lastStatus === "error" ? "bg-critical" : sync?.lastAt ? "bg-good" : "bg-subtle")} />
+            {running
+              ? "Sincronizando…"
+              : sync?.lastAt
+                ? `Actualizado ${formatDistanceToNow(new Date(sync.lastAt), { locale: es, addSuffix: true })}`
+                : "Sin sincronizar"}
           </p>
+          {model && <p className="mt-0.5 text-[0.6875rem] text-subtle">{model.work.length.toLocaleString("es-CO")} ítems asignados en el periodo</p>}
           <button
-            onClick={syncAzure}
-            disabled={syncing}
+            onClick={() => void syncNow()}
+            disabled={!!running}
             className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-line bg-surface py-1.5 text-xs font-semibold text-muted transition hover:text-foreground"
           >
-            <RefreshCw className={clsx("size-3.5", syncing && "animate-spin")} /> Sincronizar
+            <RefreshCw className={clsx("size-3.5", running && "animate-spin")} /> Sincronizar ahora
           </button>
         </div>
       )}

@@ -1,13 +1,14 @@
 "use client";
 
 import { Command } from "cmdk";
-import { CalendarCheck, FolderKanban, LogOut, Maximize, Monitor, Moon, Plus, RefreshCw, RotateCcw, Search, Sun, UserRound, ZoomIn, ZoomOut } from "lucide-react";
+import { CalendarRange, FolderKanban, Layers, LogOut, Maximize, Monitor, Moon, RefreshCw, RotateCcw, Search, Sun, UserRound, Users, ZoomIn, ZoomOut } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { Avatar, Kbd, TypeBadge } from "@/components/ui/primitives";
 import { toggleFullscreen } from "@/components/ui/display";
 import { changeScale } from "@/components/ui/display-controls";
 import { setTheme } from "@/components/ui/theme";
+import { PRESET_LABEL, type PeriodPreset } from "@/lib/analytics/period";
 import { PROJECTS, PROJECT_KEYS } from "@/lib/config";
 import { useApp } from "./app-provider";
 import { NAV } from "./nav";
@@ -18,7 +19,9 @@ const norm = (s: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 
-/** Paleta ⌘K: navegación, acciones, personas y work items. */
+const PRESETS: PeriodPreset[] = ["sprint", "14d", "30d", "90d", "month", "quarter"];
+
+/** Paleta ⌘K: navegación, acciones, personas, ítems de Azure, periodo y pantalla. */
 export function CommandPalette() {
   const router = useRouter();
   const app = useApp();
@@ -73,15 +76,24 @@ export function CommandPalette() {
                 <Command.Empty>Sin resultados.</Command.Empty>
 
                 <Command.Group heading="Acciones">
-                  <Command.Item onSelect={() => run(() => app.openRegister(null))} keywords={["nueva", "crear", "actividad"]}>
-                    <Plus className="size-4 text-accent-fg" /> Registrar actividad <Kbd className="ml-auto">N</Kbd>
+                  <Command.Item onSelect={() => run(() => void app.syncNow())} keywords={["azure", "sincronizar", "actualizar", "refrescar"]}>
+                    <RefreshCw className="size-4 text-accent-fg" /> Sincronizar con Azure ahora
                   </Command.Item>
-                  <Command.Item onSelect={() => run(() => app.setDate(app.today))} keywords={["hoy", "fecha"]}>
-                    <CalendarCheck className="size-4 text-muted" /> Ir a hoy <Kbd className="ml-auto">T</Kbd>
+                  <Command.Item onSelect={() => run(() => app.setPeople([]))} keywords={["todos", "equipo", "limpiar filtro"]}>
+                    <Users className="size-4 text-muted" /> Ver todo el equipo
                   </Command.Item>
-                  <Command.Item onSelect={() => run(() => void app.syncAzure())} keywords={["azure", "sincronizar", "refrescar"]}>
-                    <RefreshCw className="size-4 text-muted" /> Sincronizar backlog de Azure
+                  <Command.Item onSelect={() => run(() => app.setScope(app.filters.scope === "epics" ? "project" : "epics"))} keywords={["épicas", "ámbito", "alcance"]}>
+                    <Layers className="size-4 text-muted" /> {app.filters.scope === "epics" ? "Ver todo el proyecto" : "Solo épicas monitoreadas"}
                   </Command.Item>
+                </Command.Group>
+
+                <Command.Group heading="Periodo">
+                  {PRESETS.map((p) => (
+                    <Command.Item key={p} onSelect={() => run(() => app.setPreset(p))} keywords={["periodo", "fechas"]}>
+                      <CalendarRange className="size-4 text-muted" /> {PRESET_LABEL[p]}
+                      {app.period.preset === p && <span className="ml-auto text-[0.6875rem] text-subtle">Actual</span>}
+                    </Command.Item>
+                  ))}
                 </Command.Group>
 
                 <Command.Group heading="Ir a">
@@ -128,22 +140,22 @@ export function CommandPalette() {
                   </Command.Item>
                 </Command.Group>
 
-                {app.members.length > 0 && (
-                  <Command.Group heading={`Equipo · ${app.members.length}`}>
-                    {app.members.map((m) => (
-                      <Command.Item key={m.employeeId} value={`persona ${m.name} ${m.role} ${m.email ?? ""}`} onSelect={() => run(() => app.openMember(m))}>
-                        <Avatar name={m.name} size="xs" />
-                        <span className="min-w-0 flex-1 truncate">{m.name}</span>
-                        <span className="truncate text-xs text-subtle">{m.role}</span>
+                {app.people.length > 0 && (
+                  <Command.Group heading={`Colaboradores · ${app.people.length}`}>
+                    {app.people.map((p) => (
+                      <Command.Item key={p.key} value={`persona ${p.name} ${p.role ?? ""} ${p.email ?? ""}`} onSelect={() => run(() => app.openPerson(p.key))}>
+                        <Avatar name={p.name} size="xs" />
+                        <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                        <span className="truncate text-xs text-subtle">{p.inRoster ? p.role : "Fuera de la planeación"}</span>
                       </Command.Item>
                     ))}
                   </Command.Group>
                 )}
 
-                {app.workItems.data && (
-                  <Command.Group heading="Backlog Azure">
-                    {app.workItems.data.items.map((w) => (
-                      <Command.Item key={w.id} value={`item ${w.id} ${w.title}`} onSelect={() => run(() => app.openWorkItem(w.id))}>
+                {app.scoped.length > 0 && (
+                  <Command.Group heading="Ítems de Azure">
+                    {app.scoped.slice(0, 400).map((w) => (
+                      <Command.Item key={w.id} value={`item ${w.id} ${w.title ?? ""}`} onSelect={() => run(() => app.openWorkItem(w.id))}>
                         <TypeBadge type={w.type} />
                         <span className="font-mono text-xs text-subtle">#{w.id}</span>
                         <span className="min-w-0 flex-1 truncate">{w.title}</span>
