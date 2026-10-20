@@ -66,8 +66,14 @@ Está **prohibido** crear, modificar o borrar cualquier cosa en Azure DevOps.
    - `WorkItemRevisions`: el historial de estados.
    - La primera vez trae 12 meses más todo lo abierto. Después es **incremental** desde la última marca de agua.
 2. **Escritura en la base propia:** se hace *upsert* en `azure_work_items` y `azure_revisions`, y la corrida queda en `azure_sync_runs` y en `audit_log`.
-3. **Disparo automático (sin cron, sin variables nuevas):** al abrir el tablero, `GET /api/projects/[p]/dataset` responde de inmediato. Si los datos tienen más de 15 min, sincroniza en segundo plano con `after()` y la UI se actualiza sola. También están **"Sincronizar ahora"** y `POST /api/projects/[p]/sync?full=1` para resincronizar todo.
-4. **Lectura de la UI:** el RPC `azure_dataset(proyecto, desde, hasta)` devuelve los ítems asignados "vivos" en el periodo (más sus ancestros y las transiciones de estado). El motor de análisis (`src/lib/analytics/*`) calcula todo **en el navegador**, así que los filtros responden al instante.
+3. **Automática cada hora (sin cron, sin variables nuevas):**
+   - Mientras el tablero esté abierto, el navegador llama a `POST /api/sync/auto` a la hora indicada por el servidor (`nextAutoAt`).
+   - El servidor solo sincroniza los proyectos (348 y 005) que ya cumplieron una hora desde su última sincronización exitosa.
+   - Si una corrida falla, el siguiente intento es a los **10 minutos**, sin bucles.
+   - La primera vez que se abre el tablero, si no hay datos, `GET /api/projects/[p]/dataset` hace la sincronización completa y espera. Fuera de ese caso, el dataset solo lee de Supabase.
+4. **Manual:** **"Sincronizar ahora"** (`POST /api/projects/[p]/sync`) y "Resincronizar todo" (`?full=1`).
+   - En la Bitácora, cada corrida indica si fue automática, manual o inicial.
+5. **Lectura de la UI:** el RPC `azure_dataset(proyecto, desde, hasta)` devuelve los ítems asignados "vivos" en el periodo (más sus ancestros y las transiciones de estado). El motor de análisis (`src/lib/analytics/*`) calcula todo **en el navegador**, así que los filtros responden al instante.
 
 **Identidad (`src/lib/analytics/model.ts`):** un correo de Azure se vincula a un colaborador en este orden:
 1. alias manual;
@@ -127,7 +133,7 @@ pnpm dev               # http://localhost:3000
 
 1. Importar el repositorio (Next.js + pnpm).
 2. Cargar las variables marcadas con ✅, **sin comillas**.
-3. Desplegar. Las rutas `dataset` y `sync` declaran `maxDuration = 300` para la primera sincronización completa; las siguientes son incrementales.
+3. Desplegar. Las rutas `dataset`, `sync` y `sync/auto` declaran `maxDuration = 300` para la primera sincronización completa; las siguientes son incrementales (segundos).
 
 ## Scripts
 
@@ -150,8 +156,9 @@ src/
       cronograma/ colaboradores/ backlog/ bitacora/
     api/
       auth/login, auth/logout
-      projects/[project]/dataset          # dataset de análisis + sincronización automática (after)
+      projects/[project]/dataset          # dataset de análisis (solo lee; sincroniza completo solo la primera vez)
       projects/[project]/sync             # estado / sincronizar ahora / resincronizar todo
+      sync/auto                           # sincronización automática cada hora (ambos proyectos)
       aliases                             # vincular / desvincular correo de Azure ↔ colaborador
       audit                               # bitácora paginada
   lib/

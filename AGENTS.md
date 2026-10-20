@@ -60,11 +60,18 @@ Reglas de negocio (decididas con el usuario):
   - Candado de 5 min con `azure_sync_runs.status = running`.
   - El campo `Custom_FechadeEntregaReal` solo existe en 348; si OData responde 400, se reintenta sin él.
   - `normalizeEmail()` limpia el prefijo `oidconflict_upnreuse_…_` y pasa a minúsculas.
-- **Disparo:** `GET /api/projects/[p]/dataset`:
-  - si no hay datos, ejecuta la sincronización completa y espera;
-  - si los datos tienen más de 15 min, responde y sincroniza con `after()` (`maxDuration = 300`).
-  - `POST /api/projects/[p]/sync[?full=1]` hace la sincronización manual.
-  - **No hay cron ni variables nuevas.**
+- **Disparo:**
+  - **Automática cada hora:**
+    - `syncStatus()` calcula `nextAutoAt` = última sincronización exitosa + 60 min. Si la última corrida falló, la fecha pasa a ese intento + 10 min.
+    - La última corrida exitosa se consulta aparte, para que una racha de errores no la "olvide".
+    - `AppProvider` programa un `setTimeout` a esa hora y llama a `POST /api/sync/auto`. Ese endpoint ejecuta `syncDueProjects()`, que sincroniza solo los proyectos vencidos (ambos), y devuelve el siguiente `nextAutoAt`.
+    - Funciona mientras el tablero esté abierto.
+  - **Manual:** `POST /api/projects/[p]/sync[?full=1]`.
+  - **Primera carga:** `GET /api/projects/[p]/dataset` solo sincroniza (completa, esperando) si nunca hubo una exitosa y `isSyncDue`. Fuera de eso **solo lee**; nunca dispares sincronizaciones desde el dataset, porque así se causó un bucle de reintentos.
+  - `maxDuration = 300` en las tres rutas.
+  - El `trigger` (`auto|manual|initial`) queda en `audit_log.new_data`.
+  - **No hay cron ni variables nuevas.** Un cron de Vercel requeriría `CRON_SECRET` y, para correr cada hora, el plan Pro.
+- **Errores de Azure:** no uses `instanceof AzureHttpError` fuera de `azure.ts`; revisa `error.status`. En `next dev`, un módulo viejo en memoria (tras reescribir `azure.ts`) dejó la clase `undefined` y ocultó el error real. Si pasa, reinicia `pnpm dev`.
 - **Dataset:**
   - el RPC `azure_dataset(p, from, to)` devuelve ítems **asignados** vivos en el periodo (`created ≤ to` y abiertos o `completed ≥ from`), sus **ancestros** y las **transiciones de estado** (filas donde cambia el estado);
   - la UI pide desde el inicio del **periodo anterior**, para los deltas.

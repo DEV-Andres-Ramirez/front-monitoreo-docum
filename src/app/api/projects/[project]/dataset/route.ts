@@ -1,7 +1,7 @@
-import { after, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { errorResponse, isAuthenticated, unauthorizedResponse } from "@/lib/auth";
 import { azureConfig } from "@/lib/azure";
-import { syncProject, syncStatus } from "@/lib/azure-sync";
+import { isSyncDue, syncProject, syncStatus } from "@/lib/azure-sync";
 import { isProjectKey } from "@/lib/config";
 import { ISO_DATE, addDaysISO, diffDays, todayISO } from "@/lib/dates";
 import type { DatasetResponse } from "@/lib/analytics/types";
@@ -11,13 +11,12 @@ import { db } from "@/lib/supabase";
 // La primera sincronización completa puede tardar; las siguientes son incrementales.
 export const maxDuration = 300;
 
-const STALE_MINUTES = 15;
 const MAX_RANGE_DAYS = 400;
 
 /**
  * Dataset de análisis del periodo [from, to]: ítems vivos + ancestros + transiciones de estado,
- * personal de la planeación, colaboradores y alias. Si los datos tienen más de 15 minutos,
- * responde de inmediato y sincroniza con Azure (solo lectura) en segundo plano.
+ * personal de la planeación, colaboradores y alias. Solo lee de Supabase: la sincronización con
+ * Azure es automática cada hora (POST /api/sync/auto) o manual (POST /api/projects/[p]/sync).
  */
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/projects/[project]/dataset">) {
   if (!(await isAuthenticated())) return unauthorizedResponse();
@@ -33,15 +32,11 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/projects
   try {
     const cfg = azureConfig(project);
     let status = await syncStatus(project);
-    const stale = !status.lastAt || Date.now() - new Date(status.lastAt).getTime() > STALE_MINUTES * 60_000;
-
-    if (!status.lastAt && !status.running) {
+    if (!status.lastAt && isSyncDue(status)) {
       // Primera vez: se espera la sincronización completa para no mostrar un tablero vacío.
-      await syncProject(project, { full: true });
+      // Si falla, isSyncDue espera 10 minutos antes de reintentar (sin bucles).
+      await syncProject(project, { full: true, trigger: "initial" });
       status = await syncStatus(project);
-    } else if (stale && !status.running) {
-      after(() => syncProject(project).catch((e) => console.error("[sync]", e)));
-      status = { ...status, running: true };
     }
 
     const [rpc, members, employees, aliases] = await Promise.all([
@@ -63,7 +58,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/projects
       project: cfg.project,
       epicIds: cfg.epicIds,
       generatedAt: new Date().toISOString(),
-      sync: { running: status.running, lastAt: status.lastAt, lastStatus: status.lastStatus, lastError: status.lastError },
+      sync: { running: status.running, lastAt: status.lastAt, lastStatus: status.lastStatus, lastError: status.lastError, nextAutoAt: status.nextAutoAt },
       roster: members.map((m) => ({
         employeeId: m.employeeId,
         name: m.name,

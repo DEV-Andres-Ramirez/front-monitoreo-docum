@@ -54,6 +54,8 @@ export type SyncInfo = {
   lastAt: string | null;
   lastStatus: "running" | "ok" | "error" | null;
   lastError: string | null;
+  /** Próxima sincronización automática (cada hora; null mientras hay una en curso). */
+  nextAutoAt: string | null;
 };
 
 export type DatasetResponse = {

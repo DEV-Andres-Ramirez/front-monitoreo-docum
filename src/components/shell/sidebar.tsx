@@ -11,13 +11,14 @@ import { usePathname } from "next/navigation";
 import { Kbd } from "@/components/ui/primitives";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { PROJECTS, PROJECT_KEYS } from "@/lib/config";
+import { formatTime } from "@/lib/dates";
 import { useApp } from "./app-provider";
 import { NAV, navFor } from "./nav";
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname();
   const active = navFor(pathname);
-  const { projectKey, setProjectKey, scoped, model, sync, syncNow, syncing, logout, setShortcutsOpen } = useApp();
+  const { projectKey, setProjectKey, scoped, model, sync, syncNow, syncing, nextAutoSync, logout, setShortcutsOpen } = useApp();
   const overdue = scoped.filter((i) => i.overdue).length;
   const running = syncing || sync?.running;
 
@@ -139,6 +140,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                 : "Sin sincronizar"}
           </p>
           {model && <p className="mt-0.5 text-[0.6875rem] text-subtle">{model.work.length.toLocaleString("es-CO")} ítems asignados en el periodo</p>}
+          <p className="mt-0.5 text-[0.6875rem] text-subtle">
+            Automática cada hora{nextAutoSync && !running ? ` · próxima ${formatTime(new Date(nextAutoSync).toISOString())}` : ""}
+          </p>
           <button
             onClick={() => void syncNow()}
             disabled={!!running}

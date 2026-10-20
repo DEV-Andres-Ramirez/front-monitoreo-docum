@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { createContext, use, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import useSWR, { type KeyedMutator } from "swr";
+import useSWR, { useSWRConfig, type KeyedMutator } from "swr";
 import { api, fetcher, readStored, useProjectKey, useStored, writeStored } from "@/components/dashboard/client-api";
 import { MemberSheet } from "@/components/dashboard/member-sheet";
 import { WorkItemSheet } from "@/components/dashboard/work-item-sheet";
@@ -14,7 +14,7 @@ import { periodRange, previousRange, scopedWork, visiblePeople, type Filters, ty
 import { buildModel, type Item, type Model, type Person } from "@/lib/analytics/model";
 import { resolvePreset, type PeriodPreset } from "@/lib/analytics/period";
 import type { DatasetResponse, SyncInfo } from "@/lib/analytics/types";
-import { PROJECTS, type ProjectKey, type ProjectMeta } from "@/lib/config";
+import { PROJECT_KEYS, PROJECTS, type ProjectKey, type ProjectMeta } from "@/lib/config";
 import { todayISO } from "@/lib/dates";
 import { CommandPalette } from "./command-palette";
 import { NAV } from "./nav";
@@ -24,6 +24,11 @@ type StoredFilters = { preset: PeriodPreset; from: string; to: string; people: s
 type StoredIteration = { name: string; start: number; end: number; count: number };
 const DEFAULT_FILTERS: StoredFilters = { preset: "30d", from: "", to: "", people: [], includeOthers: false, scope: "project" };
 const NO_ITERATIONS: StoredIteration[] = [];
+
+type AutoSyncResponse = { results: Record<ProjectKey, { status: "ok" | "skipped" | "error" }>; nextAutoAt: string | null };
+const MINUTE = 60_000;
+/** Próxima revisión: lo que diga el servidor, nunca antes de 30 s (evita reprogramar en el mismo instante). */
+const nextCheck = (iso: string | null) => Math.max(iso ? Date.parse(iso) : Date.now() + MINUTE, Date.now() + 30_000);
 
 type AppContextValue = {
   projectKey: ProjectKey;
@@ -50,6 +55,8 @@ type AppContextValue = {
   sync?: SyncInfo;
   syncNow: (full?: boolean) => Promise<void>;
   syncing: boolean;
+  /** Próxima sincronización automática (cada hora, ambos proyectos) */
+  nextAutoSync: number | null;
   openWorkItem: (id: number) => void;
   openPerson: (key: string) => void;
   paletteOpen: boolean;
@@ -90,6 +97,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [autoSyncing, setAutoSyncing] = useState(false);
+  const [nextAutoSync, setNextAutoSync] = useState<number | null>(null);
+  const { mutate } = useSWRConfig();
 
   // --- Periodo (los presets son relativos a hoy; "Sprint actual" usa las iteraciones conocidas) ---
   const period = useMemo(() => {
@@ -143,6 +153,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [projectKey, setProjectKeyRaw],
   );
 
+  // --- Sincronización automática cada hora (ambos proyectos) mientras el tablero esté abierto ---
+  // El servidor decide qué proyecto ya cumplió su hora (o su reintento tras un error).
+  const refreshAutoSchedule = useCallback(async () => {
+    try {
+      const r = await api<{ nextAutoAt: string | null }>("/api/sync/auto");
+      setNextAutoSync(nextCheck(r.nextAutoAt));
+    } catch {
+      setNextAutoSync(Date.now() + 10 * MINUTE);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<{ nextAutoAt: string | null }>("/api/sync/auto")
+      .then((r) => !cancelled && setNextAutoSync(nextCheck(r.nextAutoAt)))
+      .catch(() => !cancelled && setNextAutoSync(Date.now() + 10 * MINUTE));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (nextAutoSync === null) return;
+    const delay = Math.min(Math.max(nextAutoSync - Date.now(), 0), 60 * MINUTE);
+    const timer = setTimeout(async () => {
+      const due = nextAutoSync <= Date.now() + 1000;
+      if (due) setAutoSyncing(true);
+      try {
+        const r = await api<AutoSyncResponse>("/api/sync/auto", { method: "POST" });
+        const synced = PROJECT_KEYS.filter((k) => r.results[k]?.status === "ok");
+        await Promise.all(synced.map((k) => mutate((key) => typeof key === "string" && key.startsWith(`/api/projects/${k}/dataset`))));
+        setNextAutoSync(nextCheck(r.nextAutoAt));
+      } catch {
+        setNextAutoSync(Date.now() + 10 * MINUTE);
+      } finally {
+        setAutoSyncing(false);
+      }
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [nextAutoSync, mutate]);
+
   const syncNow = useCallback(
     async (full = false) => {
       setSyncing(true);
@@ -160,9 +211,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toast.error(e instanceof Error ? e.message : "No se pudo sincronizar", { id });
       } finally {
         setSyncing(false);
+        void refreshAutoSchedule();
       }
     },
-    [projectKey, dataset],
+    [projectKey, dataset, refreshAutoSchedule],
   );
 
   const logout = useCallback(async () => {
@@ -234,7 +286,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     people,
     sync: data?.sync,
     syncNow,
-    syncing,
+    syncing: syncing || autoSyncing,
+    nextAutoSync,
     openWorkItem: setWorkItemId,
     openPerson: setPersonKey,
     paletteOpen,

@@ -26,6 +26,8 @@ const ACTION_META: Record<string, { label: string; icon: LucideIcon; tone: Statu
   alias_unlinked: { label: "Vínculo de correo eliminado", icon: Link2Off, tone: "neutral" },
 };
 
+const SYNC_TRIGGER: Record<string, string> = { auto: "automática (cada hora)", manual: "manual", initial: "inicial" };
+
 const FILTERS: { key: string; label: string; actions: string[] }[] = [
   { key: "todos", label: "Todo", actions: [] },
   { key: "azure", label: "Sincronizaciones", actions: ["azure_sync", "azure_sync_failed", "azure_refresh"] },
@@ -206,6 +208,7 @@ function AuditRow({ entry, index, names }: { entry: AuditEntry; index: number; n
         {(entry.action === "azure_sync" || entry.action === "azure_sync_failed") && (
           <p className="mt-1 text-xs text-muted">
             {data.mode === "full" ? "Sincronización completa" : "Sincronización incremental"}
+            {typeof data.trigger === "string" && SYNC_TRIGGER[data.trigger] && ` ${SYNC_TRIGGER[data.trigger]}`}
             {data.items !== undefined && ` · ${Number(data.items).toLocaleString("es-CO")} ítems y ${Number(data.revisions).toLocaleString("es-CO")} cambios leídos`}
             {typeof data.error === "string" && <span className="block text-critical-fg">{data.error}</span>}
           </p>

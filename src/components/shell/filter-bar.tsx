@@ -9,7 +9,7 @@ import { Avatar, Segmented } from "@/components/ui/primitives";
 import { Popover } from "@/components/ui/popover";
 import { normalizeText } from "@/lib/analytics/model";
 import { PRESET_LABEL, type PeriodPreset } from "@/lib/analytics/period";
-import { formatShort } from "@/lib/dates";
+import { formatShort, formatTime } from "@/lib/dates";
 import { useApp } from "./app-provider";
 
 const PRESETS: PeriodPreset[] = ["sprint", "14d", "30d", "90d", "month", "quarter"];
@@ -214,7 +214,7 @@ export function ScopeToggle({ className }: { className?: string }) {
 
 // ------------------------------------------------------------------ Estado de sincronización
 export function SyncChip({ compact = false }: { compact?: boolean }) {
-  const { sync, syncNow, syncing, dataset } = useApp();
+  const { sync, syncNow, syncing, dataset, nextAutoSync } = useApp();
   const running = syncing || sync?.running;
   const error = sync?.lastStatus === "error";
   const label = running
@@ -228,7 +228,11 @@ export function SyncChip({ compact = false }: { compact?: boolean }) {
     <button
       onClick={() => void syncNow()}
       disabled={!!running}
-      title={error ? `Última sincronización con error: ${sync?.lastError ?? ""}` : "Sincronizar ahora (solo lectura)"}
+      title={
+        error
+          ? `Última sincronización con error: ${sync?.lastError ?? ""}`
+          : `Sincronizar ahora (solo lectura) · automática cada hora${nextAutoSync ? `, próxima a las ${formatTime(new Date(nextAutoSync).toISOString())}` : ""}`
+      }
       className={clsx(
         "flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-medium shadow-sm transition disabled:cursor-progress",
         error ? "border-critical/40 bg-critical-soft text-critical-fg" : "border-line bg-surface text-muted hover:text-foreground",
