@@ -4,9 +4,11 @@ import { Keyboard } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect } from "react";
 import { Kbd } from "@/components/ui/primitives";
-import { NAV } from "./nav";
+import type { NavItem } from "./nav";
+import { navItems } from "./nav";
+import { useApp } from "./app-provider";
 
-const GROUPS: { title: string; items: { keys: string[]; label: string }[] }[] = [
+const groups = (nav: NavItem[]): { title: string; items: { keys: string[]; label: string }[] }[] => [
   {
     title: "General",
     items: [
@@ -15,7 +17,7 @@ const GROUPS: { title: string; items: { keys: string[]; label: string }[] }[] = 
       { keys: ["Esc"], label: "Cerrar panel" },
     ],
   },
-  { title: "Vistas", items: NAV.map((n) => ({ keys: [n.key], label: n.label })) },
+  { title: "Vistas", items: nav.map((n) => ({ keys: [n.key], label: n.label })) },
   {
     title: "Pantalla (TV)",
     items: [
@@ -28,6 +30,7 @@ const GROUPS: { title: string; items: { keys: string[]; label: string }[] }[] = 
 ];
 
 export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { projectKey } = useApp();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -57,7 +60,7 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () 
               </div>
             </div>
             <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
-              {GROUPS.map((g) => (
+              {groups(navItems(projectKey)).map((g) => (
                 <div key={g.title}>
                   <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">{g.title}</p>
                   <ul className="space-y-1.5">

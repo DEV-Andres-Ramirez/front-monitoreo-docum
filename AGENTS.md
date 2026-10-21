@@ -35,6 +35,11 @@ Reglas de negocio (decididas con el usuario):
   - a tiempo si la entrega ≤ fin del día objetivo.
 - **Capacidad** = 8 h × % asignado × días hábiles vigentes; **utilización** = horas entregadas ÷ capacidad.
 - **Días hábiles** = lunes a viernes **sin festivos de Colombia** (`colombianHolidays()` / `isBusinessDay()` en `src/lib/dates.ts`).
+- **Cumplimiento (solo 005, `PROJECTS["005"].compliance` en `config.ts`; vista `/cumplimiento` + tarjeta en el Resumen):**
+  - total, completadas y % de HU y de Tareas de la épica; cuenta **todo** lo de la épica (de quien sea o sin asignar; con personas elegidas, solo las de ellas);
+  - HU en dos niveles: **cumplida = en producción** (Completed) y **entregada a QA o más** (Resolved o Completed); tarea cumplida = `Closed`;
+  - vencida = objetivo (o fin del sprint) pasado sin cumplir (HU: sin QA);
+  - "Lista para QA" = HU con todas sus tareas cerradas que sigue en Por iniciar o En desarrollo.
 - **Meta de cierre (solo 348, `PROJECTS["348"].goal` en `config.ts`):**
   - 24 tareas `Video` y 24 `Informe` por día hábil desde el 19-oct; cierre el 13-nov;
   - cuenta **todas** las tareas con esos tags de ambas épicas, **sin** filtrar por persona ni por Global (decisión del usuario: las de Informe son de David Vergara, No Global);
@@ -92,6 +97,8 @@ Reglas de negocio (decididas con el usuario):
   - `scopedWork()` / `inEpics()` en `metrics.ts` exigen `inMonitoredEpics` (defensa además del RPC) y aplican el filtro por épica;
   - `metrics.ts`: KPIs, throughput semanal, CFD, burnup, cycle time (P50/P85), antigüedad del WIP, `perPerson` y `workloadMatrix`. Recibe `now` explícito: no llames `Date.now()` en render;
   - `period.ts`: presets. Los rápidos son `today`, `yesterday`, `thisWeek` (`DEFAULT_PRESET`) y `lastWeek`, con semana de lunes a domingo. El resto (`MORE_PRESETS`) incluye "Sprint actual", deducido de las iteraciones conocidas guardadas en localStorage. `comparisonLabel()` describe el periodo con que se compara (`previousRange(range, preset)` en `metrics.ts`: Hoy y Ayer contra el día hábil anterior; semanas, desplazadas 7 días);
+  - `compliance.ts`: `complianceAnalysis(items, opts)` calcula los resúmenes por tipo, el flujo, la tendencia, las tablas por Feature, HU y persona, y los hallazgos. Los datos vienen de `GET /api/projects/[p]/compliance` → RPC `azure_compliance_items` (0010). La identidad usa `buildIdentity()` + `classifyAssignee()` de `model.ts`, con el dataset; el hook es `useCompliance()` (`src/components/views/use-compliance.ts`);
+  - menú por proyecto: `navItems(projectKey)` en `nav.ts` (`NavItem.projects` limita una vista a ciertos proyectos; los atajos 1…n siguen el orden del menú). `navFor(pathname, projectKey)` sirve para el título;
   - `goal.ts`: `goalProgress(goal, tasks, today, tag)` calcula, por tag y en total, el avance, la serie diaria de `start` a `deadline`, el acumulado frente a la meta, el ritmo necesario y el actual (últimos 5 días hábiles cerrados) y la proyección. Los datos vienen de `GET /api/projects/[p]/goal` → RPC `azure_goal_tasks` (0008), no del dataset del periodo. Colores de tag fijos (violeta y magenta), validados con dataviz;
   - filtro de tag: `Filters.tag` + `inTag()`. Las opciones salen de `goal.tags` del proyecto (348); `Item.tagList` son los tags separados por ";";
   - cubetas de tiempo: `throughput()` y `workloadMatrix()` aceptan `TimeUnit` (`"day" | "week"`). La preferencia es global (`docum:chart-unit`, por defecto `"day"`; `chartUnit` en `useApp()`);
@@ -121,7 +128,7 @@ Reglas de negocio (decididas con el usuario):
   - RLS activo **sin políticas** y `revoke all … from anon, authenticated`;
   - RPC con `revoke execute … from public, anon, authenticated` + `grant … to service_role`;
   - tras cualquier DDL, revisar `get_advisors`.
-- **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004), `azure_dataset_assigned` (0005), `dataset_monitored_epics` (0006), `dataset_backfilled_delivery` (0007), `goal_tags` (0008) y `no_global_members` (0009).
+- **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004), `azure_dataset_assigned` (0005), `dataset_monitored_epics` (0006), `dataset_backfilled_delivery` (0007), `goal_tags` (0008), `no_global_members` (0009) y `compliance_items` (0010).
   - Se aplican con el MCP del proyecto (`.mcp.json`, ref `klrierizueihrenhcema`) o con `scripts/apply-migrations.mjs`.
   - **No** usar el conector `claude.ai Supabase` (es otra cuenta).
 - **Nueva carga de Global:** reemplazar el archivo de `context/` → `python3 scripts/generate-seed.py` → aplicar `0002_seed.sql`. Es un upsert con `in_global = true`, no borra a los No Global; si Global incluye a uno de ellos, deja de ser No Global.

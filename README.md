@@ -51,12 +51,36 @@ Calcula automáticamente:
     - los miembros **No Global** aparecen con su etiqueta en tarjetas, tabla, carga, gráficas, Gantt, detalle, filtro de personas y ⌘K.
   - **Backlog Azure** (`/backlog`): árbol Épica → Feature → HU → Tarea con estado, asignado, objetivo, entrega y horas acumuladas.
   - **Bitácora** (`/bitacora`): ingresos, sincronizaciones (con conteos o errores) y vinculaciones.
+  - **Cumplimiento** (`/cumplimiento`, solo 005): ver la sección "Cumplimiento de Positiva". El menú depende del proyecto (`navItems()` en `src/components/shell/nav.ts`), y los atajos 1…n siguen su orden.
 - **Detalle de un ítem:** ruta Épica › Feature › HU, horas y su origen, plan frente a real, puntualidad, **línea de tiempo de estados** con duraciones e ítems hijos.
 - **Detalle de un colaborador:** utilización, KPIs, **mini-Gantt** e ítems por estado.
 - **Pantalla para TV:** tamaño de 75 % a 300 % (− / % / +) y pantalla completa. Atajos `+`, `−`, `0` y `F`.
 - **Tema** claro, oscuro o del sistema, sin parpadeo.
 - **⌘K** para buscar personas, ítems, periodos y acciones; `1–5` cambian de vista; `?` muestra la ayuda.
 - **Accesibilidad:** colores de estado validados para daltonismo, estados siempre con texto, vista de tabla en cada gráfica y `prefers-reduced-motion`.
+
+## Cumplimiento de Positiva (solo 005)
+
+Vista **Cumplimiento** (2.ª en el menú de 005), más una tarjeta compacta arriba del Resumen con enlace. Mide, sobre la épica 578, cuántas **HU** y **Tareas** hay, cuántas se completaron y el **% de cumplimiento**.
+
+- **Qué cuenta:** **todas** las HU y tareas de la épica, de quien sean o sin asignar (incluye a quienes no están en Global). Con personas elegidas en el filtro, solo las de ellas.
+- **HU, en dos niveles:**
+  - **cumplimiento = en producción** (categoría Completed, estado `10. En Producción`);
+  - también **entregadas a QA o más** (categoría Resolved: `7. Backlog QA`, `7.1`, `7.2`).
+- **Tarea:** cumplida al **cerrarse** (`Closed`).
+- **Vencida:** objetivo (o fin del sprint) pasado sin cumplir. En las HU, sin llegar a QA.
+- **Secciones:**
+  1. tarjetas de HU y Tareas: % de cumplimiento, barras, flujo por etapa, completadas en el periodo (frente a la comparación del periodo), en curso, por iniciar, vencidas, sin tareas o sin asignar;
+  2. **Puntos de atención**:
+     - HU con todas sus tareas cerradas que no pasan a QA;
+     - HU sin tareas;
+     - vencidas;
+     - tareas sin asignar;
+  3. **flujo por etapa** (HU o Tareas, con tabla de estados de Azure);
+  4. **avance acumulado** de HU y de tareas frente al total (por día o semana);
+  5. cumplimiento **por Feature**, **por HU** (avance por sus tareas, con búsqueda, filtros y orden) y **por persona** (etiquetas No Global / Fuera de Global).
+- **Configuración:** `PROJECTS["005"].compliance` en `src/lib/config.ts`.
+- **Datos:** `GET /api/projects/[p]/compliance` → RPC `azure_compliance_items` (0010). No se filtra por periodo; se calcula en `src/lib/analytics/compliance.ts`.
 
 ## Meta de cierre de Acueducto (solo 348)
 
@@ -152,10 +176,11 @@ pnpm dev               # http://localhost:3000
 | `0005_azure_dataset_assigned.sql` | `azure_dataset(p, desde, hasta)` solo con ítems asignados (**legado**: se conserva para despliegues anteriores) |
 | `0006_dataset_monitored_epics.sql` | `azure_dataset(p, desde, hasta, épicas)`: solo el árbol de las épicas monitoreadas |
 | `0008_goal_tags.sql` | `azure_dataset` devuelve los tags; nuevo RPC `azure_goal_tasks` (tareas con tags de la meta, sin filtrar por periodo ni persona) |
+| `0010_compliance_items.sql` | RPC `azure_compliance_items`: todas las HU y tareas (y Features/Épicas) de las épicas, para el cumplimiento |
 | `0009_no_global_members.sql` | `project_members.in_global`; cargo, % y cédula opcionales; agrega a David Vergara y Jhostin Ladino a 348 como No Global |
 | `0007_dataset_backfilled_delivery.sql` | Un ítem entregado en el periodo cuenta aunque se haya creado después (fecha de entrega real registrada a posteriori); bordes ±1 día |
 
-**Estado (20-oct-2026):** las nueve migraciones están aplicadas. Primera sincronización: 348 con 6.838 ítems y 25.874 revisiones (≈ 45 s); 005 con 627 ítems y 1.942 revisiones (≈ 7 s). Las incrementales tardan segundos.
+**Estado (20-oct-2026):** las diez migraciones están aplicadas. Primera sincronización: 348 con 6.838 ítems y 25.874 revisiones (≈ 45 s); 005 con 627 ítems y 1.942 revisiones (≈ 7 s). Las incrementales tardan segundos.
 
 **Seguridad:**
 - RLS está activo en todas las tablas sin políticas: `anon`/`authenticated` no tienen acceso.
@@ -192,6 +217,8 @@ src/
       projects/[project]/dataset          # dataset de análisis (solo lee; sincroniza completo solo la primera vez)
       projects/[project]/sync             # estado / sincronizar ahora / resincronizar todo
       sync/auto                           # sincronización automática cada hora (ambos proyectos)
+      projects/[project]/goal             # meta de cierre (348)
+      projects/[project]/compliance       # cumplimiento de HU y tareas (005)
       aliases                             # vincular / desvincular correo de Azure ↔ colaborador
       audit                               # bitácora paginada
   lib/
@@ -206,7 +233,7 @@ src/
     charts/     # Chart.js: flow-charts (throughput, CFD, burnup, cycle time, estados, estimado), chart-card, chart-theme
     dashboard/  # work-item-sheet (traza de estados), member-sheet, client-api (fetch + preferencias)
     ui/         # primitives, sheet, popover, theme, display (escala TV + pantalla completa)…
-supabase/migrations/   # 0001 → 0009
+supabase/migrations/   # 0001 → 0010
 scripts/               # generate-seed.py, apply-migrations.mjs
 context/               # archivo de planeación de Global (contiene datos personales)
 ```

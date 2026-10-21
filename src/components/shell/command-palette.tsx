@@ -12,7 +12,7 @@ import { isNoGlobal, personRoleLabel } from "@/lib/analytics/model";
 import { MORE_PRESETS, PRESET_LABEL, QUICK_PRESETS } from "@/lib/analytics/period";
 import { PROJECTS, PROJECT_KEYS } from "@/lib/config";
 import { useApp } from "./app-provider";
-import { NAV } from "./nav";
+import { navItems } from "./nav";
 
 const norm = (s: string) =>
   s
@@ -120,7 +120,7 @@ export function CommandPalette() {
                 </Command.Group>
 
                 <Command.Group heading="Ir a">
-                  {NAV.map((n) => (
+                  {navItems(app.projectKey).map((n) => (
                     <Command.Item key={n.href} onSelect={() => run(() => router.push(n.href))} keywords={[n.description]}>
                       <n.icon className="size-4 text-muted" /> {n.label} <Kbd className="ml-auto">{n.key}</Kbd>
                     </Command.Item>

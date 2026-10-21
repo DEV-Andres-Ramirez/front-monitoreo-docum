@@ -13,16 +13,18 @@ import { ThemeSwitchButton, ThemeToggle } from "@/components/ui/theme-toggle";
 import { PROJECTS, PROJECT_KEYS } from "@/lib/config";
 import { useApp } from "./app-provider";
 import { EpicFilter, MobileFiltersButton, PeoplePanel, PeriodPanel, SyncChip, TagFilter } from "./filter-bar";
-import { NAV, navFor } from "./nav";
+import { navFor, navItems } from "./nav";
 
 /** Barra superior + tab bar inferior + panel de filtros para pantallas < lg. */
 export function MobileNav() {
   const pathname = usePathname();
-  const active = navFor(pathname);
   const { projectKey, project, setProjectKey, setPaletteOpen, logout, syncNow, sync, syncing, setShortcutsOpen, filtersOpen, setFiltersOpen, tags } = useApp();
+  const active = navFor(pathname, projectKey);
+  const items = navItems(projectKey);
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const tabs = [NAV[0], NAV[1], null, NAV[2]];
+  // Las tres primeras vistas del proyecto van en la barra; el resto, en "Más"
+  const tabs = [items[0], items[1], null, items[2]];
 
   return (
     <>
@@ -140,7 +142,7 @@ export function MobileNav() {
 
       <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Más opciones">
         <div className="space-y-2">
-          {NAV.slice(3).map((item) => (
+          {items.slice(3).map((item) => (
             <Link key={item.href} href={item.href} onClick={() => setMoreOpen(false)} className="flex items-center gap-3 rounded-2xl border border-line bg-surface-2 p-3">
               <span className="grid size-10 place-items-center rounded-xl bg-accent-soft text-accent-fg">
                 <item.icon className="size-5" />

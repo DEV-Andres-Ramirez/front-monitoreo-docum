@@ -98,7 +98,8 @@ export const endOfDay = (t: number) => {
 /** Horas declaradas de un ítem (1 punto de esfuerzo = 1 hora). */
 export const declaredHours = (i: AzureItem) => i.sp ?? i.effort ?? i.estimate ?? 0;
 
-function buildIdentity(ds: DatasetResponse) {
+/** Resolución de identidad (alias → correo exacto → parte local → tokens del nombre) a partir del dataset. */
+export function buildIdentity(ds: Pick<DatasetResponse, "roster" | "employees" | "aliases">) {
   const roster = new Map<string, RosterMember>(ds.roster.map((r) => [r.employeeId, r]));
   const employees = ds.employees;
   const byEmail = new Map<string, string>();
@@ -127,6 +128,23 @@ function buildIdentity(ds: DatasetResponse) {
     return null;
   };
   return { roster, employees: new Map(employees.map((e) => [e.id, e])), resolve };
+}
+
+export type Identity = ReturnType<typeof buildIdentity>;
+export type AssigneeKind = "global" | "noGlobal" | "fuera" | "sinAsignar";
+export type Assignee = { key: string; name: string; kind: AssigneeKind };
+
+/**
+ * Clasifica a quien tiene asignado un ítem: personal de Global, No Global, fuera de Global o sin asignar.
+ * Las claves (`emp:` / `ext:`) son las mismas de `Person.key`, para filtrar y abrir su detalle.
+ */
+export function classifyAssignee(identity: Identity, email: string | null, name: string | null): Assignee {
+  if (!email) return { key: "none", name: "Sin asignar", kind: "sinAsignar" };
+  const match = identity.resolve(email, name);
+  if (!match) return { key: `ext:${email}`, name: name ?? email, kind: "fuera" };
+  const member = identity.roster.get(match.id);
+  const display = identity.employees.get(match.id)?.name ?? member?.name ?? name ?? email;
+  return { key: `emp:${match.id}`, name: display, kind: member ? (member.inGlobal ? "global" : "noGlobal") : "fuera" };
 }
 
 function segmentsFor(item: AzureItem, transitions: Transition[] | undefined): Segment[] {

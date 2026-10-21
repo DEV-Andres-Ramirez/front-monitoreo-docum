@@ -17,7 +17,7 @@ import type { DatasetResponse, SyncInfo } from "@/lib/analytics/types";
 import { PROJECT_KEYS, PROJECTS, type ProjectKey, type ProjectMeta } from "@/lib/config";
 import { todayISO } from "@/lib/dates";
 import { CommandPalette } from "./command-palette";
-import { NAV } from "./nav";
+import { navItems } from "./nav";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 
 // `epics` vacío = todas las épicas monitoreadas del proyecto (el antiguo `scope` guardado se ignora)
@@ -216,7 +216,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       try {
         const r = await api<AutoSyncResponse>("/api/sync/auto", { method: "POST" });
         const synced = PROJECT_KEYS.filter((k) => r.results[k]?.status === "ok");
-        await Promise.all(synced.map((k) => mutate((key) => typeof key === "string" && /^\/api\/projects\/[^/]+\/(dataset|goal)/.test(key) && key.startsWith(`/api/projects/${k}/`))));
+        await Promise.all(synced.map((k) => mutate((key) => typeof key === "string" && /^\/api\/projects\/[^/]+\/(dataset|goal|compliance)/.test(key) && key.startsWith(`/api/projects/${k}/`))));
         setNextAutoSync(nextCheck(r.nextAutoAt));
       } catch {
         setNextAutoSync(Date.now() + 10 * MINUTE);
@@ -235,7 +235,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const res = await api<{ items: number; revisions: number; status: string }>(`/api/projects/${projectKey}/sync${full ? "?full=1" : ""}`, {
           method: "POST",
         });
-        await Promise.all([dataset.mutate(), mutate(`/api/projects/${projectKey}/goal`)]);
+        await Promise.all([dataset.mutate(), mutate(`/api/projects/${projectKey}/goal`), mutate(`/api/projects/${projectKey}/compliance`)]);
         toast.success(res.status === "skipped" ? "Ya hay una sincronización en curso" : "Datos de Azure actualizados", {
           id,
           description: res.status === "ok" ? `${res.items} ítems y ${res.revisions} cambios leídos` : undefined,
@@ -265,7 +265,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target) || paletteOpen || isSheetOpen()) return;
-      const nav = NAV.find((n) => n.key === e.key);
+      const nav = navItems(projectKey).find((n) => n.key === e.key);
       if (nav) {
         router.push(nav.href);
         return;
@@ -295,7 +295,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [paletteOpen, router]);
+  }, [paletteOpen, router, projectKey]);
 
   const value: AppContextValue = {
     projectKey,

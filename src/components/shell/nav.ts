@@ -1,15 +1,35 @@
-import { CalendarRange, History, Layers, LayoutDashboard, Users, type LucideIcon } from "lucide-react";
+import { CalendarRange, ClipboardCheck, History, Layers, LayoutDashboard, Users, type LucideIcon } from "lucide-react";
+import type { ProjectKey } from "@/lib/config";
 
-export type NavItem = { href: string; label: string; short: string; description: string; icon: LucideIcon; key: string };
+export type NavItem = {
+  href: string;
+  label: string;
+  short: string;
+  description: string;
+  icon: LucideIcon;
+  /** Atajo de teclado: su posición en el menú del proyecto (1…n) */
+  key: string;
+  /** Solo en estos proyectos (sin valor = en todos) */
+  projects?: ProjectKey[];
+};
 
-export const NAV: NavItem[] = [
-  { href: "/", key: "1", label: "Resumen", short: "Resumen", icon: LayoutDashboard, description: "Indicadores de flujo, entregas y alertas" },
-  { href: "/cronograma", key: "2", label: "Cronograma", short: "Gantt", icon: CalendarRange, description: "Gantt plan vs. real por colaborador" },
-  { href: "/colaboradores", key: "3", label: "Colaboradores", short: "Equipo", icon: Users, description: "Desempeño, carga y estados por persona" },
-  { href: "/backlog", key: "4", label: "Backlog Azure", short: "Backlog", icon: Layers, description: "Épicas, features, HU y tareas (solo lectura)" },
-  { href: "/bitacora", key: "5", label: "Bitácora", short: "Bitácora", icon: History, description: "Ingresos, sincronizaciones y vinculaciones" },
+const ALL: Omit<NavItem, "key">[] = [
+  { href: "/", label: "Resumen", short: "Resumen", icon: LayoutDashboard, description: "Indicadores de flujo, entregas y alertas" },
+  { href: "/cumplimiento", label: "Cumplimiento", short: "Cumplim.", icon: ClipboardCheck, description: "HU y tareas: total, completadas y % de cumplimiento", projects: ["005"] },
+  { href: "/cronograma", label: "Cronograma", short: "Gantt", icon: CalendarRange, description: "Gantt plan vs. real por colaborador" },
+  { href: "/colaboradores", label: "Colaboradores", short: "Equipo", icon: Users, description: "Desempeño, carga y estados por persona" },
+  { href: "/backlog", label: "Backlog Azure", short: "Backlog", icon: Layers, description: "Épicas, features, HU y tareas (solo lectura)" },
+  { href: "/bitacora", label: "Bitácora", short: "Bitácora", icon: History, description: "Ingresos, sincronizaciones y vinculaciones" },
 ];
 
-export function navFor(pathname: string) {
-  return NAV.find((n) => (n.href === "/" ? pathname === "/" : pathname.startsWith(n.href))) ?? NAV[0];
+/** Vistas del proyecto en orden de menú, con el atajo de teclado según su posición. */
+export function navItems(projectKey: ProjectKey): NavItem[] {
+  return ALL.filter((n) => !n.projects || n.projects.includes(projectKey)).map((n, i) => ({ ...n, key: String(i + 1) }));
+}
+
+/** Vista de la ruta actual (aunque no esté en el menú del proyecto activo). */
+export function navFor(pathname: string, projectKey: ProjectKey): NavItem {
+  const match = (n: Omit<NavItem, "key">) => (n.href === "/" ? pathname === "/" : pathname.startsWith(n.href));
+  const items = navItems(projectKey);
+  return items.find(match) ?? { ...(ALL.find(match) ?? ALL[0]), key: "" };
 }

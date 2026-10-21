@@ -15,6 +15,13 @@ export type ProjectGoal = {
   tags: { tag: string; daily: number }[];
 };
 
+/**
+ * Análisis de cumplimiento (vista "Cumplimiento"): cuántas HU y Tareas de las épicas monitoreadas hay,
+ * cuántas se completaron y su %. Cuenta TODO lo de las épicas (de quien sea o sin asignar).
+ * HU: dos niveles (Entregado/QA = categoría Resolved, Producción = Completed). Tarea: Completed.
+ */
+export type ProjectCompliance = { userStory: string; task: string };
+
 export type ProjectMeta = {
   key: ProjectKey;
   name: string;
@@ -24,6 +31,7 @@ export type ProjectMeta = {
   accent: string;
   accentSoft: string;
   goal?: ProjectGoal;
+  compliance?: ProjectCompliance;
 };
 
 export const PROJECTS: Record<ProjectKey, ProjectMeta> = {
@@ -52,6 +60,7 @@ export const PROJECTS: Record<ProjectKey, ProjectMeta> = {
     epics: "Deuda Técnica y Contractual",
     accent: "#13A538",
     accentSoft: "#E3F8E8",
+    compliance: { userStory: "User Story", task: "Task" },
   },
 };
 

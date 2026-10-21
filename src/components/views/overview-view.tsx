@@ -15,6 +15,7 @@ import type { Item } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import { formatShort } from "@/lib/dates";
 import { DatasetGate } from "./dataset-gate";
+import { ComplianceSummary } from "./compliance-summary";
 import { GoalPanel } from "./goal-panel";
 
 export function OverviewView() {
@@ -56,6 +57,7 @@ function Overview() {
     return (
       <div className="space-y-5">
         <GoalPanel />
+        <ComplianceSummary />
         <EmptyState variant="search" title="Sin ítems para estos filtros" description="Amplía el periodo, cambia la épica o el tag, o selecciona otros colaboradores." />
       </div>
     );
@@ -117,6 +119,7 @@ function Overview() {
   return (
     <div className="space-y-5">
       <GoalPanel />
+      <ComplianceSummary />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
         {tiles.map((t, i) => (
           <motion.div

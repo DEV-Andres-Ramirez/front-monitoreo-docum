@@ -14,12 +14,12 @@ import { isAlive } from "@/lib/analytics/metrics";
 import { PROJECTS, PROJECT_KEYS } from "@/lib/config";
 import { formatTime } from "@/lib/dates";
 import { useApp } from "./app-provider";
-import { NAV, navFor } from "./nav";
+import { navFor, navItems } from "./nav";
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname();
-  const active = navFor(pathname);
   const { projectKey, setProjectKey, scoped, range, model, sync, syncNow, syncing, nextAutoSync, logout, setShortcutsOpen } = useApp();
+  const active = navFor(pathname, projectKey);
   const overdue = scoped.filter((i) => i.overdue).length;
   const inPeriod = scoped.filter((i) => isAlive(i, range)).length;
   const running = syncing || sync?.running;
@@ -87,7 +87,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       {/* Navegación */}
       <nav className={clsx("mt-6 flex-1 space-y-1 px-4", collapsed && "px-3")} aria-label="Principal">
         {!collapsed && <p className="mb-2 px-1 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Vistas</p>}
-        {NAV.map((item) => {
+        {navItems(projectKey).map((item) => {
           const isActive = item.href === active.href;
           return (
             <Link

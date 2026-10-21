@@ -15,8 +15,8 @@ import { navFor } from "./nav";
  */
 export function Topbar() {
   const pathname = usePathname();
-  const nav = navFor(pathname);
   const { project, projectKey, setPaletteOpen } = useApp();
+  const nav = navFor(pathname, projectKey);
 
   return (
     <header className="glass sticky top-0 z-30 hidden border-b border-line lg:block">
