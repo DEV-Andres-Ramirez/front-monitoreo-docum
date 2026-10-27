@@ -16,11 +16,11 @@ export type ProjectGoal = {
 };
 
 /**
- * Análisis de cumplimiento (vista "Cumplimiento"): cuántas HU y Tareas de las épicas monitoreadas hay,
- * cuántas se completaron y su %. Cuenta TODO lo de las épicas (de quien sea o sin asignar).
- * HU: dos niveles (Entregado/QA = categoría Resolved, Producción = Completed). Tarea: Completed.
+ * Análisis de cumplimiento (vista "Cumplimiento"): cuántas HU, Tareas y Bugs de las épicas monitoreadas
+ * hay, cuántos se completaron y su %. Cuenta TODO lo de las épicas (de quien sea o sin asignar).
+ * HU: dos niveles (Entregado/QA = categoría Resolved, Producción = Completed). Tarea y Bug: Completed.
  */
-export type ProjectCompliance = { userStory: string; task: string };
+export type ProjectCompliance = { userStory: string; task: string; bug?: string };
 
 export type ProjectMeta = {
   key: ProjectKey;
@@ -57,10 +57,10 @@ export const PROJECTS: Record<ProjectKey, ProjectMeta> = {
     key: "005",
     name: "Positiva SGDEA",
     client: "Positiva · 3T Capital",
-    epics: "Deuda Técnica y Contractual",
+    epics: "Deuda Técnica y Contractual · Épica de gestión · Deuda · NP - Evolutivos",
     accent: "#13A538",
     accentSoft: "#E3F8E8",
-    compliance: { userStory: "User Story", task: "Task" },
+    compliance: { userStory: "User Story", task: "Task", bug: "Bug" },
   },
 };
 

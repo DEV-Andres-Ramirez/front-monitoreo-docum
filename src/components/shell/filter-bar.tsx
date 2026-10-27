@@ -7,6 +7,7 @@ import { CalendarRange, Check, ChevronDown, Layers, RefreshCw, Search, SlidersHo
 import { useMemo, useState } from "react";
 import { Avatar, NoGlobalBadge, Segmented } from "@/components/ui/primitives";
 import { Popover } from "@/components/ui/popover";
+import { inEpics, isAlive } from "@/lib/analytics/metrics";
 import { isNoGlobal, normalizeText, personRoleLabel, type EpicRef } from "@/lib/analytics/model";
 import { MORE_PRESETS, PRESET_LABEL, QUICK_PRESETS, type PeriodPreset } from "@/lib/analytics/period";
 import { formatShort, formatTime } from "@/lib/dates";
@@ -210,8 +211,61 @@ export function epicShortLabels(epics: EpicRef[]) {
   return new Map(epics.map((e, i) => [e.id, words[i].slice(common).join(" ") || e.title]));
 }
 
-/** Filtro por épica monitoreada. Con una sola épica, solo la nombra (el tablero siempre se limita a ella). */
-export function EpicFilter({ className }: { className?: string }) {
+/** Lista de épicas con casillas (selección múltiple; ninguna = todas). Para proyectos con más de 2 épicas. */
+export function EpicPanel() {
+  const { epics, filters, setEpics, model, range } = useApp();
+  const counts = useMemo(() => {
+    const out = new Map<number, number>();
+    for (const i of model?.work ?? []) if (i.epicId !== null && inEpics(i, []) && isAlive(i, range)) out.set(i.epicId, (out.get(i.epicId) ?? 0) + 1);
+    return out;
+  }, [model, range]);
+  const selected = new Set(filters.epics);
+  const toggle = (id: number) => {
+    const next = selected.has(id) ? filters.epics.filter((e) => e !== id) : [...filters.epics, id];
+    setEpics(next.length === epics.length ? [] : next);
+  };
+  const box = (on: boolean) => (
+    <span className={clsx("grid size-4 shrink-0 place-items-center rounded border", on ? "border-accent bg-accent text-white" : "border-line-strong")}>{on && <Check className="size-3" />}</span>
+  );
+  return (
+    <ul className="space-y-0.5">
+      <li>
+        <button onClick={() => setEpics([])} aria-pressed={selected.size === 0} className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left text-sm font-semibold hover:bg-surface-2">
+          {box(selected.size === 0)}
+          <Layers className="size-4 shrink-0 text-accent-fg" />
+          <span className="min-w-0 flex-1 truncate">Todas las épicas</span>
+        </button>
+      </li>
+      {epics.map((e) => (
+        <li key={e.id}>
+          <button onClick={() => toggle(e.id)} aria-pressed={selected.has(e.id)} className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left hover:bg-surface-2" title={`${e.title} (#${e.id})`}>
+            {box(selected.has(e.id))}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm">{e.title}</span>
+              <span className="block text-[0.6875rem] text-subtle">#{e.id}</span>
+            </span>
+            <span className="rounded-md bg-surface-3 px-1.5 text-[0.6875rem] tabular-nums text-muted" title="Ítems asignados en el periodo">
+              {counts.get(e.id) ?? 0}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Resumen corto de la selección de épicas ("CORE", "3 épicas"); undefined = todas. */
+export function epicSelectionLabel(epics: EpicRef[], selected: number[]) {
+  if (!selected.length) return undefined;
+  if (selected.length === 1) return epicShortLabels(epics).get(selected[0]);
+  return `${selected.length} épicas`;
+}
+
+/**
+ * Filtro por épica monitoreada. Con una sola épica, solo la nombra (el tablero siempre se limita a ella);
+ * con 2, botones; con más, un panel con casillas (en el panel de filtros móvil, `inline`).
+ */
+export function EpicFilter({ className, inline = false }: { className?: string; inline?: boolean }) {
   const { epics, filters, setEpics } = useApp();
   if (!epics.length) return null;
   if (epics.length === 1) {
@@ -220,6 +274,32 @@ export function EpicFilter({ className }: { className?: string }) {
         <Layers className="size-4 shrink-0 text-accent-fg" />
         <span className="truncate">Épica: {epics[0].title}</span>
       </span>
+    );
+  }
+  if (epics.length > 2) {
+    if (inline) return <EpicPanel />;
+    const label = epicSelectionLabel(epics, filters.epics);
+    return (
+      <Popover
+        className={className}
+        panelClassName="w-[20rem] max-w-[calc(100vw-2rem)]"
+        trigger={({ open, toggle }) => (
+          <div className={triggerClass(filters.epics.length > 0)}>
+            <button onClick={toggle} aria-expanded={open} className="flex min-w-0 items-center gap-2" title="Filtrar por épica">
+              <Layers className="size-4 shrink-0" />
+              <span className="max-w-[14rem] truncate">{label ? `Épica: ${label}` : "Todas las épicas"}</span>
+              <ChevronDown className={clsx("size-4 shrink-0 text-subtle transition-transform", open && "rotate-180")} />
+            </button>
+            {filters.epics.length > 0 && (
+              <button onClick={() => setEpics([])} aria-label="Quitar filtro de épica" className="grid size-5 place-items-center rounded-md hover:bg-accent/15">
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+      >
+        {() => <EpicPanel />}
+      </Popover>
     );
   }
   const short = epicShortLabels(epics);
@@ -304,7 +384,7 @@ export function FilterBar() {
 /** Botón que resume los filtros y abre el panel en móvil. */
 export function MobileFiltersButton() {
   const { period, filters, epics, setFiltersOpen } = useApp();
-  const epic = filters.epics.length === 1 ? epicShortLabels(epics).get(filters.epics[0]) : undefined;
+  const epic = epicSelectionLabel(epics, filters.epics);
   return (
     <button onClick={() => setFiltersOpen(true)} className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm shadow-sm">
       <SlidersHorizontal className="size-4 shrink-0 text-accent-fg" />

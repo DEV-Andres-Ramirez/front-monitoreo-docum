@@ -125,7 +125,7 @@ export function MobileNav() {
           <PeriodPanel />
           <div>
             <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Épica</p>
-            <EpicFilter />
+            <EpicFilter inline />
           </div>
           {tags.length > 0 && (
             <div>

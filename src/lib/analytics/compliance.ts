@@ -1,6 +1,6 @@
-// Cumplimiento de HU y Tareas de las épicas monitoreadas (vista "Cumplimiento", hoy solo 005).
+// Cumplimiento de HU, Tareas y Bugs de las épicas monitoreadas (vista "Cumplimiento", hoy solo 005).
 // TypeScript puro, se calcula en el cliente. Cuenta TODO lo de las épicas (de quien sea o sin asignar);
-// con personas elegidas en el filtro, solo lo asignado a ellas.
+// con personas elegidas en el filtro, solo lo asignado a ellas; con épicas elegidas, solo lo de ellas.
 import type { ProjectCompliance } from "@/lib/config";
 import { isoLocalDate } from "@/lib/dates";
 import { buckets, type TimeUnit } from "./metrics";
@@ -42,6 +42,13 @@ export const TASK_STAGE_LABEL: Record<Stage, string> = {
   Resolved: "Entregadas",
   Completed: "Cerradas",
 };
+/** Bugs: Nuevo → En desarrollo → Revisión QA (Devuelto, Bloqueado, Certificado para prod.) → Cerrado. */
+export const BUG_STAGE_LABEL: Record<Stage, string> = {
+  Proposed: "Nuevos",
+  InProgress: "En desarrollo",
+  Resolved: "En revisión QA",
+  Completed: "Cerrados",
+};
 
 const stageOf = (i: ComplianceItem): Stage => (i.cat === "Removed" ? "Proposed" : i.cat);
 
@@ -82,15 +89,30 @@ export type GroupRow = {
   label: string;
   hu: { total: number; qa: number; done: number };
   tasks: { total: number; done: number };
+  bugs: { total: number; done: number };
   overdue: number;
 };
 export type PersonRow = GroupRow & { assignee: Assignee };
 
-export type TrendPoint = { start: number; date: string; huScope: number; huQa: number; huDone: number; taskScope: number; taskDone: number };
+export type TrendPoint = {
+  start: number;
+  date: string;
+  huScope: number;
+  huQa: number;
+  huDone: number;
+  taskScope: number;
+  taskDone: number;
+  bugScope: number;
+  bugDone: number;
+};
 
 export type ComplianceAnalysis = {
   hu: TypeSummary;
   tasks: TypeSummary;
+  /** null si el proyecto no mide bugs */
+  bugs: TypeSummary | null;
+  /** Por épica monitoreada (en el orden configurado) */
+  epics: GroupRow[];
   features: GroupRow[];
   hus: HuRow[];
   people: PersonRow[];
@@ -99,6 +121,7 @@ export type ComplianceAnalysis = {
     huWithoutTasks: HuRow[];
     readyForQa: HuRow[];
     unassignedTasks: ComplianceItem[];
+    unassignedBugs: ComplianceItem[];
     overdueHu: HuRow[];
     overdueTasks: ComplianceItem[];
   };
@@ -112,6 +135,10 @@ export type ComplianceOptions = {
   period: { from: string; to: string; prevFrom: string; prevTo: string };
   /** Claves de persona elegidas en el filtro (vacío = todo) */
   people: string[];
+  /** Épicas monitoreadas del proyecto (en el orden configurado) */
+  epicIds: number[];
+  /** Épicas elegidas en el filtro (vacío = todas) */
+  epics: number[];
   unit: TimeUnit;
 };
 
@@ -149,18 +176,37 @@ function summarize(items: ComplianceItem[], level: "qa" | "done", assignees: Map
   };
 }
 
-const emptyGroup = (key: string, label: string): GroupRow => ({ key, label, hu: { total: 0, qa: 0, done: 0 }, tasks: { total: 0, done: 0 }, overdue: 0 });
+const emptyGroup = (key: string, label: string): GroupRow => ({
+  key,
+  label,
+  hu: { total: 0, qa: 0, done: 0 },
+  tasks: { total: 0, done: 0 },
+  bugs: { total: 0, done: 0 },
+  overdue: 0,
+});
 
 export function complianceAnalysis(all: ComplianceItem[], o: ComplianceOptions): ComplianceAnalysis {
   const byId = new Map(all.map((i) => [i.id, i]));
   const assignees = new Map(all.map((i) => [i.id, classifyAssignee(o.identity, i.email, i.name)]));
+  const monitored = new Set(o.epicIds);
+  /** Épica monitoreada de la que cuelga el ítem (o él mismo, si es una) */
+  const epicOf = (i: ComplianceItem) => {
+    let cur: ComplianceItem | undefined = i;
+    for (let d = 0; cur && d < 10; d++) {
+      if (monitored.has(cur.id)) return cur.id;
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+    }
+    return null;
+  };
   const selected = new Set(o.people);
-  const inScope = (i: ComplianceItem) => !selected.size || selected.has(assignees.get(i.id)!.key);
+  const selectedEpics = new Set(o.epics);
+  const inScope = (i: ComplianceItem) => (!selected.size || selected.has(assignees.get(i.id)!.key)) && (!selectedEpics.size || selectedEpics.has(epicOf(i) ?? -1));
 
   const allHus = all.filter((i) => i.type === o.config.userStory);
   const allTasks = all.filter((i) => i.type === o.config.task);
   const hus = allHus.filter(inScope);
   const tasks = allTasks.filter(inScope);
+  const bugs = o.config.bug ? all.filter((i) => i.type === o.config.bug && inScope(i)) : [];
 
   const featureOf = (i: ComplianceItem) => {
     let cur = i.parentId ? byId.get(i.parentId) : undefined;
@@ -192,9 +238,15 @@ export function complianceAnalysis(all: ComplianceItem[], o: ComplianceOptions):
     };
   });
 
-  // Por Feature y por persona
+  // Por épica, por Feature y por persona
+  const epicGroups = new Map<string, GroupRow>(o.epicIds.filter((id) => !selectedEpics.size || selectedEpics.has(id)).map((id) => [String(id), emptyGroup(String(id), byId.get(id)?.title ?? `Épica #${id}`)]));
   const featureGroups = new Map<string, GroupRow>();
   const personGroups = new Map<string, PersonRow>();
+  const epic = (i: ComplianceItem) => {
+    const key = String(epicOf(i) ?? "none");
+    if (!epicGroups.has(key)) epicGroups.set(key, emptyGroup(key, "Sin épica"));
+    return epicGroups.get(key)!;
+  };
   const feature = (i: ComplianceItem) => {
     const f = featureOf(i);
     const key = f ? String(f.id) : "none";
@@ -207,7 +259,7 @@ export function complianceAnalysis(all: ComplianceItem[], o: ComplianceOptions):
     return personGroups.get(a.key)!;
   };
   for (const h of hus) {
-    for (const g of [feature(h), person(h)]) {
+    for (const g of [epic(h), feature(h), person(h)]) {
       g.hu.total += 1;
       if (h.qa) g.hu.qa += 1;
       if (h.done) g.hu.done += 1;
@@ -215,15 +267,22 @@ export function complianceAnalysis(all: ComplianceItem[], o: ComplianceOptions):
     }
   }
   for (const t of tasks) {
-    for (const g of [feature(t), person(t)]) {
+    for (const g of [epic(t), feature(t), person(t)]) {
       g.tasks.total += 1;
       if (t.done) g.tasks.done += 1;
       if (taskOverdue(t)) g.overdue += 1;
     }
   }
+  for (const b of bugs) {
+    for (const g of [epic(b), feature(b), person(b)]) {
+      g.bugs.total += 1;
+      if (b.done) g.bugs.done += 1;
+      if (taskOverdue(b)) g.overdue += 1;
+    }
+  }
 
   // Tendencia acumulada desde el primer ítem creado hasta hoy
-  const firstCreated = [...hus, ...tasks].map((i) => i.created).filter((d): d is string => !!d).sort()[0] ?? o.today;
+  const firstCreated = [...hus, ...tasks, ...bugs].map((i) => i.created).filter((d): d is string => !!d).sort()[0] ?? o.today;
   const range = { from: new Date(`${firstCreated}T00:00:00`).getTime(), to: new Date(`${o.today}T23:59:59`).getTime() };
   const upTo = (d: string | null, end: string) => d !== null && d <= end;
   const trend = buckets(range, o.unit).map<TrendPoint>((b) => {
@@ -236,6 +295,8 @@ export function complianceAnalysis(all: ComplianceItem[], o: ComplianceOptions):
       huDone: hus.filter((i) => upTo(i.done, end)).length,
       taskScope: tasks.filter((i) => upTo(i.created, end)).length,
       taskDone: tasks.filter((i) => upTo(i.done, end)).length,
+      bugScope: bugs.filter((i) => upTo(i.created, end)).length,
+      bugDone: bugs.filter((i) => upTo(i.done, end)).length,
     };
   });
 
@@ -243,16 +304,22 @@ export function complianceAnalysis(all: ComplianceItem[], o: ComplianceOptions):
   return {
     hu: summarize(hus, "qa", assignees, o),
     tasks: summarize(tasks, "done", assignees, o),
+    bugs: o.config.bug ? summarize(bugs, "done", assignees, o) : null,
+    epics: [...epicGroups.values()],
     features: [...featureGroups.values()].sort((a, b) => (a.key === "none" ? 1 : b.key === "none" ? -1 : byName(a, b))),
     hus: huRows,
     people: [...personGroups.values()].sort(
-      (a, b) => Number(a.assignee.kind === "sinAsignar") - Number(b.assignee.kind === "sinAsignar") || b.hu.total + b.tasks.total - (a.hu.total + a.tasks.total) || byName(a, b),
+      (a, b) =>
+        Number(a.assignee.kind === "sinAsignar") - Number(b.assignee.kind === "sinAsignar") ||
+        b.hu.total + b.tasks.total + b.bugs.total - (a.hu.total + a.tasks.total + a.bugs.total) ||
+        byName(a, b),
     ),
     trend,
     findings: {
       huWithoutTasks: huRows.filter((r) => r.tasksTotal === 0 && !r.item.done),
       readyForQa: huRows.filter((r) => r.readyForQa),
       unassignedTasks: tasks.filter((t) => !t.done && assignees.get(t.id)!.kind === "sinAsignar"),
+      unassignedBugs: bugs.filter((b) => !b.done && assignees.get(b.id)!.kind === "sinAsignar"),
       overdueHu: huRows.filter((r) => r.overdue),
       overdueTasks: tasks.filter(taskOverdue),
     },

@@ -6,7 +6,7 @@ import type { ComplianceItem, ComplianceResponse } from "@/lib/analytics/complia
 import { db } from "@/lib/supabase";
 
 /**
- * Cumplimiento de HU y Tareas (si el proyecto lo tiene configurado): todos los ítems de esos tipos
+ * Cumplimiento de HU, Tareas y Bugs (si el proyecto lo tiene configurado): todos los ítems de esos tipos
  * que cuelgan de las épicas monitoreadas, sin filtrar por periodo, persona ni Global. Solo lee de Supabase.
  */
 export async function GET(_request: NextRequest, ctx: RouteContext<"/api/projects/[project]/compliance">) {
@@ -22,7 +22,7 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/project
     const { data, error } = await db().rpc("azure_compliance_items", {
       p_project: project,
       p_epics: cfg.epicIds,
-      p_types: [compliance.userStory, compliance.task],
+      p_types: [compliance.userStory, compliance.task, compliance.bug].filter((t): t is string => !!t),
     });
     if (error) throw new Error(error.message);
     return Response.json({ projectKey: project, compliance, items: (data ?? []) as ComplianceItem[], generatedAt: new Date().toISOString() } satisfies ComplianceResponse);

@@ -5,7 +5,7 @@ Tablero interno de **monitoreo automático** del trabajo de cada colaborador en 
 | Proyecto | Cliente | Azure DevOps (org / proyecto) | Épicas monitoreadas (único alcance del tablero) |
 |---|---|---|---|
 | **348 · SGDEA Acueducto** | EAAB – Acueducto de Bogotá | `LinkTic` / `348 - SGDEA ACUEDUCTO` | `539200` Certificación CORE · `539569` Certificación Temáticos |
-| **005 · Positiva SGDEA** | Positiva · 3T Capital | `3tcapitalco` / `005 - POSITIVA SGDEA NEW` | `578` Deuda Técnica y Contractual |
+| **005 · Positiva SGDEA** | Positiva · 3T Capital | `3tcapitalco` / `005 - POSITIVA SGDEA NEW` | `578` Deuda Técnica y Contractual · `568` Épica de gestión · `153` Deuda · `82` NP - Evolutivos |
 
 ## ¿Para qué sirve?
 
@@ -13,7 +13,10 @@ El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Maste
 
 > **Global** es la base de personal (planeación) de LinkTic. En la interfaz siempre se dice "Global", **nunca "Excel"**. Hoy Global se carga desde el archivo de planeación en `context/` con `scripts/generate-seed.py`.
 >
-> El **personal del proyecto** es el de Global **más los miembros "No Global"**: personas que trabajan en las épicas sin estar en Global para ese proyecto. Cuentan en el análisis, pero no tienen cargo ni % (sin capacidad ni utilización) y llevan la etiqueta **No Global** junto al nombre. Hoy son, en 348, **David Felipe Vergara Bogota** (`david.vergara@linktic.com`) y **Jhostin Alexander Ladino Gonzalez** (`jhostin.ladino@linktic.com`).
+> El **personal del proyecto** es el de Global **más los miembros "No Global"**: personas que trabajan en las épicas sin estar en Global para ese proyecto. Cuentan en el análisis, pero no tienen cargo ni % (sin capacidad ni utilización) y llevan la etiqueta **No Global** junto al nombre. Hoy son:
+>
+> - **348:** David Felipe Vergara Bogota (`david.vergara@linktic.com`) y Jhostin Alexander Ladino Gonzalez (`jhostin.ladino@linktic.com`) (0009).
+> - **005:** Cristian Roa, Carlos Cansina, Josimar Bonilla y Dario Lopez (`@3tcapital.co`), y Jose Fernando Lozano Murcia (Global de 348) (0011). El alias que hacía contar a Dario Lopez como Luis Gabriel Melendez Gongora se quitó, con traza en la bitácora.
 
 Calcula automáticamente:
 
@@ -21,7 +24,8 @@ Calcula automáticamente:
 - **Horas:** 1 punto de esfuerzo = 1 hora. Se toman Story Points o Effort; si no hay, la Estimación original. **No hay doble conteo**: si una HU y sus tareas tienen valor, suman las tareas. Se compara con el "Trabajo completado" que reportan en Azure.
 - **Tiempos:** creación → cierre (*lead time*), en curso → cerrado (*cycle time*) y la **traza completa de cambios de estado**, con la duración en cada uno.
 - **Plan vs. real:** fecha de inicio y fecha objetivo (del ítem o, si no las tiene, del sprint) frente al inicio real y la **entrega real** (campo "Fecha de entrega real" si existe, si no "Entregado" o el cierre). De ahí salen la puntualidad, los vencidos y los días de retraso.
-- **Capacidad y utilización:** capacidad = 8 h × % asignado × días hábiles vigentes; utilización = horas entregadas ÷ capacidad.
+- **Capacidad y utilización:** capacidad = 8 h × % asignado × días hábiles vigentes **transcurridos** en el periodo (hasta hoy: en el periodo actual no cuentan días futuros); utilización = horas entregadas ÷ capacidad.
+- **Semáforo de cada colaborador** (ambos proyectos): **Va mal**, **En riesgo**, **Va bien** o **Sin carga** en el periodo elegido, con las razones. Ver "Semáforo de colaboradores".
 
 ## Funcionalidades (v3 · monitoreo automático)
 
@@ -30,7 +34,7 @@ Calcula automáticamente:
   - **Periodo:** atajos **Hoy, Ayer, Esta semana** (por defecto) y **Semana pasada**. En "Más periodos" están sprint actual, 14/30/90 días, este mes, trimestre o rango personalizado. La semana va de lunes a domingo.
     - **Comparación de los indicadores:** Hoy y Ayer, contra el día hábil anterior; las semanas, contra los mismos días de la semana anterior; el resto, contra el periodo anterior de igual duración.
   - **Colaboradores:** multiselección, más "Incluir fuera de Global".
-  - **Épica:** en 348, "Todas las épicas · CORE · Temáticos"; en 005 se muestra solo su épica. Fuera de las épicas monitoreadas no se analiza nada.
+  - **Épica:** en 348, botones "Todas las épicas · CORE · Temáticos"; en 005 (4 épicas), un panel con casillas de selección múltiple (ninguna = todas). Fuera de las épicas monitoreadas no se analiza nada.
   - **Tag** (solo 348): "Todos los tags · Video · Informe". Aplica a todas las vistas. Las HU no llevan tags, así que con un tag elegido solo quedan sus tareas.
 - **Vistas:**
   - **Resumen** (`/`):
@@ -38,47 +42,66 @@ Calcula automáticamente:
     - **entregas por día o por semana** (selector Días / Semanas, compartido con la carga de Colaboradores), distribución por estado y **flujo acumulado (CFD)**;
     - si el periodo dura menos de 7 días (Hoy, Ayer, inicio de semana), las gráficas de tendencia muestran los últimos 7 días y resaltan el periodo elegido;
     - **burnup** de horas y **dispersión de cycle time** con P50/P85;
+    - tarjeta **Semáforo del equipo**: cuántos van mal, en riesgo, bien o sin carga, con la lista de quién va mal y quién está en riesgo (y por qué);
     - tarjeta de **alertas**: vencidos y trabajo estancado.
   - **Cronograma** (`/cronograma`): **diagrama de Gantt**.
     - Agrupado por colaborador, feature o sprint.
     - Cada ítem muestra la barra **planeada** (inicio → objetivo), la barra **real** coloreada por estado, el ◆ de la fecha objetivo, el ● de la entrega real y el **tramo de retraso** en rojo.
     - Incluye línea de "hoy", bandas de sprint, zoom día/semana/mes, orden, filtros por tipo y "solo con retraso".
   - **Colaboradores** (`/colaboradores`):
-    - **scorecards** (tarjetas o tabla) con utilización, puntualidad, cycle time y vencidos;
+    - **semáforo del equipo** arriba: contadores por nivel que filtran (por defecto se ve a quienes tienen carga), barra apilada y "¿Cómo se calcula?". El orden por defecto es por estado;
+    - **scorecards** (tarjetas o tabla) con utilización, puntualidad, cycle time y vencidos. Cada tarjeta lleva el color del nivel (borde, tinte y barra lateral; quien va mal, con un punto que late; sin carga, atenuada y punteada), la etiqueta y sus razones;
     - **carga** por día o por semana (mapa de calor persona × día/semana);
     - gráficas de estado por persona y de estimado frente a reportado;
-    - sección **"Fuera de Global"**: personas con ítems en las épicas que no son personal del proyecto (p. ej. en 005, Cristian Roa, Dario Lopez y Josimar Bonilla). No cuentan en los indicadores salvo que se active "Incluir fuera de Global", y se pueden vincular si son la misma persona con otro correo;
+    - sección **"Fuera de Global"**: personas con ítems en las épicas que no son personal del proyecto. No cuentan en los indicadores salvo que se active "Incluir fuera de Global", y se pueden vincular si son la misma persona con otro correo;
     - los miembros **No Global** aparecen con su etiqueta en tarjetas, tabla, carga, gráficas, Gantt, detalle, filtro de personas y ⌘K.
   - **Backlog Azure** (`/backlog`): árbol Épica → Feature → HU → Tarea con estado, asignado, objetivo, entrega y horas acumuladas.
   - **Bitácora** (`/bitacora`): ingresos, sincronizaciones (con conteos o errores) y vinculaciones.
   - **Cumplimiento** (`/cumplimiento`, solo 005): ver la sección "Cumplimiento de Positiva". El menú depende del proyecto (`navItems()` en `src/components/shell/nav.ts`), y los atajos 1…n siguen su orden.
 - **Detalle de un ítem:** ruta Épica › Feature › HU, horas y su origen, plan frente a real, puntualidad, **línea de tiempo de estados** con duraciones e ítems hijos.
-- **Detalle de un colaborador:** utilización, KPIs, **mini-Gantt** e ítems por estado.
+- **Detalle de un colaborador:** semáforo con sus razones, utilización, KPIs, **mini-Gantt** e ítems por estado.
 - **Pantalla para TV:** tamaño de 75 % a 300 % (− / % / +) y pantalla completa. Atajos `+`, `−`, `0` y `F`.
 - **Tema** claro, oscuro o del sistema, sin parpadeo.
 - **⌘K** para buscar personas, ítems, periodos y acciones; `1–5` cambian de vista; `?` muestra la ayuda.
 - **Accesibilidad:** colores de estado validados para daltonismo, estados siempre con texto, vista de tabla en cada gráfica y `prefers-reduced-motion`.
 
+## Semáforo de colaboradores (ambos proyectos)
+
+Para decidir rápido con quién hablar. Se calcula por persona en el periodo elegido (`src/lib/analytics/health.ts`, desde `perPerson()`; umbrales en `HEALTH_RULES`):
+
+| Nivel | Cuándo |
+|---|---|
+| **Sin carga** | No tiene ítems en las épicas monitoreadas en el periodo. |
+| **Va mal** | 3 o más vencidos · sin entregas con 3+ días hábiles transcurridos · utilización < 50 % (solo Global) · a tiempo < 60 % (con 3+ entregas con objetivo). |
+| **En riesgo** | 1–2 vencidos · utilización 50–80 % · a tiempo 60–80 % · nada en curso teniendo ítems por iniciar. |
+| **Va bien** | Entregó y nada de lo anterior. |
+
+- Con menos de 3 días hábiles transcurridos (Hoy, Ayer, lunes de "Esta semana") solo cuentan vencidos y puntualidad, y "Va bien" no exige entregas.
+- La utilización usa la capacidad a la fecha. Los No Global y los de fuera de Global no tienen capacidad, así que no se juzgan por utilización.
+- Se ve en Colaboradores (tarjetas, tabla y carga), en el detalle del colaborador, en la tarjeta del Resumen y en la tabla por persona de Cumplimiento. Siempre con ícono y texto, no solo color.
+
 ## Cumplimiento de Positiva (solo 005)
 
-Vista **Cumplimiento** (2.ª en el menú de 005), más una tarjeta compacta arriba del Resumen con enlace. Mide, sobre la épica 578, cuántas **HU** y **Tareas** hay, cuántas se completaron y el **% de cumplimiento**.
+Vista **Cumplimiento** (2.ª en el menú de 005), más una tarjeta compacta arriba del Resumen con enlace. Mide, sobre las 4 épicas monitoreadas, cuántas **HU**, **Tareas** y **Bugs** hay, cuántos se completaron y el **% de cumplimiento**.
 
-- **Qué cuenta:** **todas** las HU y tareas de la épica, de quien sean o sin asignar (incluye a quienes no están en Global). Con personas elegidas en el filtro, solo las de ellas.
+- **Qué cuenta:** **todos** los ítems de esos tipos de las épicas, de quien sean o sin asignar (incluye a quienes no están en Global). Con personas elegidas en el filtro, solo los de ellas; con épicas elegidas, solo los de ellas.
 - **HU, en dos niveles:**
   - **cumplimiento = en producción** (categoría Completed, estado `10. En Producción`);
   - también **entregadas a QA o más** (categoría Resolved: `7. Backlog QA`, `7.1`, `7.2`).
 - **Tarea:** cumplida al **cerrarse** (`Closed`).
+- **Bug:** cumplido al **cerrarse** (`4. Cerrado`); también se muestra cuántos están en revisión QA o más (`3. Revisión QA`, `3.1 Devuelto`, `3.2 Bloqueado`, `3.4 Certificado Para Prod`).
 - **Vencida:** objetivo (o fin del sprint) pasado sin cumplir. En las HU, sin llegar a QA.
 - **Secciones:**
-  1. tarjetas de HU y Tareas: % de cumplimiento, barras, flujo por etapa, completadas en el periodo (frente a la comparación del periodo), en curso, por iniciar, vencidas, sin tareas o sin asignar;
+  1. tarjetas de HU, Tareas y Bugs: % de cumplimiento, barras, flujo por etapa, completadas en el periodo (frente a la comparación del periodo), en curso, por iniciar, vencidas, sin tareas o sin asignar;
   2. **Puntos de atención**:
      - HU con todas sus tareas cerradas que no pasan a QA;
      - HU sin tareas;
      - vencidas;
      - tareas sin asignar;
-  3. **flujo por etapa** (HU o Tareas, con tabla de estados de Azure);
-  4. **avance acumulado** de HU y de tareas frente al total (por día o semana);
-  5. cumplimiento **por Feature**, **por HU** (avance por sus tareas, con búsqueda, filtros y orden) y **por persona** (etiquetas No Global / Fuera de Global).
+     - bugs abiertos sin asignar;
+  3. **flujo por etapa** (HU, Tareas o Bugs, con tabla de estados de Azure);
+  4. **avance acumulado** de HU, tareas y bugs frente al total (por día o semana);
+  5. cumplimiento **por épica**, **por Feature**, **por HU** (avance por sus tareas, con búsqueda, filtros y orden) y **por persona** (etiquetas No Global / Fuera de Global y semáforo del periodo).
 - **Configuración:** `PROJECTS["005"].compliance` en `src/lib/config.ts`.
 - **Datos:** `GET /api/projects/[p]/compliance` → RPC `azure_compliance_items` (0010). No se filtra por periodo; se calcula en `src/lib/analytics/compliance.ts`.
 
@@ -163,7 +186,7 @@ pnpm dev               # http://localhost:3000
 | `AZURE_005_ORG` / `AZURE_005_PROJECT` / `AZURE_005_EPIC_IDS` / `AZURE_005_PAT` | Lectura del proyecto 005 (REST + Analytics) | ✅ |
 | `SUPABASE_ACCESS_TOKEN` | Token personal `sbp_…`, solo para tooling local | ❌ |
 
-> `AZURE_<p>_EPIC_IDS` define el **alcance** del tablero: solo se analiza lo que cuelga de esas épicas (348: `539200,539569` · 005: `578`).
+> `AZURE_<p>_EPIC_IDS` define el **alcance** del tablero: solo se analiza lo que cuelga de esas épicas (348: `539200,539569` · 005: `578,568,153,82`). Al cambiarla en Vercel hay que volver a desplegar; no hace falta sincronizar, porque la copia de Supabase ya tiene todo el proyecto.
 
 ## Base de datos (Supabase · `baas-monitoreo-docum`)
 
@@ -176,7 +199,8 @@ pnpm dev               # http://localhost:3000
 | `0005_azure_dataset_assigned.sql` | `azure_dataset(p, desde, hasta)` solo con ítems asignados (**legado**: se conserva para despliegues anteriores) |
 | `0006_dataset_monitored_epics.sql` | `azure_dataset(p, desde, hasta, épicas)`: solo el árbol de las épicas monitoreadas |
 | `0008_goal_tags.sql` | `azure_dataset` devuelve los tags; nuevo RPC `azure_goal_tasks` (tareas con tags de la meta, sin filtrar por periodo ni persona) |
-| `0010_compliance_items.sql` | RPC `azure_compliance_items`: todas las HU y tareas (y Features/Épicas) de las épicas, para el cumplimiento |
+| `0011_no_global_005.sql` | Agrega a 005 como No Global a Cristian Roa, Carlos Cansina, Josimar Bonilla, Dario Lopez y Jose Fernando Lozano Murcia, y quita el alias de Dario Lopez (con traza en la bitácora) |
+| `0010_compliance_items.sql` | RPC `azure_compliance_items`: todos los ítems de los tipos pedidos (HU, tareas y bugs), más Features y Épicas, de las épicas, para el cumplimiento |
 | `0009_no_global_members.sql` | `project_members.in_global`; cargo, % y cédula opcionales; agrega a David Vergara y Jhostin Ladino a 348 como No Global |
 | `0007_dataset_backfilled_delivery.sql` | Un ítem entregado en el periodo cuenta aunque se haya creado después (fecha de entrega real registrada a posteriori); bordes ±1 día |
 
@@ -233,7 +257,7 @@ src/
     charts/     # Chart.js: flow-charts (throughput, CFD, burnup, cycle time, estados, estimado), chart-card, chart-theme
     dashboard/  # work-item-sheet (traza de estados), member-sheet, client-api (fetch + preferencias)
     ui/         # primitives, sheet, popover, theme, display (escala TV + pantalla completa)…
-supabase/migrations/   # 0001 → 0010
+supabase/migrations/   # 0001 → 0011
 scripts/               # generate-seed.py, apply-migrations.mjs
 context/               # archivo de planeación de Global (contiene datos personales)
 ```

@@ -27,9 +27,11 @@ export function useCompliance() {
       today,
       period: { from: filters.from, to: filters.to, prevFrom: isoLocalDate(prevRange.from), prevTo: isoLocalDate(prevRange.to) },
       people: filters.people,
+      epicIds: ds?.epicIds ?? [],
+      epics: filters.epics,
       unit: chartUnit,
     });
-  }, [config, identity, data, projectKey, today, filters.from, filters.to, filters.people, prevRange, chartUnit]);
+  }, [config, identity, data, projectKey, today, filters.from, filters.to, filters.people, filters.epics, ds, prevRange, chartUnit]);
 
   /** Abre el detalle si el ítem está en el dataset; si no (p. ej. tarea sin asignar), lo abre en Azure. */
   const openItem = useCallback(

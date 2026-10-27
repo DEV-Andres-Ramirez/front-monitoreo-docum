@@ -1,5 +1,6 @@
 // Métricas de flujo y desempeño sobre el modelo filtrado (TypeScript puro, cliente).
 import { isBusinessDay, isoLocalDate } from "@/lib/dates";
+import { businessDaysElapsed, personHealth, type Health } from "./health";
 import type { PeriodPreset } from "./period";
 import type { StateCategory } from "./types";
 import { DAY, capacityHours, categoryAt, endOfDay, type Item, type Model, type Person } from "./model";
@@ -239,15 +240,23 @@ export type PersonRow = {
   estimated: number;
   completedWork: number;
   onTimeRate: number | null;
+  /** Entregas con fecha objetivo (base de onTimeRate) */
+  onTimeBase: number;
   cycleP50: number | null;
+  /** Capacidad a la fecha: días hábiles del periodo transcurridos hasta hoy (sin días futuros) */
   capacity: number | null;
   utilization: number | null;
   byCat: Record<StateCategory, number>;
+  /** Días hábiles del periodo transcurridos hasta hoy */
+  elapsedDays: number;
+  /** Semáforo: Va mal / En riesgo / Va bien / Sin carga (health.ts) */
+  health: Health;
 };
 
 export function perPerson(people: Person[], items: Item[], r: Range, now = Date.now()): PersonRow[] {
   const byPerson = new Map<string, Item[]>();
   for (const i of items) byPerson.set(i.personKey!, [...(byPerson.get(i.personKey!) ?? []), i]);
+  const elapsedDays = businessDaysElapsed(r, now);
   return people.map((person) => {
     const mine = byPerson.get(person.key) ?? [];
     const k = kpis(mine, r, now);
@@ -255,7 +264,10 @@ export function perPerson(people: Person[], items: Item[], r: Range, now = Date.
     const delivered = mine.filter((i) => deliveredIn(i, r));
     const byCat: Record<StateCategory, number> = { Proposed: 0, InProgress: 0, Resolved: 0, Completed: 0, Removed: 0 };
     for (const i of alive) byCat[i.cat] += 1;
-    const capacity = capacityHours(person, r.from, r.to);
+    const capacity = capacityHours(person, r.from, Math.min(r.to, now));
+    const utilization = capacity ? k.hoursDelivered / capacity : null;
+    // Por iniciar al cierre del periodo (o hoy, si el periodo llega hasta hoy), igual que el WIP de kpis()
+    const proposed = r.to >= now - DAY ? byCat.Proposed : alive.filter((i) => categoryAt(i, r.to) === "Proposed").length;
     return {
       person,
       active: alive.length,
@@ -267,10 +279,13 @@ export function perPerson(people: Person[], items: Item[], r: Range, now = Date.
       estimated: round(sum(delivered.filter((i) => i.estimate !== null).map((i) => i.estimate!))),
       completedWork: round(sum(delivered.map((i) => i.completedWork ?? 0))),
       onTimeRate: k.onTimeRate,
+      onTimeBase: k.onTimeBase,
       cycleP50: k.cycleP50,
       capacity,
-      utilization: capacity ? k.hoursDelivered / capacity : null,
+      utilization,
       byCat,
+      elapsedDays,
+      health: personHealth({ ...k, active: alive.length, utilization, proposed }, elapsedDays),
     };
   });
 }

@@ -5,10 +5,11 @@ import { Mail } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Gantt } from "@/components/gantt/gantt";
 import { useApp } from "@/components/shell/app-provider";
-import { Avatar, Chip, EmptyState, NoGlobalBadge, ProgressRing, TypeBadge } from "@/components/ui/primitives";
+import { Avatar, Chip, EmptyState, HealthBadge, NoGlobalBadge, ProgressRing, TypeBadge } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
 import { useTheme } from "@/components/ui/theme";
-import { CATEGORIES, CATEGORY_LABEL, inEpics, isAlive, perPerson } from "@/lib/analytics/metrics";
+import { HEALTH_RULES } from "@/lib/analytics/health";
+import { CATEGORIES, CATEGORY_LABEL, inEpics, inTag, isAlive, perPerson } from "@/lib/analytics/metrics";
 import { isNoGlobal, personRoleLabel, type Person } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import type { StateCategory } from "@/lib/analytics/types";
@@ -54,8 +55,8 @@ function Body({ person }: { person: Person }) {
   const dark = resolved === "dark";
   const [cat, setCat] = useState<StateCategory | "all">("all");
   const items = useMemo(
-    () => model!.work.filter((i) => i.personKey === person.key && isAlive(i, range) && inEpics(i, filters.epics)),
-    [model, person.key, range, filters.epics],
+    () => model!.work.filter((i) => i.personKey === person.key && isAlive(i, range) && inEpics(i, filters.epics) && inTag(i, filters.tag)),
+    [model, person.key, range, filters.epics, filters.tag],
   );
   const row = useMemo(() => perPerson([person], items, range, model!.now)[0], [person, items, range, model]);
   const listed = items.filter((i) => cat === "all" || i.cat === cat).sort((a, b) => (b.deliveredAt ?? b.createdAt) - (a.deliveredAt ?? a.createdAt));
@@ -70,6 +71,24 @@ function Body({ person }: { person: Person }) {
 
   return (
     <div className="space-y-5">
+      <section className="flex flex-wrap items-start gap-x-4 gap-y-2 rounded-2xl border border-line bg-surface-2 p-3" aria-label="Semáforo del periodo">
+        <div className="flex items-center gap-2">
+          <span className="text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">Semáforo</span>
+          <HealthBadge level={row.health.level} reasons={row.health.reasons} />
+        </div>
+        <ul className="min-w-0 flex-1 space-y-0.5 text-sm">
+          {row.health.reasons.map((r) => (
+            <li key={r} className="flex items-start gap-1.5">
+              <span className="mt-2 size-1 shrink-0 rounded-full bg-subtle" aria-hidden />
+              {r}
+            </li>
+          ))}
+        </ul>
+        <p className="w-full text-[0.6875rem] text-subtle sm:w-auto">
+          {row.elapsedDays} {row.elapsedDays === 1 ? "día hábil transcurrido" : "días hábiles transcurridos"}
+          {row.elapsedDays < HEALTH_RULES.minDays && row.health.level !== "idle" ? " · periodo corto: solo cuentan vencidos y puntualidad" : ""}
+        </p>
+      </section>
       <div className="flex flex-wrap items-center gap-3">
         {row.utilization !== null && (
           <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface-2 p-3">

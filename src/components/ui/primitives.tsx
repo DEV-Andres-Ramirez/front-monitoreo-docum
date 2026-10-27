@@ -1,9 +1,10 @@
 "use client";
 
 import clsx from "clsx";
-import { Loader2 } from "lucide-react";
+import { CheckCircle2, CircleDashed, Loader2, OctagonX, TriangleAlert, type LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { forwardRef, useId } from "react";
+import { HEALTH_LABEL, type HealthLevel } from "@/lib/analytics/health";
 import { typeMeta } from "@/lib/work-item-types";
 import { useTheme } from "./theme";
 
@@ -141,6 +142,43 @@ export function StatusPill({
 
 // ---------------------------------------------------------------- No Global
 /** Etiqueta de un miembro del proyecto que no está en Global (la base de personal); igual cuenta en el análisis. */
+// ---------------------------------------------------------------- Semáforo
+/** Tono de estado de cada nivel del semáforo (colores reservados: siempre con ícono y etiqueta). */
+export const HEALTH_TONE: Record<HealthLevel, StatusTone> = { bad: "critical", risk: "warning", good: "good", idle: "neutral" };
+export const HEALTH_ICON: Record<HealthLevel, LucideIcon> = { bad: OctagonX, risk: TriangleAlert, good: CheckCircle2, idle: CircleDashed };
+export const HEALTH_CLASSES: Record<HealthLevel, string> = {
+  bad: "border-critical/35 bg-critical-soft text-critical-fg",
+  risk: "border-warning/45 bg-warning-soft text-warning-fg",
+  good: "border-good/35 bg-good-soft text-good-fg",
+  idle: "border-dashed border-line-strong bg-surface-3 text-muted",
+};
+
+/** Etiqueta del semáforo (Va mal / En riesgo / Va bien / Sin carga) con ícono; el título lista las razones. */
+export function HealthBadge({ level, reasons, size = "md", className }: { level: HealthLevel; reasons?: string[]; size?: "sm" | "md"; className?: string }) {
+  const Icon = HEALTH_ICON[level];
+  return (
+    <span
+      title={reasons?.length ? `${HEALTH_LABEL[level]}: ${reasons.join(" · ")}` : HEALTH_LABEL[level]}
+      className={clsx(
+        "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border font-semibold",
+        size === "sm" ? "px-1.5 py-px text-[0.625rem]" : "px-2 py-0.5 text-[0.6875rem]",
+        HEALTH_CLASSES[level],
+        className,
+      )}
+    >
+      {level === "bad" ? (
+        <span className="relative grid place-items-center">
+          <span className="absolute size-full rounded-full bg-critical/40 motion-safe:animate-ping" aria-hidden />
+          <Icon className={clsx("relative", size === "sm" ? "size-3" : "size-3.5")} aria-hidden />
+        </span>
+      ) : (
+        <Icon className={size === "sm" ? "size-3" : "size-3.5"} aria-hidden />
+      )}
+      {HEALTH_LABEL[level]}
+    </span>
+  );
+}
+
 export function NoGlobalBadge({ className }: { className?: string }) {
   return (
     <span

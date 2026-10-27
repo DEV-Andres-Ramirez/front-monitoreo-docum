@@ -11,18 +11,26 @@ import { axes, baseOptions, verticalGradient, type ChartTheme } from "./chart-th
 import { bucketLabel } from "./flow-charts";
 
 /**
- * Avance acumulado de un tipo (HU o Tareas): alcance (ítems creados) frente a completados
+ * Avance acumulado de un tipo (HU, Tareas o Bugs): alcance (ítems creados) frente a completados
  * y, en HU, también entregados a QA. Un solo eje Y.
  */
-export function ComplianceTrendChart({ trend, kind, unit, theme }: { trend: TrendPoint[]; kind: "hu" | "tasks"; unit: TimeUnit; theme: ChartTheme }) {
+const SCOPE = { hu: (p: TrendPoint) => p.huScope, tasks: (p: TrendPoint) => p.taskScope, bugs: (p: TrendPoint) => p.bugScope };
+const DONE = { hu: (p: TrendPoint) => p.huDone, tasks: (p: TrendPoint) => p.taskDone, bugs: (p: TrendPoint) => p.bugDone };
+const LABELS = {
+  hu: { done: "HU en producción", total: "Total de HU" },
+  tasks: { done: "Tareas cerradas", total: "Total de tareas" },
+  bugs: { done: "Bugs cerrados", total: "Total de bugs" },
+};
+
+export function ComplianceTrendChart({ trend, kind, unit, theme }: { trend: TrendPoint[]; kind: "hu" | "tasks" | "bugs"; unit: TimeUnit; theme: ChartTheme }) {
   const done = categoryColor("Completed", theme.dark);
   const qa = categoryColor("Resolved", theme.dark);
   const data = useMemo<ChartData<"line", number[], string>>(() => {
-    const scope = trend.map((p) => (kind === "hu" ? p.huScope : p.taskScope));
+    const scope = trend.map(SCOPE[kind]);
     const series = [
       {
-        label: kind === "hu" ? "HU en producción" : "Tareas cerradas",
-        data: trend.map((p) => (kind === "hu" ? p.huDone : p.taskDone)),
+        label: LABELS[kind].done,
+        data: trend.map(DONE[kind]),
         borderColor: done,
         backgroundColor: verticalGradient(done, theme.dark ? 0.4 : 0.3),
         fill: "origin" as const,
@@ -47,7 +55,7 @@ export function ComplianceTrendChart({ trend, kind, unit, theme }: { trend: Tren
           ]
         : []),
       {
-        label: kind === "hu" ? "Total de HU" : "Total de tareas",
+        label: LABELS[kind].total,
         data: scope,
         borderColor: theme.reference,
         borderDash: [theme.px(6), theme.px(4)],
@@ -75,8 +83,8 @@ export function ComplianceTrendChart({ trend, kind, unit, theme }: { trend: Tren
             label: (i) => ` ${i.dataset.label}: ${i.raw}`,
             footer: (items) => {
               const p = trend[items[0].dataIndex];
-              const total = kind === "hu" ? p.huScope : p.taskScope;
-              const completed = kind === "hu" ? p.huDone : p.taskDone;
+              const total = SCOPE[kind](p);
+              const completed = DONE[kind](p);
               return total ? `Cumplimiento: ${Math.round((completed / total) * 1000) / 10} %`.replace(".", ",") : "";
             },
           },

@@ -15,7 +15,7 @@ export type NavItem = {
 
 const ALL: Omit<NavItem, "key">[] = [
   { href: "/", label: "Resumen", short: "Resumen", icon: LayoutDashboard, description: "Indicadores de flujo, entregas y alertas" },
-  { href: "/cumplimiento", label: "Cumplimiento", short: "Cumplim.", icon: ClipboardCheck, description: "HU y tareas: total, completadas y % de cumplimiento", projects: ["005"] },
+  { href: "/cumplimiento", label: "Cumplimiento", short: "Cumplim.", icon: ClipboardCheck, description: "HU, tareas y bugs: total, completados y % de cumplimiento", projects: ["005"] },
   { href: "/cronograma", label: "Cronograma", short: "Gantt", icon: CalendarRange, description: "Gantt plan vs. real por colaborador" },
   { href: "/colaboradores", label: "Colaboradores", short: "Equipo", icon: Users, description: "Desempeño, carga y estados por persona" },
   { href: "/backlog", label: "Backlog Azure", short: "Backlog", icon: Layers, description: "Épicas, features, HU y tareas (solo lectura)" },

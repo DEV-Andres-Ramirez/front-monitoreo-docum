@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
-import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ClipboardCheck, ClipboardList, FolderTree, ListChecks, Search, TrendingUp, UserX, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, Bug, CheckCircle2, ChevronDown, ClipboardCheck, ClipboardList, FolderTree, Layers, ListChecks, Search, TrendingUp, UserX, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ChartCard } from "@/components/charts/chart-card";
@@ -11,9 +11,10 @@ import { useChartTheme } from "@/components/charts/chart-theme";
 import { ComplianceTrendChart } from "@/components/charts/compliance-charts";
 import { bucketLabel } from "@/components/charts/flow-charts";
 import { useApp } from "@/components/shell/app-provider";
-import { Avatar, Chip, EmptyState, NoGlobalBadge, Segmented, Skeleton } from "@/components/ui/primitives";
+import { Avatar, Chip, EmptyState, HealthBadge, NoGlobalBadge, Segmented, Skeleton } from "@/components/ui/primitives";
 import { useTheme } from "@/components/ui/theme";
 import {
+  BUG_STAGE_LABEL,
   HU_STAGE_LABEL,
   STAGES,
   TASK_STAGE_LABEL,
@@ -24,15 +25,17 @@ import {
   type Stage,
   type TypeSummary,
 } from "@/lib/analytics/compliance";
+import type { Health } from "@/lib/analytics/health";
 import { normalizeText, type Assignee } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import { DatasetGate } from "./dataset-gate";
+import { useTeamRows } from "./team-health";
 import { useCompliance } from "./use-compliance";
 
 export const pctText = (v: number) => `${(Math.round(v * 1000) / 10).toLocaleString("es-CO")} %`;
 const shortDate = (iso: string) => format(new Date(`${iso}T12:00:00`), "d MMM", { locale: es });
 
-/** Vista "Cumplimiento": HU y Tareas de las épicas monitoreadas — total, completadas y % (hoy, Positiva). */
+/** Vista "Cumplimiento": HU, Tareas y Bugs de las épicas monitoreadas — total, completados y % (hoy, Positiva). */
 export function ComplianceView() {
   const { project } = useApp();
   if (!project.compliance) {
@@ -70,29 +73,51 @@ function Compliance() {
       </div>
     );
   }
+  const withBugs = analysis.bugs !== null;
   return (
     <div className="space-y-5">
       <Header />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className={clsx("grid grid-cols-1 gap-4", withBugs ? "md:grid-cols-2 2xl:grid-cols-3" : "lg:grid-cols-2")}>
         <TypeCard kind="hu" s={analysis.hu} withoutTasks={analysis.findings.huWithoutTasks.length} />
         <TypeCard kind="tasks" s={analysis.tasks} />
+        {analysis.bugs && <TypeCard kind="bugs" s={analysis.bugs} className="md:col-span-2 2xl:col-span-1" />}
       </div>
       <Findings a={analysis} onOpen={openItem} />
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <div className={clsx("grid grid-cols-1 gap-4", withBugs ? "xl:grid-cols-2" : "xl:grid-cols-3")}>
         <FlowCard a={analysis} />
         <TrendCard a={analysis} kind="hu" />
         <TrendCard a={analysis} kind="tasks" />
+        {withBugs && <TrendCard a={analysis} kind="bugs" />}
       </div>
-      <FeatureTable rows={analysis.features} />
+      {analysis.epics.length > 1 && (
+        <GroupTable
+          rows={analysis.epics}
+          withBugs={withBugs}
+          icon={Layers}
+          title="Cumplimiento por épica"
+          subtitle="HU, tareas y bugs completados sobre el total de cada épica monitoreada"
+          label="Épica"
+        />
+      )}
+      <GroupTable
+        rows={analysis.features}
+        withBugs={withBugs}
+        icon={FolderTree}
+        title="Cumplimiento por Feature"
+        subtitle={`HU en producción y en QA o más, y tareas${withBugs ? " y bugs" : ""} cerrados, sobre el total de cada Feature`}
+        label="Feature"
+      />
       <HuTable rows={analysis.hus} onOpen={openItem} />
-      <PeopleTable rows={analysis.people} />
+      <PeopleTable rows={analysis.people} withBugs={withBugs} />
     </div>
   );
 }
 
 // ------------------------------------------------------------------ Encabezado
 function Header() {
-  const { epics, sync, filters } = useApp();
+  const { epics, sync, filters, project } = useApp();
+  const shown = filters.epics.length ? epics.filter((e) => filters.epics.includes(e.id)) : epics;
+  const what = project.compliance?.bug ? "HU, tareas y bugs" : "HU y tareas";
   return (
     <section className="card flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
       <div className="flex min-w-0 items-start gap-3">
@@ -100,11 +125,21 @@ function Header() {
           <ClipboardCheck className="size-5" />
         </span>
         <div className="min-w-0">
-          <h2 className="font-display text-lg font-semibold leading-tight">Cumplimiento · {epics.map((e) => e.title).join(" y ") || "épicas monitoreadas"}</h2>
-          <p className="mt-1 max-w-4xl text-xs text-muted">
-            Cuenta <strong className="font-semibold text-foreground">todas</strong> las HU y tareas de la épica, de quien sean o sin asignar
+          <h2 className="font-display text-lg font-semibold leading-tight">Cumplimiento</h2>
+          {shown.length > 0 && (
+            <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Épicas incluidas">
+              {shown.map((e) => (
+                <li key={e.id} className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[0.6875rem] font-medium text-muted" title={`Épica #${e.id}`}>
+                  <Layers className="size-3 text-accent-fg" />
+                  {e.title}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-1.5 max-w-4xl text-xs text-muted">
+            Cuenta <strong className="font-semibold text-foreground">todas</strong> las {what} de {shown.length === 1 ? "la épica" : "las épicas"}, de quien sean o sin asignar
             {filters.people.length > 0 && <> (filtrado por {filters.people.length} colaborador{filters.people.length === 1 ? "" : "es"})</>}. Una HU se cumple al llegar a producción; también
-            se muestra cuántas ya se entregaron a QA. Una tarea se cumple al cerrarse.
+            se muestra cuántas ya se entregaron a QA. Una tarea {project.compliance?.bug ? "o un bug se cumple al cerrarse" : "se cumple al cerrarse"}.
           </p>
         </div>
       </div>
@@ -173,42 +208,50 @@ function AssigneeName({ a }: { a: Assignee }) {
 }
 
 // ------------------------------------------------------------------ Tarjetas por tipo
-function TypeCard({ kind, s, withoutTasks }: { kind: "hu" | "tasks"; s: TypeSummary; withoutTasks?: number }) {
+type Kind = "hu" | "tasks" | "bugs";
+const KIND: Record<Kind, { title: string; icon: LucideIcon; done: string; qa: string | null; labels: Record<Stage, string> }> = {
+  hu: { title: "Historias de usuario", icon: ClipboardList, done: "en producción", qa: "Entregadas a QA o más", labels: HU_STAGE_LABEL },
+  tasks: { title: "Tareas", icon: ListChecks, done: "cerradas", qa: null, labels: TASK_STAGE_LABEL },
+  bugs: { title: "Bugs", icon: Bug, done: "cerrados", qa: "En revisión QA o más", labels: BUG_STAGE_LABEL },
+};
+const capitalize = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+function TypeCard({ kind, s, withoutTasks, className }: { kind: Kind; s: TypeSummary; withoutTasks?: number; className?: string }) {
   const { comparison } = useApp();
   const { resolved } = useTheme();
   const dark = resolved === "dark";
-  const hu = kind === "hu";
-  const Icon = hu ? ClipboardList : ListChecks;
+  const k = KIND[kind];
+  const Icon = k.icon;
   return (
-    <section className="card p-4 sm:p-5">
+    <section className={clsx("card p-4 sm:p-5", className)}>
       <header className="flex items-center justify-between gap-3">
         <span className="flex items-center gap-2.5">
           <span className="grid size-9 place-items-center rounded-xl bg-accent-soft text-accent-fg">
             <Icon className="size-[1.125rem]" />
           </span>
           <span>
-            <span className="block font-display text-[0.9375rem] font-semibold">{hu ? "Historias de usuario" : "Tareas"}</span>
+            <span className="block font-display text-[0.9375rem] font-semibold">{k.title}</span>
             <span className="block text-xs text-muted">{s.total.toLocaleString("es-CO")} en total</span>
           </span>
         </span>
         <span className="text-right">
           <span className="block font-display text-3xl font-semibold tabular-nums tracking-tight">{pctText(s.pctDone)}</span>
-          <span className="block text-xs text-muted">{hu ? "en producción" : "cerradas"} · cumplimiento</span>
+          <span className="block text-xs text-muted">{k.done} · cumplimiento</span>
         </span>
       </header>
 
       <div className="mt-4 space-y-2">
         <div className="flex items-baseline justify-between text-sm">
-          <span className="text-muted">{hu ? "En producción" : "Cerradas"}</span>
+          <span className="text-muted">{capitalize(k.done)}</span>
           <span className="font-semibold tabular-nums">
             {s.done} de {s.total}
           </span>
         </div>
         <ProgressBar value={s.pctDone} color={categoryColor("Completed", dark)} className="h-2" />
-        {hu && (
+        {k.qa && (
           <>
             <div className="flex items-baseline justify-between pt-1 text-sm">
-              <span className="text-muted">Entregadas a QA o más</span>
+              <span className="text-muted">{k.qa}</span>
               <span className="font-semibold tabular-nums">
                 {s.qa} de {s.total} · {pctText(s.pctQa)}
               </span>
@@ -219,24 +262,29 @@ function TypeCard({ kind, s, withoutTasks }: { kind: "hu" | "tasks"; s: TypeSumm
       </div>
 
       <div className="mt-4">
-        <StageBar s={s} labels={hu ? HU_STAGE_LABEL : TASK_STAGE_LABEL} />
+        <StageBar s={s} labels={k.labels} />
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {hu ? (
+        {kind === "hu" ? (
           <Stat label="En el periodo" value={`+${s.qaInPeriod} QA · +${s.doneInPeriod} prod.`} hint={`${comparison}: +${s.qaInPrev} · +${s.doneInPrev}`} />
         ) : (
-          <Stat label="Cerradas en el periodo" value={`+${s.doneInPeriod}`} hint={`${comparison}: +${s.doneInPrev}`} />
+          <Stat label={`${capitalize(k.done)} en el periodo`} value={`+${s.doneInPeriod}`} hint={`${comparison}: +${s.doneInPrev}`} />
         )}
-        <Stat label={hu ? "En desarrollo" : "Activas"} value={s.byStage.InProgress} />
-        <Stat label={hu ? "Por iniciar" : "Nuevas"} value={s.byStage.Proposed} />
-        <Stat label="Vencidas" value={s.overdue} hint={hu ? "sin llegar a QA y con objetivo pasado" : "sin cerrar y con objetivo pasado"} tone={s.overdue > 0 ? "critical" : undefined} />
-        {hu ? (
+        <Stat label={k.labels.InProgress} value={s.byStage.InProgress} />
+        <Stat label={kind === "hu" ? "Por iniciar" : k.labels.Proposed} value={s.byStage.Proposed} />
+        <Stat
+          label={kind === "bugs" ? "Vencidos" : "Vencidas"}
+          value={s.overdue}
+          hint={kind === "hu" ? "sin llegar a QA y con objetivo pasado" : "sin cerrar y con objetivo pasado"}
+          tone={s.overdue > 0 ? "critical" : undefined}
+        />
+        {kind === "hu" ? (
           <Stat label="Sin tareas" value={withoutTasks ?? 0} hint="HU sin tareas creadas" tone={withoutTasks ? "warning" : undefined} />
         ) : (
           <Stat label="Sin asignar" value={s.unassigned} tone={s.unassigned > 0 ? "warning" : undefined} />
         )}
-        <Stat label={hu ? "En QA / aprobación" : "Cumplimiento"} value={hu ? s.byStage.Resolved : pctText(s.pctDone)} />
+        {kind === "tasks" ? <Stat label="Cumplimiento" value={pctText(s.pctDone)} /> : <Stat label={k.labels.Resolved} value={s.byStage.Resolved} />}
       </div>
     </section>
   );
@@ -251,6 +299,7 @@ function Findings({ a, onOpen }: { a: ComplianceAnalysis; onOpen: (id: number) =
     { key: "overdueHu", tone: "critical" as const, icon: AlertTriangle, label: "HU vencidas (sin llegar a QA)", items: a.findings.overdueHu.map((r) => ({ item: r.item, who: r.assignee })) },
     { key: "overdueTasks", tone: "critical" as const, icon: AlertTriangle, label: "Tareas vencidas (sin cerrar)", items: a.findings.overdueTasks.map((item) => ({ item, who: null })) },
     { key: "unassigned", tone: "warning" as const, icon: UserX, label: "Tareas sin asignar (pendientes)", items: a.findings.unassignedTasks.map((item) => ({ item, who: null })) },
+    { key: "unassignedBugs", tone: "warning" as const, icon: Bug, label: "Bugs abiertos sin asignar", items: a.findings.unassignedBugs.map((item) => ({ item, who: null })) },
   ].filter((f) => f.items.length > 0);
 
   const tone = {
@@ -303,14 +352,20 @@ function Findings({ a, onOpen }: { a: ComplianceAnalysis; onOpen: (id: number) =
 // ------------------------------------------------------------------ Flujo por etapa
 function FlowCard({ a }: { a: ComplianceAnalysis }) {
   const { resolved } = useTheme();
-  const [kind, setKind] = useState<"hu" | "tasks">("hu");
-  const s = kind === "hu" ? a.hu : a.tasks;
-  const labels = kind === "hu" ? HU_STAGE_LABEL : TASK_STAGE_LABEL;
-  const stages = kind === "hu" ? STAGES : STAGES.filter((st) => st !== "Resolved" || s.byStage.Resolved > 0);
+  const [picked, setKind] = useState<Kind>("hu");
+  const kind = picked === "bugs" && !a.bugs ? "hu" : picked;
+  const s = kind === "hu" ? a.hu : kind === "tasks" ? a.tasks : a.bugs!;
+  const labels = KIND[kind].labels;
+  const stages = kind === "tasks" ? STAGES.filter((st) => st !== "Resolved" || s.byStage.Resolved > 0) : STAGES;
+  const subtitle = {
+    hu: "Dónde están las HU: levantamiento → desarrollo → QA → producción",
+    tasks: "Dónde están las tareas",
+    bugs: "Dónde están los bugs: nuevo → desarrollo → revisión QA → cerrado",
+  };
   return (
     <ChartCard
       title="Flujo por etapa"
-      subtitle={kind === "hu" ? "Dónde están las HU: levantamiento → desarrollo → QA → producción" : "Dónde están las tareas"}
+      subtitle={subtitle[kind]}
       icon={FolderTree}
       actions={
         <Segmented
@@ -320,6 +375,7 @@ function FlowCard({ a }: { a: ComplianceAnalysis }) {
           options={[
             { value: "hu", label: "HU" },
             { value: "tasks", label: "Tareas" },
+            ...(a.bugs ? [{ value: "bugs" as const, label: "Bugs" }] : []),
           ]}
         />
       }
@@ -348,14 +404,17 @@ function FlowCard({ a }: { a: ComplianceAnalysis }) {
 }
 
 // ------------------------------------------------------------------ Avance acumulado
-function TrendCard({ a, kind }: { a: ComplianceAnalysis; kind: "hu" | "tasks" }) {
+function TrendCard({ a, kind }: { a: ComplianceAnalysis; kind: Kind }) {
   const { projectKey, chartUnit, setChartUnit } = useApp();
   const theme = useChartTheme(projectKey);
   const hu = kind === "hu";
+  const scopeOf = (p: ComplianceAnalysis["trend"][number]) => (hu ? p.huScope : kind === "tasks" ? p.taskScope : p.bugScope);
+  const doneOf = (p: ComplianceAnalysis["trend"][number]) => (hu ? p.huDone : kind === "tasks" ? p.taskDone : p.bugDone);
+  const noun = { hu: "HU", tasks: "tareas", bugs: "bugs" }[kind];
   return (
     <ChartCard
-      title={hu ? "Avance acumulado · HU" : "Avance acumulado · Tareas"}
-      subtitle={hu ? "Total frente a entregadas a QA y en producción" : "Total frente a cerradas"}
+      title={`Avance acumulado · ${{ hu: "HU", tasks: "Tareas", bugs: "Bugs" }[kind]}`}
+      subtitle={hu ? "Total frente a entregadas a QA y en producción" : `Total frente a ${KIND[kind].done}`}
       icon={TrendingUp}
       actions={
         <Segmented
@@ -369,17 +428,17 @@ function TrendCard({ a, kind }: { a: ComplianceAnalysis; kind: "hu" | "tasks" })
         />
       }
       legend={[
-        { label: hu ? "En producción" : "Cerradas", color: categoryColor("Completed", theme.dark) },
+        { label: capitalize(KIND[kind].done), color: categoryColor("Completed", theme.dark) },
         ...(hu ? [{ label: "QA o más", color: categoryColor("Resolved", theme.dark) }] : []),
         { label: "Total", color: theme.reference, dashed: true },
       ]}
-      summary={`Avance acumulado de ${hu ? "HU" : "tareas"} frente al total.`}
+      summary={`Avance acumulado de ${noun} frente al total.`}
       table={{
-        columns: [chartUnit === "day" ? "Día" : "Semana", "Total", ...(hu ? ["QA o más", "En producción"] : ["Cerradas"]), "Cumplimiento"],
+        columns: [chartUnit === "day" ? "Día" : "Semana", "Total", ...(hu ? ["QA o más", "En producción"] : [capitalize(KIND[kind].done)]), "Cumplimiento"],
         rows: a.trend.map((p) => {
-          const total = hu ? p.huScope : p.taskScope;
-          const done = hu ? p.huDone : p.taskDone;
-          return [bucketLabel(p.start, chartUnit), total, ...(hu ? [p.huQa, p.huDone] : [p.taskDone]), pctText(total ? done / total : 0)];
+          const total = scopeOf(p);
+          const done = doneOf(p);
+          return [bucketLabel(p.start, chartUnit), total, ...(hu ? [p.huQa, p.huDone] : [done]), pctText(total ? done / total : 0)];
         }),
       }}
       height={230}
@@ -389,28 +448,41 @@ function TrendCard({ a, kind }: { a: ComplianceAnalysis; kind: "hu" | "tasks" })
   );
 }
 
-// ------------------------------------------------------------------ Por Feature
-function FeatureTable({ rows }: { rows: GroupRow[] }) {
+// ------------------------------------------------------------------ Por épica / por Feature
+function ClosedCell({ done, total, dark, empty = "—" }: { done: number; total: number; dark: boolean; empty?: string }) {
+  if (!total) return <span className="text-xs text-subtle">{empty}</span>;
+  return (
+    <div className="flex items-center gap-3">
+      <ProgressBar value={done / total} color={categoryColor("Completed", dark)} className="w-28 shrink-0 xl:w-36" />
+      <span className="whitespace-nowrap text-xs tabular-nums text-muted">
+        <span className="font-semibold text-foreground">{done}</span> de {total} · {pctText(done / total)}
+      </span>
+    </div>
+  );
+}
+
+function GroupTable({ rows, withBugs, icon: Icon, title, subtitle, label }: { rows: GroupRow[]; withBugs: boolean; icon: LucideIcon; title: string; subtitle: string; label: string }) {
   const { resolved } = useTheme();
   const dark = resolved === "dark";
   return (
     <section className="card overflow-hidden">
       <header className="flex items-center gap-3 border-b border-line px-4 py-3 sm:px-5">
-        <span className="grid size-9 place-items-center rounded-xl bg-accent-soft text-accent-fg">
-          <FolderTree className="size-[1.125rem]" />
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent-fg">
+          <Icon className="size-[1.125rem]" />
         </span>
         <div>
-          <h3 className="font-display text-[0.9375rem] font-semibold">Cumplimiento por Feature</h3>
-          <p className="text-xs text-muted">HU en producción y en QA o más, y tareas cerradas, sobre el total de cada Feature</p>
+          <h3 className="font-display text-[0.9375rem] font-semibold">{title}</h3>
+          <p className="text-xs text-muted">{subtitle}</p>
         </div>
       </header>
       <div className="scrollbar-thin overflow-x-auto">
-        <table className="w-full min-w-[44rem] text-sm">
+        <table className={clsx("w-full text-sm", withBugs ? "min-w-[62rem]" : "min-w-[44rem]")}>
           <thead className="bg-surface-2 text-[0.6875rem] uppercase tracking-wider text-subtle">
             <tr>
-              <th className="px-4 py-2.5 text-left font-semibold">Feature</th>
+              <th className="px-4 py-2.5 text-left font-semibold">{label}</th>
               <th className="px-3 py-2.5 text-left font-semibold">HU (producción · QA+)</th>
               <th className="px-3 py-2.5 text-left font-semibold">Tareas cerradas</th>
+              {withBugs && <th className="px-3 py-2.5 text-left font-semibold">Bugs cerrados</th>}
               <th className="px-4 py-2.5 text-right font-semibold">Vencidas</th>
             </tr>
           </thead>
@@ -419,24 +491,28 @@ function FeatureTable({ rows }: { rows: GroupRow[] }) {
               <tr key={r.key} className="border-t border-line">
                 <td className="px-4 py-3 font-medium">{r.label}</td>
                 <td className="px-3 py-3">
+                  {r.hu.total === 0 ? (
+                    <span className="text-xs text-subtle">—</span>
+                  ) : (
                   <div className="flex items-center gap-3">
-                    <div className="w-36 space-y-1">
+                    <div className="w-28 shrink-0 space-y-1 xl:w-36">
                       <ProgressBar value={r.hu.total ? r.hu.done / r.hu.total : 0} color={categoryColor("Completed", dark)} />
                       <ProgressBar value={r.hu.total ? r.hu.qa / r.hu.total : 0} color={categoryColor("Resolved", dark)} />
                     </div>
-                    <span className="text-xs tabular-nums text-muted">
+                    <span className="whitespace-nowrap text-xs tabular-nums text-muted">
                       <span className="font-semibold text-foreground">{r.hu.done}</span> · {r.hu.qa} de {r.hu.total}
                     </span>
                   </div>
+                  )}
                 </td>
                 <td className="px-3 py-3">
-                  <div className="flex items-center gap-3">
-                    <ProgressBar value={r.tasks.total ? r.tasks.done / r.tasks.total : 0} color={categoryColor("Completed", dark)} className="w-36" />
-                    <span className="text-xs tabular-nums text-muted">
-                      <span className="font-semibold text-foreground">{r.tasks.done}</span> de {r.tasks.total} · {pctText(r.tasks.total ? r.tasks.done / r.tasks.total : 0)}
-                    </span>
-                  </div>
+                  <ClosedCell done={r.tasks.done} total={r.tasks.total} dark={dark} />
                 </td>
+                {withBugs && (
+                  <td className="px-3 py-3">
+                    <ClosedCell done={r.bugs.done} total={r.bugs.total} dark={dark} />
+                  </td>
+                )}
                 <td className={clsx("px-4 py-3 text-right font-semibold tabular-nums", r.overdue > 0 && "text-critical-fg")}>{r.overdue}</td>
               </tr>
             ))}
@@ -633,10 +709,13 @@ function HuTable({ rows, onOpen }: { rows: HuRow[]; onOpen: (id: number) => void
 }
 
 // ------------------------------------------------------------------ Por persona
-function PeopleTable({ rows }: { rows: (GroupRow & { assignee: Assignee })[] }) {
+function PeopleTable({ rows, withBugs }: { rows: (GroupRow & { assignee: Assignee })[]; withBugs: boolean }) {
   const { model, openPerson } = useApp();
   const { resolved } = useTheme();
   const dark = resolved === "dark";
+  // Semáforo del periodo (mismo cálculo que Colaboradores), por la misma clave de persona
+  const team = useTeamRows();
+  const health = useMemo(() => new Map<string, Health>(team.map((r) => [r.person.key, r.health])), [team]);
   return (
     <section className="card overflow-hidden">
       <header className="flex items-center gap-3 border-b border-line px-4 py-3 sm:px-5">
@@ -645,23 +724,28 @@ function PeopleTable({ rows }: { rows: (GroupRow & { assignee: Assignee })[] }) 
         </span>
         <div>
           <h3 className="font-display text-[0.9375rem] font-semibold">Cumplimiento por persona</h3>
-          <p className="text-xs text-muted">HU y tareas asignadas a cada persona y cuántas ha cumplido</p>
+          <p className="text-xs text-muted">
+            HU, tareas{withBugs ? " y bugs" : ""} asignados a cada persona y cuántos ha cumplido · el estado es el semáforo del periodo elegido
+          </p>
         </div>
       </header>
       <div className="scrollbar-thin overflow-x-auto">
-        <table className="w-full min-w-[48rem] text-sm">
+        <table className={clsx("w-full text-sm", withBugs ? "min-w-[66rem]" : "min-w-[56rem]")}>
           <thead className="bg-surface-2 text-[0.6875rem] uppercase tracking-wider text-subtle">
             <tr>
               <th className="px-4 py-2.5 text-left font-semibold">Persona</th>
+              <th className="px-3 py-2.5 text-left font-semibold">Estado del periodo</th>
               <th className="px-3 py-2.5 text-right font-semibold">HU</th>
               <th className="px-3 py-2.5 text-right font-semibold">QA o más</th>
               <th className="px-3 py-2.5 text-right font-semibold">Producción</th>
               <th className="px-3 py-2.5 text-left font-semibold">Tareas cerradas</th>
+              {withBugs && <th className="px-3 py-2.5 text-left font-semibold">Bugs cerrados</th>}
               <th className="px-4 py-2.5 text-right font-semibold">Vencidas</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => {
+              const h = health.get(r.key);
               const canOpen = r.assignee.kind !== "sinAsignar" && !!model?.people.has(r.key);
               return (
                 <tr key={r.key} className="border-t border-line">
@@ -675,21 +759,24 @@ function PeopleTable({ rows }: { rows: (GroupRow & { assignee: Assignee })[] }) 
                       <AssigneeName a={r.assignee} />
                     </button>
                   </td>
+                  <td className="px-3 py-2.5">{h ? <HealthBadge level={h.level} reasons={h.reasons} size="sm" /> : <span className="text-xs text-subtle">—</span>}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{r.hu.total || "—"}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{r.hu.total ? r.hu.qa : "—"}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{r.hu.total ? r.hu.done : "—"}</td>
-                  <td className="px-3 py-2.5">
-                    {r.tasks.total ? (
-                      <div className="flex items-center gap-2.5">
-                        <ProgressBar value={r.tasks.done / r.tasks.total} color={categoryColor("Completed", dark)} className="w-24" />
-                        <span className="whitespace-nowrap text-xs tabular-nums text-muted">
-                          <span className="font-semibold text-foreground">{r.tasks.done}</span>/{r.tasks.total} · {pctText(r.tasks.done / r.tasks.total)}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-subtle">—</span>
-                    )}
-                  </td>
+                  {[r.tasks, ...(withBugs ? [r.bugs] : [])].map((g, i) => (
+                    <td key={i} className="px-3 py-2.5">
+                      {g.total ? (
+                        <div className="flex items-center gap-2.5">
+                          <ProgressBar value={g.done / g.total} color={categoryColor("Completed", dark)} className="w-24 shrink-0" />
+                          <span className="whitespace-nowrap text-xs tabular-nums text-muted">
+                            <span className="font-semibold text-foreground">{g.done}</span>/{g.total} · {pctText(g.done / g.total)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-subtle">—</span>
+                      )}
+                    </td>
+                  ))}
                   <td className={clsx("px-4 py-2.5 text-right font-semibold tabular-nums", r.overdue > 0 && "text-critical-fg")}>{r.overdue}</td>
                 </tr>
               );

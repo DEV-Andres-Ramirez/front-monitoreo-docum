@@ -11,13 +11,14 @@ import { useCompliance } from "./use-compliance";
 
 /** Tarjeta compacta de cumplimiento para el Resumen (proyectos con análisis de cumplimiento). */
 export function ComplianceSummary() {
-  const { project, epics } = useApp();
+  const { project, epics, filters } = useApp();
   const { analysis } = useCompliance();
   const { resolved } = useTheme();
   if (!project.compliance) return null;
   if (!analysis) return <Skeleton className="h-36 w-full rounded-2xl" />;
   const dark = resolved === "dark";
-  const { hu, tasks } = analysis;
+  const { hu, tasks, bugs } = analysis;
+  const shown = filters.epics.length ? epics.filter((e) => filters.epics.includes(e.id)) : epics;
   const blocks = [
     {
       title: "Historias de usuario",
@@ -36,6 +37,20 @@ export function ComplianceSummary() {
       bars: [{ label: "Cerradas", value: tasks.pctDone, color: categoryColor("Completed", dark) }],
       period: `+${tasks.doneInPeriod} cerradas en el periodo`,
     },
+    ...(bugs
+      ? [
+          {
+            title: "Bugs",
+            main: pctText(bugs.pctDone),
+            caption: `${bugs.done} de ${bugs.total} cerrados`,
+            bars: [
+              { label: "Cerrados", value: bugs.pctDone, color: categoryColor("Completed", dark) },
+              { label: `En revisión QA o más · ${pctText(bugs.pctQa)} (${bugs.qa})`, value: bugs.pctQa, color: categoryColor("Resolved", dark) },
+            ],
+            period: `+${bugs.doneInPeriod} cerrados en el periodo`,
+          },
+        ]
+      : []),
   ];
   return (
     <section className="card p-4 sm:p-5">
@@ -45,15 +60,17 @@ export function ComplianceSummary() {
             <ClipboardCheck className="size-[1.125rem]" />
           </span>
           <div className="min-w-0">
-            <h2 className="font-display text-[0.9375rem] font-semibold leading-tight">Cumplimiento · {epics.map((e) => e.title).join(" y ")}</h2>
-            <p className="mt-0.5 text-xs text-muted">Todas las HU y tareas de la épica: total, completadas y % de cumplimiento</p>
+            <h2 className="font-display text-[0.9375rem] font-semibold leading-tight">Cumplimiento</h2>
+            <p className="mt-0.5 text-xs text-muted">
+              Todas las HU, tareas{bugs ? " y bugs" : ""} de {shown.length === 1 ? `la épica ${shown[0].title}` : `${shown.length} épicas`}: total, completados y % de cumplimiento
+            </p>
           </div>
         </div>
         <Link href="/cumplimiento" className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-xs font-semibold shadow-sm transition hover:bg-surface-2">
           Ver análisis de cumplimiento <ArrowRight className="size-3.5" />
         </Link>
       </header>
-      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className={bugs ? "mt-4 grid grid-cols-1 gap-3 md:grid-cols-3" : "mt-4 grid grid-cols-1 gap-3 md:grid-cols-2"}>
         {blocks.map((b) => (
           <div key={b.title} className="rounded-2xl border border-line bg-surface-2/60 p-4">
             <div className="flex items-baseline justify-between gap-2">

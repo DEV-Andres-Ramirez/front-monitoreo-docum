@@ -17,6 +17,7 @@ import { formatShort } from "@/lib/dates";
 import { DatasetGate } from "./dataset-gate";
 import { ComplianceSummary } from "./compliance-summary";
 import { GoalPanel } from "./goal-panel";
+import { TeamHealthCard } from "./team-health";
 
 export function OverviewView() {
   return (
@@ -156,6 +157,8 @@ function Overview() {
           </motion.div>
         ))}
       </div>
+
+      <TeamHealthCard />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <ChartCard

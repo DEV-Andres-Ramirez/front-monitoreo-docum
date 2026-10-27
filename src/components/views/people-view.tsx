@@ -12,15 +12,17 @@ import { useChartTheme } from "@/components/charts/chart-theme";
 import { EstimateChart, PersonStatesChart } from "@/components/charts/flow-charts";
 import { api, useStored } from "@/components/dashboard/client-api";
 import { useApp } from "@/components/shell/app-provider";
-import { Avatar, Button, Chip, EmptyState, NoGlobalBadge, ProgressRing, Segmented } from "@/components/ui/primitives";
+import { Avatar, Button, Chip, EmptyState, HEALTH_TONE, HealthBadge, NoGlobalBadge, ProgressRing, Segmented } from "@/components/ui/primitives";
 import { useUiScale } from "@/components/ui/display";
-import { CATEGORIES, CATEGORY_LABEL, perPerson, workloadMatrix, type PersonRow } from "@/lib/analytics/metrics";
+import type { Health, HealthLevel } from "@/lib/analytics/health";
+import { CATEGORIES, CATEGORY_LABEL, workloadMatrix, type PersonRow } from "@/lib/analytics/metrics";
 import { isNoGlobal, normalizeText, personRoleLabel, type Person } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import { DatasetGate } from "./dataset-gate";
+import { HealthCounters, HealthRules, HealthStackBar, byHealth, healthCounts, shownLevels, useHealthFilter, useTeamRows } from "./team-health";
 
 type Layout = "cards" | "table" | "heatmap";
-type SortKey = "delivered" | "utilization" | "overdue" | "wip" | "name";
+type SortKey = "health" | "delivered" | "utilization" | "overdue" | "wip" | "name";
 
 export function PeopleView() {
   return (
@@ -33,22 +35,26 @@ export function PeopleView() {
 const fmtH = (n: number) => `${n.toLocaleString("es-CO", { maximumFractionDigits: 1 })} h`;
 const pct = (r: number | null) => (r === null ? "—" : `${Math.round(r * 100)} %`);
 
+const SORTS: SortKey[] = ["health", "delivered", "utilization", "overdue", "wip", "name"];
+
 function People() {
-  const { people, scoped, range, filters, model, projectKey, openPerson } = useApp();
+  const { model, projectKey, openPerson } = useApp();
   const theme = useChartTheme(projectKey);
   const scale = useUiScale();
   const [layout, setLayout] = useStored<Layout>("docum:people-layout", "cards");
-  const [sort, setSort] = useState<SortKey>("delivered");
+  const [storedSort, setSort] = useStored<SortKey>("docum:people-sort", "health");
+  const sort = SORTS.includes(storedSort) ? storedSort : "health";
   const [query, setQuery] = useState("");
-  const [showEmpty, setShowEmpty] = useStored<boolean>("docum:people-show-empty", false);
+  const [healthFilter, setHealthFilter] = useHealthFilter();
 
-  const selected = new Set(filters.people);
-  const visible = people.filter((p) => !selected.size || selected.has(p.key));
+  const all = useTeamRows();
+  const counts = useMemo(() => healthCounts(all), [all]);
+  const levels = useMemo(() => shownLevels(healthFilter), [healthFilter]);
   const rows = useMemo(() => {
-    const all = perPerson(visible, scoped, range, model?.now).filter((r) => (r.person.inRoster || r.active > 0) && (showEmpty || r.active > 0));
     const q = normalizeText(query);
-    const filtered = all.filter((r) => !q || normalizeText(`${r.person.name} ${r.person.role ?? ""}`).includes(q));
+    const filtered = all.filter((r) => levels.includes(r.health.level) && (!q || normalizeText(`${r.person.name} ${r.person.role ?? ""}`).includes(q)));
     const by: Record<SortKey, (a: PersonRow, b: PersonRow) => number> = {
+      health: byHealth,
       delivered: (a, b) => b.hoursDelivered - a.hoursDelivered || b.delivered - a.delivered,
       utilization: (a, b) => (b.utilization ?? -1) - (a.utilization ?? -1),
       overdue: (a, b) => b.overdue - a.overdue,
@@ -56,16 +62,34 @@ function People() {
       name: (a, b) => a.person.name.localeCompare(b.person.name, "es"),
     };
     return filtered.sort(by[sort]);
-  }, [visible, scoped, range, query, sort, model, showEmpty]);
-  const emptyCount = useMemo(
-    () => perPerson(visible.filter((p) => p.inRoster), scoped, range, model?.now).filter((r) => r.active === 0).length,
-    [visible, scoped, range, model],
-  );
+  }, [all, levels, query, sort]);
+  const selectLevel = (l: HealthLevel) => setHealthFilter(healthFilter === l ? "active" : l);
   const chartRows = rows.filter((r) => r.active > 0);
   const estimateRows = rows.filter((r) => r.estimated > 0 || r.completedWork > 0);
 
   return (
     <div className="space-y-5">
+      <section className="card space-y-3 p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="font-display text-[0.9375rem] font-semibold leading-tight">Semáforo del equipo</h2>
+            <p className="mt-0.5 text-xs text-muted">
+              {healthFilter === "active"
+                ? `Mostrando a quienes tienen carga (${counts.bad + counts.risk + counts.good}) · clic en un nivel para ver solo ese`
+                : healthFilter === "all"
+                  ? `Mostrando a todo el personal (${all.length}), con o sin carga`
+                  : "Clic de nuevo en el nivel para volver a ver a quienes tienen carga"}
+            </p>
+          </div>
+          <Chip active={healthFilter === "all"} onClick={() => setHealthFilter(healthFilter === "all" ? "active" : "all")} count={all.length}>
+            {healthFilter === "all" ? "Todos" : "Ver todos"}
+          </Chip>
+        </div>
+        <HealthCounters counts={counts} active={levels} onSelect={selectLevel} />
+        <HealthStackBar counts={counts} />
+        <HealthRules />
+      </section>
+
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative w-full sm:max-w-xs">
@@ -88,14 +112,10 @@ function People() {
           />
         </div>
         <div className="flex flex-wrap items-center gap-3">
-        {emptyCount > 0 && (
-          <Chip active={showEmpty} onClick={() => setShowEmpty(!showEmpty)} count={emptyCount}>
-            {showEmpty ? "Ocultar sin ítems" : "Mostrar sin ítems en Azure"}
-          </Chip>
-        )}
         <label className="flex items-center gap-2 text-xs text-muted">
           Ordenar por
           <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="h-9 rounded-lg border border-line bg-surface px-2 text-sm text-foreground">
+            <option value="health">estado (semáforo)</option>
             <option value="delivered">horas entregadas</option>
             <option value="utilization">utilización</option>
             <option value="overdue">vencidos</option>
@@ -117,7 +137,7 @@ function People() {
       ) : layout === "table" ? (
         <PeopleTable rows={rows} onOpen={openPerson} />
       ) : (
-        <Heatmap people={rows.map((r) => r.person)} />
+        <Heatmap people={rows.map((r) => r.person)} health={new Map(rows.map((r) => [r.person.key, r.health]))} />
       )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -159,7 +179,11 @@ function People() {
       </div>
 
       <OutsidePlanning />
-      {model && <p className="text-xs text-subtle">Capacidad = 8 h × % asignado × días hábiles de su vigencia en el periodo. Utilización = horas entregadas ÷ capacidad.</p>}
+      {model && (
+        <p className="text-xs text-subtle">
+          Capacidad = 8 h × % asignado × días hábiles de su vigencia transcurridos en el periodo (hasta hoy). Utilización = horas entregadas ÷ capacidad.
+        </p>
+      )}
     </div>
   );
 }
@@ -176,7 +200,27 @@ function StateBar({ row, dark }: { row: PersonRow; dark: boolean }) {
   );
 }
 
+/**
+ * Efecto de cada nivel del semáforo en la tarjeta: borde, tinte y halo (el texto sigue en tokens de texto).
+ * En línea porque `.card` (fuera de las capas de Tailwind) fija fondo y borde y le gana a las utilidades.
+ */
+const CARD_HEALTH: Record<HealthLevel, React.CSSProperties> = {
+  bad: {
+    borderColor: "color-mix(in oklab, var(--critical) 55%, var(--line))",
+    background: "linear-gradient(135deg, var(--critical-soft), var(--surface) 60%)",
+    boxShadow: "0 0 0 0.25rem var(--critical-soft), var(--shadow-card)",
+  },
+  risk: {
+    borderColor: "color-mix(in oklab, var(--warning) 60%, var(--line))",
+    background: "linear-gradient(135deg, var(--warning-soft), var(--surface) 60%)",
+  },
+  good: { borderColor: "color-mix(in oklab, var(--good) 40%, var(--line))" },
+  idle: { borderStyle: "dashed", borderColor: "var(--line-strong)" },
+};
+const SIDE_HEALTH: Record<HealthLevel, string> = { bad: "bg-critical", risk: "bg-warning", good: "bg-good", idle: "bg-line-strong" };
+
 function PersonCard({ row: r, index, dark, onOpen }: { row: PersonRow; index: number; dark: boolean; onOpen: () => void }) {
+  const level = r.health.level;
   return (
     <motion.article
       initial={{ opacity: 0, y: 14 }}
@@ -187,16 +231,27 @@ function PersonCard({ row: r, index, dark, onOpen }: { row: PersonRow; index: nu
       onKeyDown={(e) => e.key === "Enter" && onOpen()}
       role="button"
       tabIndex={0}
-      className="card cursor-pointer p-4 transition-shadow hover:shadow-pop sm:p-5"
+      aria-label={`${r.person.name}: ${r.health.reasons.join(", ")}`}
+      className={clsx("card relative cursor-pointer overflow-hidden p-4 transition-shadow hover:shadow-pop sm:p-5", level === "idle" && "opacity-75 hover:opacity-100")}
+      style={CARD_HEALTH[level]}
     >
+      <span className={clsx("absolute inset-y-0 left-0 w-1", SIDE_HEALTH[level])} aria-hidden />
       <div className="flex items-start gap-3">
-        <Avatar name={r.person.name} status={r.overdue > 0 ? "critical" : r.wip > 0 ? "info" : "neutral"} />
+        <div className={clsx(level === "idle" && "grayscale")}>
+          <Avatar name={r.person.name} status={HEALTH_TONE[level]} />
+        </div>
         <div className="min-w-0 flex-1">
           <h3 className="flex min-w-0 items-center gap-1.5 font-semibold">
             <span className="truncate">{r.person.name}</span>
             {isNoGlobal(r.person) && <NoGlobalBadge />}
           </h3>
           <p className="truncate text-xs text-muted">{personRoleLabel(r.person, { allocation: true })}</p>
+          <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
+            <HealthBadge level={level} reasons={r.health.reasons} size="sm" />
+            <span className="truncate text-[0.6875rem] text-muted" title={r.health.reasons.join(" · ")}>
+              {r.health.reasons.join(" · ")}
+            </span>
+          </div>
         </div>
         {r.utilization !== null && (
           <div className="relative grid place-items-center" title="Utilización: horas entregadas ÷ capacidad">
@@ -236,10 +291,11 @@ function PeopleTable({ rows, onOpen }: { rows: PersonRow[]; onOpen: (key: string
   return (
     <div className="card overflow-hidden">
       <div className="scrollbar-thin overflow-x-auto">
-        <table className="w-full min-w-[56rem] text-sm">
+        <table className="w-full min-w-[68rem] text-sm">
           <thead className="bg-surface-2 text-left text-[0.6875rem] uppercase tracking-wider text-subtle">
             <tr>
               <th className="px-4 py-3 font-semibold">Colaborador</th>
+              <th className="px-3 py-3 font-semibold">Estado</th>
               <th className="px-3 py-3 text-right font-semibold">Activos</th>
               <th className="px-3 py-3 text-right font-semibold">En curso</th>
               <th className="px-3 py-3 text-right font-semibold">Entregados</th>
@@ -253,10 +309,11 @@ function PeopleTable({ rows, onOpen }: { rows: PersonRow[]; onOpen: (key: string
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.person.key} onClick={() => onOpen(r.person.key)} className="cursor-pointer border-t border-line transition-colors hover:bg-surface-2">
-                <td className="px-4 py-2.5">
+              <tr key={r.person.key} onClick={() => onOpen(r.person.key)} className={clsx("cursor-pointer border-t border-line transition-colors hover:bg-surface-2", r.health.level === "idle" && "text-muted")}>
+                <td className="relative px-4 py-2.5">
+                  <span className={clsx("absolute inset-y-1 left-0 w-1 rounded-r-full", SIDE_HEALTH[r.health.level])} aria-hidden />
                   <div className="flex items-center gap-2.5">
-                    <Avatar name={r.person.name} size="sm" />
+                    <Avatar name={r.person.name} size="sm" status={HEALTH_TONE[r.health.level]} />
                     <div className="min-w-0">
                       <p className="flex min-w-0 items-center gap-1.5 font-medium">
                         <span className="truncate">{r.person.name}</span>
@@ -265,6 +322,12 @@ function PeopleTable({ rows, onOpen }: { rows: PersonRow[]; onOpen: (key: string
                       <p className="truncate text-xs text-subtle">{personRoleLabel(r.person)}</p>
                     </div>
                   </div>
+                </td>
+                <td className="max-w-[14rem] px-3">
+                  <HealthBadge level={r.health.level} reasons={r.health.reasons} size="sm" />
+                  <p className="mt-0.5 truncate text-[0.6875rem] text-subtle" title={r.health.reasons.join(" · ")}>
+                    {r.health.reasons.join(" · ")}
+                  </p>
                 </td>
                 <td className="px-3 text-right tabular-nums">{r.active}</td>
                 <td className="px-3 text-right tabular-nums">{r.wip}</td>
@@ -285,7 +348,7 @@ function PeopleTable({ rows, onOpen }: { rows: PersonRow[]; onOpen: (key: string
 }
 
 /** Mapa de calor persona × día o semana con las horas entregadas (escala secuencial del acento). */
-function Heatmap({ people }: { people: Person[] }) {
+function Heatmap({ people, health }: { people: Person[]; health: Map<string, Health> }) {
   const { scoped, range, openPerson, chartUnit, setChartUnit } = useApp();
   const matrix = useMemo(() => workloadMatrix(people, scoped, range, chartUnit), [people, scoped, range, chartUnit]);
   const byDay = chartUnit === "day";
@@ -337,10 +400,11 @@ function Heatmap({ people }: { people: Person[] }) {
             {matrix.rows.map((r) => (
               <tr key={r.person.key} className="group">
                 <td className="sticky left-0 z-[5] border-t border-line bg-surface px-4 py-2 group-hover:bg-surface-2">
-                  <button onClick={() => openPerson(r.person.key)} className="flex max-w-[15rem] items-center gap-2.5 text-left">
+                  <button onClick={() => openPerson(r.person.key)} className="flex max-w-[20rem] items-center gap-2 text-left">
                     <Avatar name={r.person.name} size="xs" />
                     <span className="truncate text-[0.8125rem] font-medium">{r.person.name}</span>
                     {isNoGlobal(r.person) && <NoGlobalBadge />}
+                    {health.get(r.person.key) && <HealthBadge level={health.get(r.person.key)!.level} reasons={health.get(r.person.key)!.reasons} size="sm" />}
                   </button>
                 </td>
                 {r.cells.map((c, i) => (
