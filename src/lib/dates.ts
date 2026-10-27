@@ -99,6 +99,27 @@ export function isBusinessDay(iso: string) {
   return dow !== 0 && dow !== 6 && !colombianHolidays(Number(iso.slice(0, 4))).has(iso);
 }
 
+/** La misma fecha si es hábil; si no, el siguiente día hábil (lo hecho en fin de semana o festivo cuenta ahí). */
+export function businessDayOnOrAfter(iso: string) {
+  let d = iso;
+  for (let guard = 0; guard < 31 && !isBusinessDay(d); guard++) d = addDaysISO(d, 1);
+  return d;
+}
+
+/** Día hábil anterior a la fecha (sin incluirla). */
+export function previousBusinessDay(iso: string) {
+  let d = addDaysISO(iso, -1);
+  for (let guard = 0; guard < 31 && !isBusinessDay(d); guard++) d = addDaysISO(d, -1);
+  return d;
+}
+
+/** Días hábiles entre dos fechas ISO, ambas incluidas. */
+export function businessDaysBetween(from: string, to: string) {
+  const out: string[] = [];
+  for (let d = from; d <= to; d = addDaysISO(d, 1)) if (isBusinessDay(d)) out.push(d);
+  return out;
+}
+
 /** Semana laboral lunes → domingo que contiene la fecha. */
 export function weekRange(iso: string) {
   const dow = dayOfWeek(iso);

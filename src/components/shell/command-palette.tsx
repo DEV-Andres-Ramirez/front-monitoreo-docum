@@ -1,15 +1,15 @@
 "use client";
 
 import { Command } from "cmdk";
-import { CalendarRange, FolderKanban, Layers, LogOut, Maximize, Monitor, Moon, RefreshCw, RotateCcw, Search, Sun, Tag, UserRound, Users, ZoomIn, ZoomOut } from "lucide-react";
+import { CalendarRange, Eye, FolderKanban, Layers, LogOut, Maximize, Monitor, Moon, RefreshCw, RotateCcw, Search, Sun, Tag, UserRound, Users, ZoomIn, ZoomOut } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
-import { Avatar, Kbd, NoGlobalBadge, TypeBadge } from "@/components/ui/primitives";
+import { Avatar, Kbd, PersonBadges, TypeBadge } from "@/components/ui/primitives";
 import { toggleFullscreen } from "@/components/ui/display";
 import { changeScale } from "@/components/ui/display-controls";
 import { setTheme } from "@/components/ui/theme";
 import { isNoGlobal, personRoleLabel } from "@/lib/analytics/model";
-import { MORE_PRESETS, PRESET_LABEL, QUICK_PRESETS } from "@/lib/analytics/period";
+import { DEFAULT_PRESET, PRESET_LABEL, QUICK_PRESETS } from "@/lib/analytics/period";
 import { PROJECTS, PROJECT_KEYS } from "@/lib/config";
 import { useApp } from "./app-provider";
 import { navItems } from "./nav";
@@ -20,7 +20,7 @@ const norm = (s: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 
-const PRESETS = [...QUICK_PRESETS, ...MORE_PRESETS];
+const PRESETS = [DEFAULT_PRESET, ...QUICK_PRESETS];
 
 /** Paleta ⌘K: navegación, acciones, personas, ítems de Azure, periodo y pantalla. */
 export function CommandPalette() {
@@ -84,6 +84,17 @@ export function CommandPalette() {
                     <Users className="size-4 text-muted" /> Ver todo el equipo
                   </Command.Item>
                 </Command.Group>
+
+                {app.views.length > 1 && (
+                  <Command.Group heading="Qué analizar">
+                    {app.views.map((v) => (
+                      <Command.Item key={v.key} value={`analizar ${v.label}`} onSelect={() => run(() => app.setView(v.key))} keywords={["mundo", "tipo", "tareas", "hu", "bugs"]}>
+                        <Eye className="size-4 text-muted" /> Analizar {v.label.toLowerCase()}
+                        {app.view.key === v.key && <span className="ml-auto text-[0.6875rem] text-subtle">Actual</span>}
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                )}
 
                 {app.tags.length > 0 && (
                   <Command.Group heading="Tag">
@@ -168,12 +179,12 @@ export function CommandPalette() {
                     {app.people.map((p) => (
                       <Command.Item
                         key={p.key}
-                        value={`persona ${p.name} ${p.role ?? ""} ${p.email ?? ""} ${isNoGlobal(p) ? "no global" : ""}`}
+                        value={`persona ${p.name} ${p.role ?? ""} ${p.email ?? ""} ${isNoGlobal(p) ? "sin asignación al proyecto" : ""} ${p.flag?.label ?? ""}`}
                         onSelect={() => run(() => app.openPerson(p.key))}
                       >
                         <Avatar name={p.name} size="xs" />
                         <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                        {isNoGlobal(p) && <NoGlobalBadge />}
+                        <PersonBadges person={p} />
                         <span className="truncate text-xs text-subtle">{personRoleLabel(p)}</span>
                       </Command.Item>
                     ))}

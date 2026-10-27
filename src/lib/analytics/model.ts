@@ -1,7 +1,7 @@
 // Modelo de análisis (cliente): identidad, horas sin doble conteo, fechas plan/real y traza.
 import { JORNADA_HORAS } from "@/lib/config";
 import { isBusinessDay, isoLocalDate } from "@/lib/dates";
-import type { AzureItem, DatasetResponse, RosterMember, StateCategory, Transition } from "./types";
+import type { AzureItem, DatasetResponse, MemberFlag, RosterMember, StateCategory, Transition } from "./types";
 
 export const DAY = 86_400_000;
 const WORK_TYPES = new Set(["User Story", "Task", "Bug", "Product Backlog Item", "Issue"]);
@@ -22,15 +22,20 @@ export type Person = {
   endDate: string | null;
   azureEmails: string[];
   matchedBy: "alias" | "email" | "usuario" | "nombre" | "global" | null;
+  /** Marca vigente en el proyecto (vacaciones, asignado a otro proyecto…): no se evalúa ni genera alertas */
+  flag: MemberFlag | null;
 };
 
-/** Miembro del proyecto que no está en Global: cuenta en el análisis y se marca "No Global". */
+/**
+ * Miembro del proyecto que no está en Global para este proyecto: cuenta en el análisis y en la UI
+ * se marca "Sin asignación al proyecto" (internamente, "No Global").
+ */
 export const isNoGlobal = (p: Pick<Person, "inRoster" | "inGlobal">) => p.inRoster && !p.inGlobal;
 
 /** Subtítulo de una persona: cargo (± %) si es de Global; si no, de dónde sale. */
 export function personRoleLabel(p: Pick<Person, "inRoster" | "inGlobal" | "role" | "allocation">, { allocation = false } = {}) {
   if (p.inGlobal) return allocation ? `${p.role ?? "Sin cargo"} · ${Math.round(p.allocation * 100)} %` : (p.role ?? "Sin cargo");
-  return p.inRoster ? "Sin cargo ni % en Global" : "Fuera de Global";
+  return p.inRoster ? "Sin cargo ni % asignado" : "Fuera de Global";
 }
 
 export type Segment = { state: string; cat: StateCategory; from: number; to: number | null };
@@ -60,6 +65,8 @@ export type Item = AzureItem & {
   segments: Segment[];
   /** Épica monitoreada de la que cuelga (o la épica más cercana, si no cuelga de ninguna) */
   epicId: number | null;
+  /** La persona asignada tiene una marca: sus atrasos no generan alertas */
+  excused: boolean;
   featureId: number | null;
   inMonitoredEpics: boolean;
 };
@@ -192,6 +199,7 @@ export function buildModel(ds: DatasetResponse, now = Date.now()): Model {
         endDate: r?.endDate ?? null,
         azureEmails: [],
         matchedBy: by,
+        flag: r?.flag ?? null,
       };
       people.set(key, p);
     }
@@ -226,6 +234,7 @@ export function buildModel(ds: DatasetResponse, now = Date.now()): Model {
           endDate: null,
           azureEmails: [email],
           matchedBy: null,
+          flag: null,
         });
       }
     }
@@ -269,10 +278,14 @@ export function buildModel(ds: DatasetResponse, now = Date.now()): Model {
       epicId: null,
       featureId: null,
       inMonitoredEpics: false,
+      excused: false,
     };
     byId.set(raw.id, item);
     return item;
   });
+
+  // Personas con marca: sus atrasos no generan alertas
+  for (const item of items) if (item.personKey && people.get(item.personKey)?.flag) item.excused = true;
 
   // Ancestros: Feature y Épica de cada ítem, y si cuelga de una épica monitoreada
   const monitored = new Set(ds.epicIds);

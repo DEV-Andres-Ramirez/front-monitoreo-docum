@@ -39,6 +39,13 @@ export type AzureItem = {
 export type Transition = { id: number; state: string | null; cat: StateCategory; at: string };
 
 /** Personal del proyecto: Global (inGlobal) o No Global (sin cargo ni % en Global, igual cuenta en el análisis). */
+/**
+ * Marca especial de una persona en un proyecto (tabla member_flags): no se evalúa en el semáforo
+ * y sus pendientes no generan alertas, pero lo que entrega sí cuenta. `until` null = sin fecha.
+ */
+export type MemberFlagKind = "vacaciones" | "otro_proyecto" | "otro";
+export type MemberFlag = { kind: MemberFlagKind; label: string; until: string | null };
+
 export type RosterMember = {
   employeeId: string;
   name: string;
@@ -49,6 +56,8 @@ export type RosterMember = {
   startDate: string | null;
   endDate: string | null;
   inGlobal: boolean;
+  /** Marca vigente (vacaciones, asignado a otro proyecto…); null si no tiene */
+  flag: MemberFlag | null;
 };
 
 export type SyncInfo = {

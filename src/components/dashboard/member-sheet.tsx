@@ -1,18 +1,24 @@
 "use client";
 
 import clsx from "clsx";
-import { Mail } from "lucide-react";
+import { Mail, Tag, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Gantt } from "@/components/gantt/gantt";
 import { useApp } from "@/components/shell/app-provider";
-import { Avatar, Chip, EmptyState, HealthBadge, NoGlobalBadge, ProgressRing, TypeBadge } from "@/components/ui/primitives";
+import { Avatar, Button, Chip, EmptyState, FLAG_ICON, FlagBadge, HealthBadge, PersonBadges, ProgressRing, TypeBadge } from "@/components/ui/primitives";
+import { Popover } from "@/components/ui/popover";
 import { Sheet } from "@/components/ui/sheet";
 import { useTheme } from "@/components/ui/theme";
+import { useCompliance } from "@/components/views/use-compliance";
+import { BUG_STAGE_LABEL, STAGES } from "@/lib/analytics/compliance";
 import { HEALTH_RULES } from "@/lib/analytics/health";
-import { CATEGORIES, CATEGORY_LABEL, inEpics, inTag, isAlive, perPerson } from "@/lib/analytics/metrics";
-import { isNoGlobal, personRoleLabel, type Person } from "@/lib/analytics/model";
+import { CATEGORIES, CATEGORY_LABEL, inEpics, inTag, inTypes, isAlive, perPerson } from "@/lib/analytics/metrics";
+import { personRoleLabel, type Person } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
-import type { StateCategory } from "@/lib/analytics/types";
+import type { MemberFlagKind, StateCategory } from "@/lib/analytics/types";
+import { PROJECTS } from "@/lib/config";
+import { api } from "./client-api";
 
 /** Panel de un colaborador: desempeño del periodo, mini-Gantt e ítems por estado. */
 export function MemberSheet({ personKey, onClose }: { personKey: string | null; onClose: () => void }) {
@@ -30,13 +36,13 @@ export function MemberSheet({ personKey, onClose }: { personKey: string | null; 
             <div className="min-w-0">
               <p className="flex min-w-0 items-center gap-2">
                 <span className="truncate">{person.name}</span>
-                {isNoGlobal(person) && <NoGlobalBadge />}
+                <PersonBadges person={person} />
               </p>
               <p className="truncate font-sans text-sm font-normal text-muted">
                 {person.inGlobal
                   ? `${personRoleLabel(person, { allocation: true })} · ${person.assignmentType}`
                   : person.inRoster
-                    ? "Sin cargo ni % en Global · cuenta en el análisis del proyecto"
+                    ? "Sin asignación al proyecto en Global (sin cargo ni %) · igual cuenta en el análisis"
                     : "Fuera de Global para este proyecto"}
               </p>
             </div>
@@ -49,28 +55,221 @@ export function MemberSheet({ personKey, onClose }: { personKey: string | null; 
   );
 }
 
+const fmt = (n: number) => n.toLocaleString("es-CO", { maximumFractionDigits: 1 });
+
 function Body({ person }: { person: Person }) {
+  const { view } = useApp();
+  return (
+    <div className="space-y-5">
+      <FlagControl person={person} />
+      {view.dated ? <DatedBody person={person} /> : <PersonBugs person={person} />}
+    </div>
+  );
+}
+
+/** Proyecto "otro" para la marca de asignación (348 ↔ 005), con su nombre corto ("Acueducto", "Positiva"). */
+function otherProjectName(projectKey: keyof typeof PROJECTS) {
+  const other = Object.values(PROJECTS).find((p) => p.key !== projectKey);
+  return other ? other.name.replace("SGDEA", "").trim() : "otro proyecto";
+}
+
+const FLAG_KINDS: { kind: MemberFlagKind; title: string; hint: string }[] = [
+  { kind: "vacaciones", title: "En vacaciones", hint: "Opcional: hasta qué fecha" },
+  { kind: "otro_proyecto", title: "Asignado a otro proyecto", hint: "Trabaja para otro proyecto" },
+  { kind: "otro", title: "Otra", hint: "Licencia, incapacidad, capacitación…" },
+];
+
+/**
+ * Marca especial de la persona en este proyecto (vacaciones, otro proyecto…). Con marca no se evalúa en el
+ * semáforo y sus pendientes no generan alertas; lo que entrega sí cuenta. Queda en la bitácora.
+ */
+function FlagControl({ person }: { person: Person }) {
+  const { projectKey, dataset, today } = useApp();
+  const [busy, setBusy] = useState(false);
+  const [kind, setKind] = useState<MemberFlagKind>("vacaciones");
+  const defaultLabel = (k: MemberFlagKind) => (k === "vacaciones" ? "En vacaciones" : k === "otro_proyecto" ? `Asignado al proyecto de ${otherProjectName(projectKey)}` : "");
+  const [label, setLabel] = useState(defaultLabel("vacaciones"));
+  const [until, setUntil] = useState("");
+  if (!person.inRoster || !person.employeeId) return null;
+
+  async function save(close: () => void) {
+    setBusy(true);
+    try {
+      await api("/api/members/flag", {
+        method: "PUT",
+        body: JSON.stringify({ projectKey, employeeId: person.employeeId, kind, label: label.trim(), until: until || null }),
+      });
+      await dataset.mutate();
+      toast.success("Marca guardada", { description: `${person.name}: ${label.trim()}. No se evaluará en el semáforo.` });
+      close();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar la marca");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clear() {
+    setBusy(true);
+    try {
+      await api("/api/members/flag", { method: "DELETE", body: JSON.stringify({ projectKey, employeeId: person.employeeId }) });
+      await dataset.mutate();
+      toast.success("Marca quitada", { description: `${person.name} vuelve a evaluarse en el semáforo.` });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo quitar la marca");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line p-3" aria-label="Marca especial">
+      <span className="text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">Marca especial</span>
+      {person.flag ? (
+        <>
+          <FlagBadge flag={person.flag} className="text-xs" />
+          <span className="min-w-0 flex-1 text-xs text-muted">No se evalúa en el semáforo ni genera alertas; lo que entrega sí cuenta.</span>
+          <Button size="sm" variant="ghost" icon={X} loading={busy} onClick={() => void clear()}>
+            Quitar marca
+          </Button>
+        </>
+      ) : (
+        <>
+          <span className="min-w-0 flex-1 text-xs text-muted">Sin marca: se evalúa normalmente.</span>
+          <Popover
+            align="end"
+            panelClassName="w-[20rem] max-w-[calc(100vw-2rem)]"
+            trigger={({ open, toggle }) => (
+              <Button size="sm" variant="secondary" icon={Tag} onClick={toggle} aria-expanded={open}>
+                Poner marca
+              </Button>
+            )}
+          >
+            {({ close }) => (
+              <div className="space-y-3">
+                <p className="text-xs text-muted">La persona dejará de evaluarse en el semáforo y sus pendientes no generarán alertas. Lo que entregue sí cuenta.</p>
+                <div className="space-y-1">
+                  {FLAG_KINDS.map((k) => {
+                    const Icon = FLAG_ICON[k.kind];
+                    return (
+                      <button
+                        key={k.kind}
+                        onClick={() => {
+                          setKind(k.kind);
+                          setLabel(defaultLabel(k.kind));
+                        }}
+                        aria-pressed={kind === k.kind}
+                        className={clsx("flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left", kind === k.kind ? "bg-accent-soft text-accent-fg" : "hover:bg-surface-2")}
+                      >
+                        <Icon className="size-4 shrink-0" />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold">{k.title}</span>
+                          <span className="block text-[0.6875rem] text-muted">{k.hint}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <label className="block text-[0.6875rem] text-subtle">
+                  Texto de la etiqueta
+                  <input
+                    value={label}
+                    maxLength={80}
+                    onChange={(e) => setLabel(e.target.value)}
+                    placeholder="Ej.: En incapacidad"
+                    className="mt-1 h-9 w-full rounded-lg border border-line bg-surface px-2 text-sm text-foreground outline-none focus:border-accent focus:ring-4 focus:ring-accent/10"
+                  />
+                </label>
+                <label className="block text-[0.6875rem] text-subtle">
+                  Hasta (opcional; sin fecha, se quita a mano)
+                  <input
+                    type="date"
+                    value={until}
+                    min={today}
+                    onChange={(e) => setUntil(e.target.value)}
+                    className="mt-1 h-9 w-full rounded-lg border border-line bg-surface px-2 text-sm text-foreground outline-none focus:border-accent focus:ring-4 focus:ring-accent/10"
+                  />
+                </label>
+                <Button className="w-full" variant="primary" size="sm" loading={busy} disabled={!label.trim()} onClick={() => void save(close)}>
+                  Guardar marca
+                </Button>
+              </div>
+            )}
+          </Popover>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** Mundo Bugs: los bugs de la persona por estado actual (sin fechas). */
+function PersonBugs({ person }: { person: Person }) {
+  const { analysis, openItem } = useCompliance();
+  const { resolved } = useTheme();
+  const mine = (analysis?.bugItems ?? []).filter((b) => b.assignee.key === person.key);
+  if (!analysis) return null;
+  if (!mine.length) return <EmptyState title="Sin bugs asignados en las épicas elegidas" />;
+  return (
+    <section>
+      <h3 className="mb-1 font-display text-sm font-semibold">Bugs ({mine.length}) · estado actual</h3>
+      <p className="mb-3 text-xs text-muted">Sin fechas: las de los bugs no son confiables, así que aquí no hay periodo, atrasos ni semáforo.</p>
+      <div className="mb-3 flex flex-wrap gap-2">
+        {STAGES.map((st) => (
+          <span key={st} className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 text-xs">
+            <span className="size-2 rounded-full" style={{ background: categoryColor(st, resolved === "dark") }} />
+            {BUG_STAGE_LABEL[st]} <strong className="tabular-nums">{mine.filter((b) => b.stage === st).length}</strong>
+          </span>
+        ))}
+      </div>
+      <ul className="divide-y divide-line rounded-2xl border border-line">
+        {mine
+          .slice()
+          .sort((a, b) => STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage) || a.item.id - b.item.id)
+          .slice(0, 80)
+          .map((b) => (
+            <li key={b.item.id}>
+              <button onClick={() => openItem(b.item.id)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition hover:bg-surface-2">
+                <TypeBadge type="Bug" />
+                <span className="font-mono text-[0.6875rem] text-subtle">#{b.item.id}</span>
+                <span className="min-w-0 flex-1 truncate">{b.item.title}</span>
+                <span className="flex w-40 shrink-0 items-center gap-1.5 text-xs text-muted">
+                  <span className="size-1.5 shrink-0 rounded-full" style={{ background: categoryColor(b.stage, resolved === "dark") }} />
+                  <span className="truncate">{b.item.state}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+      </ul>
+    </section>
+  );
+}
+
+function DatedBody({ person }: { person: Person }) {
   const { model, range, filters, openWorkItem, openPerson } = useApp();
   const { resolved } = useTheme();
   const dark = resolved === "dark";
   const [cat, setCat] = useState<StateCategory | "all">("all");
   const items = useMemo(
-    () => model!.work.filter((i) => i.personKey === person.key && isAlive(i, range) && inEpics(i, filters.epics) && inTag(i, filters.tag)),
-    [model, person.key, range, filters.epics, filters.tag],
+    () =>
+      model!.work.filter((i) => i.personKey === person.key && isAlive(i, range) && inTypes(i, filters.types) && inEpics(i, filters.epics) && inTag(i, filters.tag)),
+    [model, person.key, range, filters.types, filters.epics, filters.tag],
   );
   const row = useMemo(() => perPerson([person], items, range, model!.now)[0], [person, items, range, model]);
   const listed = items.filter((i) => cat === "all" || i.cat === cat).sort((a, b) => (b.deliveredAt ?? b.createdAt) - (a.deliveredAt ?? a.createdAt));
 
   const stats = [
-    { label: "Entregado", value: `${row.hoursDelivered.toLocaleString("es-CO", { maximumFractionDigits: 1 })} h`, hint: `${row.delivered} ítems` },
-    { label: "En curso", value: String(row.wip), hint: `${row.hoursOpen.toLocaleString("es-CO", { maximumFractionDigits: 1 })} h abiertas` },
-    { label: "A tiempo", value: row.onTimeRate === null ? "—" : `${Math.round(row.onTimeRate * 100)} %`, hint: "de las entregas con objetivo" },
-    { label: "Cycle time", value: row.cycleP50 === null ? "—" : `${row.cycleP50.toLocaleString("es-CO", { maximumFractionDigits: 1 })} d`, hint: "mediana" },
-    { label: "Vencidos", value: String(row.overdue), hint: "sin entregar", tone: row.overdue > 0 },
+    { label: "Entregó", value: String(row.delivered), hint: `${fmt(row.hoursDelivered)} h estimadas` },
+    { label: "En curso", value: String(row.wip), hint: `${fmt(row.hoursOpen)} h pendientes` },
+    {
+      label: "A tiempo",
+      value: row.onTimeRate === null ? "—" : `${Math.round(row.onTimeRate * 100)} %`,
+      hint: row.onTimeBase ? `de ${row.onTimeBase} entregas con fecha objetivo` : "sin entregas con fecha objetivo",
+    },
+    { label: "Atrasadas", value: String(row.overdue), hint: "sin entregar y con la fecha pasada", tone: row.overdue > 0 },
   ];
 
   return (
-    <div className="space-y-5">
+    <>
       <section className="flex flex-wrap items-start gap-x-4 gap-y-2 rounded-2xl border border-line bg-surface-2 p-3" aria-label="Semáforo del periodo">
         <div className="flex items-center gap-2">
           <span className="text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">Semáforo</span>
@@ -86,25 +285,25 @@ function Body({ person }: { person: Person }) {
         </ul>
         <p className="w-full text-[0.6875rem] text-subtle sm:w-auto">
           {row.elapsedDays} {row.elapsedDays === 1 ? "día hábil transcurrido" : "días hábiles transcurridos"}
-          {row.elapsedDays < HEALTH_RULES.minDays && row.health.level !== "idle" ? " · periodo corto: solo cuentan vencidos y puntualidad" : ""}
+          {row.elapsedDays < HEALTH_RULES.minDays && row.health.level !== "idle" ? " · periodo corto: solo cuentan atrasos y puntualidad" : ""}
         </p>
       </section>
       <div className="flex flex-wrap items-center gap-3">
         {row.utilization !== null && (
-          <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface-2 p-3">
+          <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface-2 p-3" title="Horas estimadas entregadas ÷ horas que podía trabajar hasta hoy (8 h × % asignado × días hábiles)">
             <div className="relative grid place-items-center">
               <ProgressRing value={Math.min(row.utilization, 1)} size={52} />
               <span className="absolute text-xs font-bold tabular-nums">{Math.round(row.utilization * 100)}%</span>
             </div>
             <div>
-              <p className="text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">Utilización</p>
+              <p className="text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">Uso de capacidad</p>
               <p className="text-sm font-semibold">
-                {row.hoursDelivered.toLocaleString("es-CO", { maximumFractionDigits: 1 })} de {row.capacity?.toLocaleString("es-CO", { maximumFractionDigits: 0 })} h de capacidad
+                {fmt(row.hoursDelivered)} h entregadas de {row.capacity?.toLocaleString("es-CO", { maximumFractionDigits: 0 })} h posibles a hoy
               </p>
             </div>
           </div>
         )}
-        <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-5">
+        <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
           {stats.map((s) => (
             <div key={s.label} className="rounded-2xl border border-line bg-surface-2 p-3">
               <p className="text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">{s.label}</p>
@@ -169,6 +368,6 @@ function Body({ person }: { person: Person }) {
           </section>
         </>
       )}
-    </div>
+    </>
   );
 }

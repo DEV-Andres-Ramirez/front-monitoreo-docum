@@ -1,10 +1,12 @@
 "use client";
 
 import clsx from "clsx";
-import { CheckCircle2, CircleDashed, Loader2, OctagonX, TriangleAlert, type LucideIcon } from "lucide-react";
+import { ArrowRightLeft, CheckCircle2, CircleDashed, CircleSlash, Loader2, OctagonX, Palmtree, Tag, TriangleAlert, type LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { forwardRef, useId } from "react";
-import { HEALTH_LABEL, type HealthLevel } from "@/lib/analytics/health";
+import { HEALTH_LABEL, flagText, type HealthLevel } from "@/lib/analytics/health";
+import { isNoGlobal, type Person } from "@/lib/analytics/model";
+import type { MemberFlag, MemberFlagKind } from "@/lib/analytics/types";
 import { typeMeta } from "@/lib/work-item-types";
 import { useTheme } from "./theme";
 
@@ -144,16 +146,17 @@ export function StatusPill({
 /** Etiqueta de un miembro del proyecto que no está en Global (la base de personal); igual cuenta en el análisis. */
 // ---------------------------------------------------------------- Semáforo
 /** Tono de estado de cada nivel del semáforo (colores reservados: siempre con ícono y etiqueta). */
-export const HEALTH_TONE: Record<HealthLevel, StatusTone> = { bad: "critical", risk: "warning", good: "good", idle: "neutral" };
-export const HEALTH_ICON: Record<HealthLevel, LucideIcon> = { bad: OctagonX, risk: TriangleAlert, good: CheckCircle2, idle: CircleDashed };
+export const HEALTH_TONE: Record<HealthLevel, StatusTone> = { bad: "critical", risk: "warning", good: "good", excused: "info", idle: "neutral" };
+export const HEALTH_ICON: Record<HealthLevel, LucideIcon> = { bad: OctagonX, risk: TriangleAlert, good: CheckCircle2, excused: CircleSlash, idle: CircleDashed };
 export const HEALTH_CLASSES: Record<HealthLevel, string> = {
   bad: "border-critical/35 bg-critical-soft text-critical-fg",
   risk: "border-warning/45 bg-warning-soft text-warning-fg",
   good: "border-good/35 bg-good-soft text-good-fg",
+  excused: "border-info-fg/25 bg-info-soft text-info-fg",
   idle: "border-dashed border-line-strong bg-surface-3 text-muted",
 };
 
-/** Etiqueta del semáforo (Va mal / En riesgo / Va bien / Sin carga) con ícono; el título lista las razones. */
+/** Etiqueta del semáforo (Va mal / En riesgo / Va bien / No evaluado / Sin carga) con ícono; el título lista las razones. */
 export function HealthBadge({ level, reasons, size = "md", className }: { level: HealthLevel; reasons?: string[]; size?: "sm" | "md"; className?: string }) {
   const Icon = HEALTH_ICON[level];
   return (
@@ -179,18 +182,45 @@ export function HealthBadge({ level, reasons, size = "md", className }: { level:
   );
 }
 
+/** Trabaja en el proyecto sin estar asignado en Global (internamente "No Global"); cuenta en el análisis. */
 export function NoGlobalBadge({ className }: { className?: string }) {
   return (
     <span
-      title="No está en el personal de Global de este proyecto; se incluye en el análisis"
+      title="No está asignado a este proyecto en Global (sin cargo ni %), pero trabaja en él y cuenta en el análisis"
       className={clsx(
-        "inline-flex shrink-0 items-center whitespace-nowrap rounded-md border border-info-fg/25 bg-info-soft px-1.5 py-px text-[0.625rem] font-semibold uppercase tracking-wide text-info-fg",
+        "inline-flex shrink-0 items-center whitespace-nowrap rounded-md border border-info-fg/25 bg-info-soft px-1.5 py-px text-[0.625rem] font-semibold text-info-fg",
         className,
       )}
     >
-      No Global
+      Sin asignación al proyecto
     </span>
   );
+}
+
+export const FLAG_ICON: Record<MemberFlagKind, LucideIcon> = { vacaciones: Palmtree, otro_proyecto: ArrowRightLeft, otro: Tag };
+
+/** Marca especial (En vacaciones, Asignado al proyecto de Acueducto…): no se evalúa ni genera alertas. */
+export function FlagBadge({ flag, className }: { flag: MemberFlag; className?: string }) {
+  const Icon = FLAG_ICON[flag.kind];
+  return (
+    <span
+      title={`${flagText(flag)}. No se evalúa en el semáforo y sus pendientes no generan alertas; lo que entrega sí cuenta.`}
+      className={clsx(
+        "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-line-strong bg-surface-3 px-1.5 py-px text-[0.625rem] font-semibold text-foreground",
+        className,
+      )}
+    >
+      <Icon className="size-3 text-accent-fg" aria-hidden />
+      {flagText(flag)}
+    </span>
+  );
+}
+
+/** Etiquetas junto al nombre de una persona: su marca especial o, si no tiene, "Sin asignación al proyecto". */
+export function PersonBadges({ person, className }: { person: Pick<Person, "inRoster" | "inGlobal" | "flag">; className?: string }) {
+  if (person.flag) return <FlagBadge flag={person.flag} className={className} />;
+  if (isNoGlobal(person)) return <NoGlobalBadge className={className} />;
+  return null;
 }
 
 // ---------------------------------------------------------------- Chip & Segmented

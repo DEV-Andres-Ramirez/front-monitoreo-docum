@@ -7,13 +7,13 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useStored, writeStored } from "@/components/dashboard/client-api";
 import { useApp } from "@/components/shell/app-provider";
-import { Avatar, HEALTH_CLASSES, HEALTH_ICON, HEALTH_TONE, HealthBadge, NoGlobalBadge } from "@/components/ui/primitives";
+import { Avatar, HEALTH_CLASSES, HEALTH_ICON, HEALTH_TONE, HealthBadge, PersonBadges } from "@/components/ui/primitives";
 import { HEALTH_LABEL, HEALTH_LEVELS, HEALTH_ORDER, HEALTH_RULES, type HealthLevel } from "@/lib/analytics/health";
 import { perPerson, type PersonRow } from "@/lib/analytics/metrics";
-import { isNoGlobal } from "@/lib/analytics/model";
+
 import { formatShort } from "@/lib/dates";
 
-/** Filtro del semáforo en Colaboradores: "active" = con carga (Va mal, En riesgo, Va bien); "all" incluye Sin carga. */
+/** Filtro del semáforo en Colaboradores: "active" = con carga (Va mal, En riesgo, Va bien, No evaluado); "all" incluye Sin carga. */
 export type HealthFilter = "active" | "all" | HealthLevel;
 export const PEOPLE_HEALTH_KEY = "docum:people-health";
 const FILTERS: HealthFilter[] = ["active", "all", ...HEALTH_LEVELS];
@@ -23,9 +23,9 @@ export function useHealthFilter(): [HealthFilter, (value: HealthFilter) => void]
   return [FILTERS.includes(stored) ? stored : "active", set];
 }
 
-export const shownLevels = (f: HealthFilter): HealthLevel[] => (f === "active" ? ["bad", "risk", "good"] : f === "all" ? HEALTH_LEVELS : [f]);
+export const shownLevels = (f: HealthFilter): HealthLevel[] => (f === "active" ? ["bad", "risk", "good", "excused"] : f === "all" ? HEALTH_LEVELS : [f]);
 
-/** Orden por estado: Va mal → En riesgo → Va bien → Sin carga; dentro de cada nivel, más vencidos y menos entregado primero. */
+/** Orden por estado: Va mal → En riesgo → Va bien → No evaluado → Sin carga; dentro de cada nivel, más atrasos y menos entregado primero. */
 export const byHealth = (a: PersonRow, b: PersonRow) =>
   HEALTH_ORDER[a.health.level] - HEALTH_ORDER[b.health.level] || b.overdue - a.overdue || a.hoursDelivered - b.hoursDelivered || a.person.name.localeCompare(b.person.name, "es");
 
@@ -40,14 +40,17 @@ export function useTeamRows() {
 }
 
 export function healthCounts(rows: PersonRow[]) {
-  const counts: Record<HealthLevel, number> = { bad: 0, risk: 0, good: 0, idle: 0 };
+  const counts: Record<HealthLevel, number> = { bad: 0, risk: 0, good: 0, excused: 0, idle: 0 };
   for (const r of rows) counts[r.health.level] += 1;
   return counts;
 }
 
-const BAR_COLOR: Record<HealthLevel, string> = { bad: "bg-critical", risk: "bg-warning", good: "bg-good", idle: "bg-line-strong" };
+const BAR_COLOR: Record<HealthLevel, string> = { bad: "bg-critical", risk: "bg-warning", good: "bg-good", excused: "bg-info-fg/60", idle: "bg-line-strong" };
 
-/** Barra apilada de los 4 niveles (con 2 px de separación); la leyenda son los contadores. */
+/** Niveles que se muestran como contador: "No evaluado" solo si hay alguien con marca. */
+const counterLevels = (counts: Record<HealthLevel, number>) => HEALTH_LEVELS.filter((l) => l !== "excused" || counts.excused > 0);
+
+/** Barra apilada de los niveles (con 2 px de separación); la leyenda son los contadores. */
 export function HealthStackBar({ counts, className }: { counts: Record<HealthLevel, number>; className?: string }) {
   const total = HEALTH_LEVELS.reduce((s, l) => s + counts[l], 0);
   if (!total) return <div className={clsx("h-2.5 rounded-full bg-surface-3", className)} />;
@@ -66,9 +69,10 @@ export function HealthStackBar({ counts, className }: { counts: Record<HealthLev
 
 /** Contadores por nivel (ícono + etiqueta + número). Con `onSelect` son botones de filtro. */
 export function HealthCounters({ counts, active, onSelect }: { counts: Record<HealthLevel, number>; active?: HealthLevel[]; onSelect?: (level: HealthLevel) => void }) {
+  const levels = counterLevels(counts);
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {HEALTH_LEVELS.map((l) => {
+    <div className={clsx("grid grid-cols-2 gap-2", levels.length > 4 ? "sm:grid-cols-3 xl:grid-cols-5" : "sm:grid-cols-4")}>
+      {levels.map((l) => {
         const Icon = HEALTH_ICON[l];
         const on = !active || active.includes(l);
         const body = (
@@ -109,19 +113,20 @@ export function HealthRules() {
       </summary>
       <ul className="mt-2 space-y-1.5">
         <li>
-          <strong className="text-critical-fg">Va mal:</strong> {R.overdueBad} o más vencidos · sin entregas en {R.minDays}+ días hábiles · utilización &lt; {pct(R.utilBad)} (solo Global) · a
-          tiempo &lt; {pct(R.onTimeBad)} (con {R.onTimeMinBase}+ entregas con objetivo).
+          <strong className="text-critical-fg">Va mal:</strong> {R.overdueBad} o más pendientes atrasados · no entregó nada en {R.minDays}+ días hábiles · uso de capacidad menor al {pct(R.utilBad)} ·
+          entregó a tiempo menos del {pct(R.onTimeBad)} (con {R.onTimeMinBase}+ entregas con fecha objetivo).
         </li>
         <li>
-          <strong className="text-warning-fg">En riesgo:</strong> 1–{R.overdueBad - 1} vencidos · utilización {pct(R.utilBad)}–{pct(R.utilRisk)} · a tiempo {pct(R.onTimeBad)}–{pct(R.onTimeRisk)} · nada
-          en curso con ítems por iniciar.
+          <strong className="text-warning-fg">En riesgo:</strong> 1 o {R.overdueBad - 1} pendientes atrasados · uso de capacidad entre {pct(R.utilBad)} y {pct(R.utilRisk)} · a tiempo entre{" "}
+          {pct(R.onTimeBad)} y {pct(R.onTimeRisk)} · nada en curso teniendo ítems por iniciar.
         </li>
         <li>
-          <strong className="text-good-fg">Va bien:</strong> entregó en el periodo y nada de lo anterior. <strong className="text-foreground">Sin carga:</strong> sin ítems en las épicas en el periodo.
+          <strong className="text-good-fg">Va bien:</strong> entregó en el periodo y nada de lo anterior. <strong className="text-info-fg">No evaluado:</strong> tiene una marca (vacaciones, otro
+          proyecto…): lo que entrega cuenta, pero no recibe alertas. <strong className="text-foreground">Sin carga:</strong> no tiene ítems en el periodo.
         </li>
         <li>
-          Con menos de {R.minDays} días hábiles transcurridos (Hoy, Ayer) solo cuentan vencidos y puntualidad. La utilización usa la capacidad a la fecha (8 h × % asignado × días hábiles
-          transcurridos).
+          Un pendiente atrasado es uno sin entregar cuya fecha objetivo ya pasó. El uso de capacidad compara las horas estimadas que entregó con las que podía trabajar hasta hoy (8 h × % asignado ×
+          días hábiles). Solo aplica a quien tiene % en Global. Con menos de {R.minDays} días hábiles transcurridos (Hoy, Ayer) solo cuentan atrasos y puntualidad.
         </li>
       </ul>
     </details>
@@ -136,7 +141,7 @@ function PersonLine({ row, onOpen }: { row: PersonRow; onOpen: () => void }) {
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
             <span className="truncate">{row.person.name}</span>
-            {isNoGlobal(row.person) && <NoGlobalBadge />}
+            <PersonBadges person={row.person} />
           </span>
           <span className="block truncate text-[0.6875rem] text-muted">{row.health.reasons.join(" · ")}</span>
         </span>
@@ -149,14 +154,16 @@ const LIST_SIZE = 5;
 
 /** Tarjeta del Resumen: semáforo del equipo en el periodo, con quién va mal y quién está en riesgo. */
 export function TeamHealthCard() {
-  const { period, openPerson } = useApp();
+  const { period, openPerson, view } = useApp();
   const rows = useTeamRows();
   const counts = useMemo(() => healthCounts(rows), [rows]);
   const [showIdle, setShowIdle] = useState(false);
+  const [showExcused, setShowExcused] = useState(false);
   if (!rows.length) return null;
   const sorted = [...rows].sort(byHealth);
   const lists = (["bad", "risk"] as const).map((l) => ({ level: l, rows: sorted.filter((r) => r.health.level === l) }));
   const idle = sorted.filter((r) => r.health.level === "idle");
+  const excused = sorted.filter((r) => r.health.level === "excused");
   const goTo = (f: HealthFilter) => writeStored(PEOPLE_HEALTH_KEY, f);
 
   return (
@@ -169,7 +176,7 @@ export function TeamHealthCard() {
           <div className="min-w-0">
             <h2 className="font-display text-[0.9375rem] font-semibold leading-tight">Semáforo del equipo</h2>
             <p className="mt-0.5 text-xs text-muted">
-              {formatShort(period.from)} – {formatShort(period.to)} · {rows.length} colaboradores · clic en una persona para ver su detalle
+              Medido con {view.label.toLowerCase()} · {formatShort(period.from)} – {formatShort(period.to)} · {rows.length} colaboradores · clic en una persona para ver por qué
             </p>
           </div>
         </div>
@@ -212,6 +219,25 @@ export function TeamHealthCard() {
           </div>
         ))}
       </div>
+
+      {excused.length > 0 && (
+        <div className="mt-3 border-t border-line pt-3">
+          <button type="button" onClick={() => setShowExcused(!showExcused)} aria-expanded={showExcused} className="flex w-full items-center gap-2 text-left text-xs text-muted">
+            <HealthBadge level="excused" size="sm" />
+            <span className="min-w-0 flex-1 truncate">
+              {excused.length} {excused.length === 1 ? "persona con marca" : "personas con marca"} (vacaciones u otro proyecto): lo que entregan cuenta, pero no reciben alertas
+            </span>
+            <ChevronDown className={clsx("size-3.5 shrink-0 transition-transform", showExcused && "rotate-180")} />
+          </button>
+          {showExcused && (
+            <ul className="mt-2 space-y-0.5">
+              {excused.map((r) => (
+                <PersonLine key={r.person.key} row={r} onOpen={() => openPerson(r.person.key)} />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {idle.length > 0 && (
         <div className="mt-3 border-t border-line pt-3">

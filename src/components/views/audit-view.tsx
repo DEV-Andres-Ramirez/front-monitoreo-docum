@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowRight, CloudDownload, CloudOff, Link2, Link2Off, LogIn, LogOut, PencilLine, PlusCircle, RefreshCw, ShieldAlert, Trash2, Undo2, type LucideIcon } from "lucide-react";
+import { ArrowRight, BadgeCheck, CloudDownload, CloudOff, Link2, Link2Off, LogIn, LogOut, PencilLine, PlusCircle, RefreshCw, ShieldAlert, Tag, Trash2, Undo2, type LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 import useSWRInfinite from "swr/infinite";
@@ -24,6 +24,8 @@ const ACTION_META: Record<string, { label: string; icon: LucideIcon; tone: Statu
   azure_sync_failed: { label: "Falló la sincronización con Azure", icon: CloudOff, tone: "critical" },
   alias_linked: { label: "Correo de Azure vinculado", icon: Link2, tone: "good" },
   alias_unlinked: { label: "Vínculo de correo eliminado", icon: Link2Off, tone: "neutral" },
+  member_flag_set: { label: "Marca especial puesta", icon: Tag, tone: "info" },
+  member_flag_cleared: { label: "Marca especial quitada", icon: BadgeCheck, tone: "neutral" },
 };
 
 const SYNC_TRIGGER: Record<string, string> = { auto: "automática (cada hora)", manual: "manual", initial: "inicial" };
@@ -33,6 +35,7 @@ const FILTERS: { key: string; label: string; actions: string[] }[] = [
   { key: "azure", label: "Sincronizaciones", actions: ["azure_sync", "azure_sync_failed", "azure_refresh"] },
   { key: "sesiones", label: "Sesiones", actions: ["login_success", "login_failed", "logout"] },
   { key: "vinculos", label: "Vinculaciones", actions: ["alias_linked", "alias_unlinked"] },
+  { key: "marcas", label: "Marcas", actions: ["member_flag_set", "member_flag_cleared"] },
   { key: "legado", label: "Registro manual (legado)", actions: ["activity_created", "activity_updated", "activity_deleted", "activity_restored"] },
 ];
 
@@ -217,6 +220,16 @@ function AuditRow({ entry, index, names }: { entry: AuditEntry; index: number; n
           <p className="mt-1 text-xs text-muted">
             {String(data.alias ?? "")}
             {data.employeeId ? ` → ${names.get(String(data.employeeId)) ?? "colaborador"}` : ""}
+          </p>
+        )}
+        {(entry.action === "member_flag_set" || entry.action === "member_flag_cleared") && (
+          <p className="mt-1 text-xs text-muted">
+            {names.get(String(entry.entityId)) ?? "Colaborador"}
+            {entry.action === "member_flag_set"
+              ? ` · ${String(data.label ?? "")}${data.until ? ` hasta el ${formatDayMonth(String(data.until))}` : ""}${old.label ? ` (antes: ${String(old.label)})` : ""}`
+              : old.label
+                ? ` · ya no tiene "${String(old.label)}"`
+                : ""}
           </p>
         )}
         {!isActivity && (entry.ip || entry.userAgent) && (

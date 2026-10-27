@@ -6,11 +6,11 @@ import { es } from "date-fns/locale";
 import { AlertTriangle, CheckCircle2, CircleDot, ExternalLink, ShieldCheck } from "lucide-react";
 import { motion } from "motion/react";
 import { useApp } from "@/components/shell/app-provider";
-import { Avatar, EmptyState, NoGlobalBadge, TypeBadge } from "@/components/ui/primitives";
+import { Avatar, EmptyState, PersonBadges, TypeBadge } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
 import { useTheme } from "@/components/ui/theme";
 import { CATEGORY_LABEL } from "@/lib/analytics/metrics";
-import { DAY, isNoGlobal, personRoleLabel, type Item } from "@/lib/analytics/model";
+import { DAY, personRoleLabel, type Item } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 
 const fmt = (t: number | null) => (t ? format(t, "EEE d MMM yyyy · HH:mm", { locale: es }) : "—");
@@ -100,7 +100,7 @@ function Detail({ item: i }: { item: Item }) {
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold">
               <span className="truncate">{person.name}</span>
-              {isNoGlobal(person) && <NoGlobalBadge />}
+              <PersonBadges person={person} />
             </span>
             <span className="block truncate text-xs text-subtle">
               {personRoleLabel(person)} · asignado en Azure como {i.email}
@@ -125,7 +125,7 @@ function Detail({ item: i }: { item: Item }) {
           <dd className="text-right tabular-nums">{fmtDate(i.deliveredAt)}</dd>
           <dt className="text-muted">Creación → cierre</dt>
           <dd className="text-right tabular-nums">{i.leadTime !== null ? `${i.leadTime.toLocaleString("es-CO", { maximumFractionDigits: 1 })} d` : "abierto"}</dd>
-          <dt className="text-muted">Cycle time (en curso → cerrado)</dt>
+          <dt className="text-muted">Días de en curso a cerrado</dt>
           <dd className="text-right tabular-nums">{i.cycleTime !== null ? `${i.cycleTime.toLocaleString("es-CO", { maximumFractionDigits: 1 })} d` : "—"}</dd>
         </dl>
         <p

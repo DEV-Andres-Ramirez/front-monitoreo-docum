@@ -12,12 +12,13 @@ import { useChartTheme } from "@/components/charts/chart-theme";
 import { EstimateChart, PersonStatesChart } from "@/components/charts/flow-charts";
 import { api, useStored } from "@/components/dashboard/client-api";
 import { useApp } from "@/components/shell/app-provider";
-import { Avatar, Button, Chip, EmptyState, HEALTH_TONE, HealthBadge, NoGlobalBadge, ProgressRing, Segmented } from "@/components/ui/primitives";
+import { Avatar, Button, Chip, EmptyState, HEALTH_TONE, HealthBadge, PersonBadges, ProgressRing, Segmented } from "@/components/ui/primitives";
 import { useUiScale } from "@/components/ui/display";
 import type { Health, HealthLevel } from "@/lib/analytics/health";
 import { CATEGORIES, CATEGORY_LABEL, workloadMatrix, type PersonRow } from "@/lib/analytics/metrics";
-import { isNoGlobal, normalizeText, personRoleLabel, type Person } from "@/lib/analytics/model";
+import { normalizeText, personRoleLabel, type Person } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
+import { BugsByPerson, UndatedNote } from "./bugs-board";
 import { DatasetGate } from "./dataset-gate";
 import { HealthCounters, HealthRules, HealthStackBar, byHealth, healthCounts, shownLevels, useHealthFilter, useTeamRows } from "./team-health";
 
@@ -25,9 +26,18 @@ type Layout = "cards" | "table" | "heatmap";
 type SortKey = "health" | "delivered" | "utilization" | "overdue" | "wip" | "name";
 
 export function PeopleView() {
+  const { view } = useApp();
   return (
     <DatasetGate>
-      <People />
+      {view.dated ? (
+        <People />
+      ) : (
+        // Bugs: sin fechas ni semáforo, solo cuántos tiene cada persona y en qué estado
+        <div className="space-y-5">
+          <UndatedNote />
+          <BugsByPerson />
+        </div>
+      )}
     </DatasetGate>
   );
 }
@@ -117,8 +127,8 @@ function People() {
           <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="h-9 rounded-lg border border-line bg-surface px-2 text-sm text-foreground">
             <option value="health">estado (semáforo)</option>
             <option value="delivered">horas entregadas</option>
-            <option value="utilization">utilización</option>
-            <option value="overdue">vencidos</option>
+            <option value="utilization">uso de capacidad</option>
+            <option value="overdue">atrasadas</option>
             <option value="wip">trabajo en curso</option>
             <option value="name">nombre</option>
           </select>
@@ -181,7 +191,8 @@ function People() {
       <OutsidePlanning />
       {model && (
         <p className="text-xs text-subtle">
-          Capacidad = 8 h × % asignado × días hábiles de su vigencia transcurridos en el periodo (hasta hoy). Utilización = horas entregadas ÷ capacidad.
+          Capacidad a hoy = 8 h × % asignado en Global × días hábiles transcurridos del periodo. Uso de capacidad = horas estimadas entregadas ÷ capacidad a hoy (puede pasar de 100 % si
+          se entregó más de lo estimado para esos días).
         </p>
       )}
     </div>
@@ -215,9 +226,25 @@ const CARD_HEALTH: Record<HealthLevel, React.CSSProperties> = {
     background: "linear-gradient(135deg, var(--warning-soft), var(--surface) 60%)",
   },
   good: { borderColor: "color-mix(in oklab, var(--good) 40%, var(--line))" },
+  excused: { borderColor: "color-mix(in oklab, var(--info-fg) 30%, var(--line))", background: "linear-gradient(135deg, var(--info-soft), var(--surface) 55%)" },
   idle: { borderStyle: "dashed", borderColor: "var(--line-strong)" },
 };
-const SIDE_HEALTH: Record<HealthLevel, string> = { bad: "bg-critical", risk: "bg-warning", good: "bg-good", idle: "bg-line-strong" };
+const SIDE_HEALTH: Record<HealthLevel, string> = { bad: "bg-critical", risk: "bg-warning", good: "bg-good", excused: "bg-info-fg/60", idle: "bg-line-strong" };
+
+/** Uso de capacidad (horas estimadas entregadas ÷ capacidad a la fecha), con el anillo topado en 100 %. */
+function CapacityRing({ r }: { r: PersonRow }) {
+  if (r.utilization === null || r.capacity === null) return null;
+  const value = Math.round(r.utilization * 100);
+  return (
+    <div className="flex shrink-0 flex-col items-center" title={`Uso de capacidad: entregó ${fmtH(r.hoursDelivered)} estimadas de ${fmtH(r.capacity)} que podía trabajar hasta hoy`}>
+      <div className="relative grid place-items-center">
+        <ProgressRing value={Math.min(r.utilization, 1)} size={44} />
+        <span className="absolute text-[0.625rem] font-bold tabular-nums">{value > 100 ? "+100" : value}%</span>
+      </div>
+      <span className="mt-0.5 text-[0.5625rem] uppercase tracking-wider text-subtle">capacidad</span>
+    </div>
+  );
+}
 
 function PersonCard({ row: r, index, dark, onOpen }: { row: PersonRow; index: number; dark: boolean; onOpen: () => void }) {
   const level = r.health.level;
@@ -243,7 +270,7 @@ function PersonCard({ row: r, index, dark, onOpen }: { row: PersonRow; index: nu
         <div className="min-w-0 flex-1">
           <h3 className="flex min-w-0 items-center gap-1.5 font-semibold">
             <span className="truncate">{r.person.name}</span>
-            {isNoGlobal(r.person) && <NoGlobalBadge />}
+            <PersonBadges person={r.person} />
           </h3>
           <p className="truncate text-xs text-muted">{personRoleLabel(r.person, { allocation: true })}</p>
           <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
@@ -253,34 +280,29 @@ function PersonCard({ row: r, index, dark, onOpen }: { row: PersonRow; index: nu
             </span>
           </div>
         </div>
-        {r.utilization !== null && (
-          <div className="relative grid place-items-center" title="Utilización: horas entregadas ÷ capacidad">
-            <ProgressRing value={Math.min(r.utilization, 1)} size={44} />
-            <span className="absolute text-[0.625rem] font-bold tabular-nums">{Math.round(r.utilization * 100)}%</span>
-          </div>
-        )}
+        <CapacityRing r={r} />
       </div>
       <div className="mt-3">
         <StateBar row={r} dark={dark} />
         <p className="mt-1.5 text-[0.6875rem] text-subtle">
-          {r.active} activos · {r.byCat.InProgress} en curso · {r.byCat.Resolved} entregados sin cerrar
+          {r.active} en el periodo · {r.byCat.InProgress} en curso · {r.byCat.Resolved} entregados sin cerrar
         </p>
       </div>
       <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-line pt-3 text-center">
         <div>
-          <dt className="text-[0.625rem] uppercase tracking-wider text-subtle">Entregado</dt>
-          <dd className="font-display text-base font-semibold tabular-nums">{fmtH(r.hoursDelivered)}</dd>
-          <dd className="text-[0.6875rem] text-subtle">{r.delivered} ítems</dd>
+          <dt className="text-[0.625rem] uppercase tracking-wider text-subtle">Entregó</dt>
+          <dd className="font-display text-base font-semibold tabular-nums">{r.delivered}</dd>
+          <dd className="text-[0.6875rem] text-subtle">{fmtH(r.hoursDelivered)} estimadas</dd>
         </div>
         <div>
           <dt className="text-[0.625rem] uppercase tracking-wider text-subtle">A tiempo</dt>
           <dd className="font-display text-base font-semibold tabular-nums">{pct(r.onTimeRate)}</dd>
-          <dd className="text-[0.6875rem] text-subtle">cycle {r.cycleP50 === null ? "—" : `${r.cycleP50.toLocaleString("es-CO", { maximumFractionDigits: 1 })} d`}</dd>
+          <dd className="text-[0.6875rem] text-subtle">{r.onTimeBase ? `de ${r.onTimeBase} con fecha objetivo` : "sin fecha objetivo"}</dd>
         </div>
         <div>
-          <dt className="text-[0.625rem] uppercase tracking-wider text-subtle">Vencidos</dt>
+          <dt className="text-[0.625rem] uppercase tracking-wider text-subtle">Atrasadas</dt>
           <dd className={clsx("font-display text-base font-semibold tabular-nums", r.overdue > 0 && "text-critical-fg")}>{r.overdue}</dd>
-          <dd className="text-[0.6875rem] text-subtle">{fmtH(r.hoursOpen)} abiertas</dd>
+          <dd className="text-[0.6875rem] text-subtle">{fmtH(r.hoursOpen)} pendientes</dd>
         </div>
       </dl>
     </motion.article>
@@ -291,20 +313,19 @@ function PeopleTable({ rows, onOpen }: { rows: PersonRow[]; onOpen: (key: string
   return (
     <div className="card overflow-hidden">
       <div className="scrollbar-thin overflow-x-auto">
-        <table className="w-full min-w-[68rem] text-sm">
+        <table className="w-full min-w-[66rem] text-sm">
           <thead className="bg-surface-2 text-left text-[0.6875rem] uppercase tracking-wider text-subtle">
             <tr>
               <th className="px-4 py-3 font-semibold">Colaborador</th>
               <th className="px-3 py-3 font-semibold">Estado</th>
-              <th className="px-3 py-3 text-right font-semibold">Activos</th>
+              <th className="px-3 py-3 text-right font-semibold" title="Ítems con actividad en el periodo">En el periodo</th>
               <th className="px-3 py-3 text-right font-semibold">En curso</th>
-              <th className="px-3 py-3 text-right font-semibold">Entregados</th>
-              <th className="px-3 py-3 text-right font-semibold">Horas entregadas</th>
-              <th className="px-3 py-3 text-right font-semibold">Capacidad</th>
-              <th className="px-3 py-3 text-right font-semibold">Utilización</th>
-              <th className="px-3 py-3 text-right font-semibold">A tiempo</th>
-              <th className="px-3 py-3 text-right font-semibold">Cycle P50</th>
-              <th className="px-4 py-3 text-right font-semibold">Vencidos</th>
+              <th className="px-3 py-3 text-right font-semibold">Entregó</th>
+              <th className="px-3 py-3 text-right font-semibold" title="Suma de la estimación de lo entregado (1 punto = 1 h)">Horas estimadas entregadas</th>
+              <th className="px-3 py-3 text-right font-semibold" title="8 h × % asignado × días hábiles transcurridos">Capacidad a hoy</th>
+              <th className="px-3 py-3 text-right font-semibold" title="Horas estimadas entregadas ÷ capacidad a hoy">Uso de capacidad</th>
+              <th className="px-3 py-3 text-right font-semibold" title="De lo entregado con fecha objetivo, cuánto llegó a tiempo">A tiempo</th>
+              <th className="px-4 py-3 text-right font-semibold" title="Sin entregar y con la fecha objetivo pasada">Atrasadas</th>
             </tr>
           </thead>
           <tbody>
@@ -317,7 +338,7 @@ function PeopleTable({ rows, onOpen }: { rows: PersonRow[]; onOpen: (key: string
                     <div className="min-w-0">
                       <p className="flex min-w-0 items-center gap-1.5 font-medium">
                         <span className="truncate">{r.person.name}</span>
-                        {isNoGlobal(r.person) && <NoGlobalBadge />}
+                        <PersonBadges person={r.person} />
                       </p>
                       <p className="truncate text-xs text-subtle">{personRoleLabel(r.person)}</p>
                     </div>
@@ -336,7 +357,6 @@ function PeopleTable({ rows, onOpen }: { rows: PersonRow[]; onOpen: (key: string
                 <td className="px-3 text-right tabular-nums text-muted">{r.capacity === null ? "—" : fmtH(r.capacity)}</td>
                 <td className="px-3 text-right tabular-nums">{pct(r.utilization)}</td>
                 <td className="px-3 text-right tabular-nums">{pct(r.onTimeRate)}</td>
-                <td className="px-3 text-right tabular-nums">{r.cycleP50 === null ? "—" : `${r.cycleP50.toLocaleString("es-CO", { maximumFractionDigits: 1 })} d`}</td>
                 <td className={clsx("px-4 text-right font-semibold tabular-nums", r.overdue > 0 && "text-critical-fg")}>{r.overdue}</td>
               </tr>
             ))}
@@ -358,9 +378,9 @@ function Heatmap({ people, health }: { people: Person[]; health: Map<string, Hea
     <div className="card overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div>
-          <h3 className="font-display text-[0.9375rem] font-semibold">Carga entregada por {byDay ? "día" : "semana"}</h3>
+          <h3 className="font-display text-[0.9375rem] font-semibold">Horas entregadas por {byDay ? "día hábil" : "semana"}</h3>
           <p className="text-xs text-muted">
-            Horas (puntos) entregadas por colaborador y {byDay ? "día" : "semana"}. Intensidad relativa al máximo ({fmtH(max)}).
+            Horas estimadas (puntos) que entregó cada colaborador por {byDay ? "día hábil (sin fines de semana ni festivos)" : "semana"}. Más oscuro = más horas (máximo {fmtH(max)}).
           </p>
         </div>
         <Segmented
@@ -379,9 +399,8 @@ function Heatmap({ people, health }: { people: Person[]; health: Map<string, Hea
             <tr>
               <th className="sticky left-0 z-20 bg-surface-2 px-4 py-2.5 text-left text-[0.6875rem] font-semibold uppercase tracking-wider text-subtle">Colaborador</th>
               {matrix.buckets.map((b) => {
-                const weekend = byDay && [0, 6].includes(new Date(b.start).getDay());
                 return (
-                  <th key={b.start} className={clsx("bg-surface-2 px-1 py-2 text-center text-[0.6875rem] font-semibold", weekend ? "text-subtle/60" : "text-subtle")}>
+                  <th key={b.start} className="bg-surface-2 px-1 py-2 text-center text-[0.6875rem] font-semibold text-subtle">
                     {byDay ? (
                       <>
                         <span className="block font-normal capitalize">{format(b.start, "EEE", { locale: es })}</span>
@@ -403,7 +422,7 @@ function Heatmap({ people, health }: { people: Person[]; health: Map<string, Hea
                   <button onClick={() => openPerson(r.person.key)} className="flex max-w-[20rem] items-center gap-2 text-left">
                     <Avatar name={r.person.name} size="xs" />
                     <span className="truncate text-[0.8125rem] font-medium">{r.person.name}</span>
-                    {isNoGlobal(r.person) && <NoGlobalBadge />}
+                    <PersonBadges person={r.person} />
                     {health.get(r.person.key) && <HealthBadge level={health.get(r.person.key)!.level} reasons={health.get(r.person.key)!.reasons} size="sm" />}
                   </button>
                 </td>

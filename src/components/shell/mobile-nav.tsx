@@ -12,13 +12,14 @@ import { Sheet } from "@/components/ui/sheet";
 import { ThemeSwitchButton, ThemeToggle } from "@/components/ui/theme-toggle";
 import { PROJECTS, PROJECT_KEYS } from "@/lib/config";
 import { useApp } from "./app-provider";
-import { EpicFilter, MobileFiltersButton, PeoplePanel, PeriodPanel, SyncChip, TagFilter } from "./filter-bar";
+import { EpicFilter, MobileFiltersButton, PeoplePanel, PeriodPanel, SyncChip, TagFilter, ViewFilter, useViewFilterVisible } from "./filter-bar";
 import { navFor, navItems } from "./nav";
 
 /** Barra superior + tab bar inferior + panel de filtros para pantallas < lg. */
 export function MobileNav() {
   const pathname = usePathname();
   const { projectKey, project, setProjectKey, setPaletteOpen, logout, syncNow, sync, syncing, setShortcutsOpen, filtersOpen, setFiltersOpen, tags } = useApp();
+  const showView = useViewFilterVisible();
   const active = navFor(pathname, projectKey);
   const items = navItems(projectKey);
   const [projectsOpen, setProjectsOpen] = useState(false);
@@ -122,6 +123,12 @@ export function MobileNav() {
 
       <Sheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtros" description="Aplican a todas las vistas">
         <div className="space-y-5">
+          {showView && (
+            <div>
+              <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Qué analizar</p>
+              <ViewFilter full className="w-full" />
+            </div>
+          )}
           <PeriodPanel />
           <div>
             <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Épica</p>

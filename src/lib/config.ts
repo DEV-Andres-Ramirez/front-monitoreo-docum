@@ -22,6 +22,12 @@ export type ProjectGoal = {
  */
 export type ProjectCompliance = { userStory: string; task: string; bug?: string };
 
+/**
+ * Mundo de análisis: qué tipos de ítem cuentan en Resumen, Colaboradores, semáforo y Cronograma.
+ * `dated: false` = sus fechas no son confiables: solo se muestran cantidades y el estado actual.
+ */
+export type WorkView = { key: "tasks" | "hu" | "bugs"; label: string; short: string; types: string[]; dated: boolean };
+
 export type ProjectMeta = {
   key: ProjectKey;
   name: string;
@@ -32,7 +38,11 @@ export type ProjectMeta = {
   accentSoft: string;
   goal?: ProjectGoal;
   compliance?: ProjectCompliance;
+  /** Mundos de análisis (el primero es el predeterminado); con uno solo no se muestra selector */
+  views: WorkView[];
 };
+
+const TASKS_VIEW: WorkView = { key: "tasks", label: "Tareas", short: "Tareas", types: ["Task"], dated: true };
 
 export const PROJECTS: Record<ProjectKey, ProjectMeta> = {
   "348": {
@@ -52,6 +62,8 @@ export const PROJECTS: Record<ProjectKey, ProjectMeta> = {
         { tag: "Informe", daily: 24 },
       ],
     },
+    // El rendimiento y el análisis de Acueducto se miden solo con tareas
+    views: [TASKS_VIEW],
   },
   "005": {
     key: "005",
@@ -61,8 +73,17 @@ export const PROJECTS: Record<ProjectKey, ProjectMeta> = {
     accent: "#13A538",
     accentSoft: "#E3F8E8",
     compliance: { userStory: "User Story", task: "Task", bug: "Bug" },
+    // Tres mundos separados; los bugs no usan fechas (las de Azure no son confiables)
+    views: [
+      TASKS_VIEW,
+      { key: "hu", label: "Historias de usuario", short: "HU", types: ["User Story"], dated: true },
+      { key: "bugs", label: "Bugs", short: "Bugs", types: ["Bug"], dated: false },
+    ],
   },
 };
+
+/** Inicio del análisis (ambos proyectos): el periodo por defecto va de esta fecha a hoy. */
+export const ANALYSIS_START = "2026-10-19";
 
 /** Horas de una jornada completa (100 % de asignación). Esperado diario = JORNADA_HORAS × % asignado. */
 export const JORNADA_HORAS = 8;

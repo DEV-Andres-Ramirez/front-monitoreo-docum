@@ -16,7 +16,7 @@ const MAX_RANGE_DAYS = 400;
 /**
  * Dataset de análisis del periodo [from, to], limitado a las épicas monitoreadas del proyecto
  * (AZURE_<p>_EPIC_IDS): ítems vivos + ancestros hasta la épica + transiciones de estado,
- * personal del proyecto (Global y No Global), colaboradores y alias. Solo lee de Supabase: la sincronización con
+ * personal del proyecto (Global y No Global, con su marca vigente), colaboradores y alias. Solo lee de Supabase: la sincronización con
  * Azure es automática cada hora (POST /api/sync/auto) o manual (POST /api/projects/[p]/sync).
  */
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/projects/[project]/dataset">) {
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/projects
     const [rpc, members, employees, aliases] = await Promise.all([
       // Solo lo que cuelga de las épicas monitoreadas del proyecto
       db().rpc("azure_dataset", { p_project: project, p_from: from, p_to: to, p_epics: cfg.epicIds }),
-      loadMembers(project),
+      loadMembers(project, todayISO()),
       db().from("employees").select("id, full_name, email"),
       db().from("employee_aliases").select("alias_email, employee_id").eq("project_key", project),
     ]);
@@ -72,6 +72,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/projects
         startDate: m.startDate,
         endDate: m.endDate,
         inGlobal: m.inGlobal,
+        flag: m.flag,
       })),
       employees: (employees.data ?? []).map((e) => ({ id: e.id, name: e.full_name, email: e.email })),
       aliases: (aliases.data ?? []).map((a) => ({ alias: a.alias_email, employeeId: a.employee_id })),

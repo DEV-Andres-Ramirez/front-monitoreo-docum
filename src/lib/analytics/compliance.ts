@@ -67,6 +67,8 @@ export type TypeSummary = {
   qaInPrev: number;
   overdue: number;
   unassigned: number;
+  /** Sin asignar y sin cumplir (pendientes sin responsable) */
+  unassignedOpen: number;
   /** Estados de Azure con su etapa (para la tabla) */
   states: { state: string; stage: Stage; count: number }[];
 };
@@ -102,15 +104,18 @@ export type TrendPoint = {
   huDone: number;
   taskScope: number;
   taskDone: number;
-  bugScope: number;
-  bugDone: number;
 };
+
+/** Bug del alcance con su responsable y etapa (los bugs no usan fechas: solo estado y cantidades). */
+export type BugRow = { item: ComplianceItem; assignee: Assignee; stage: Stage; epicId: number | null; feature: ComplianceItem | null };
 
 export type ComplianceAnalysis = {
   hu: TypeSummary;
   tasks: TypeSummary;
-  /** null si el proyecto no mide bugs */
+  /** null si el proyecto no mide bugs. Sin fechas: los campos de periodo y vencidas quedan en 0 */
   bugs: TypeSummary | null;
+  /** Bugs del alcance (personas y épicas del filtro) para el tablero de Bugs */
+  bugItems: BugRow[];
   /** Por épica monitoreada (en el orden configurado) */
   epics: GroupRow[];
   features: GroupRow[];
@@ -172,9 +177,13 @@ function summarize(items: ComplianceItem[], level: "qa" | "done", assignees: Map
     qaInPrev: items.filter((i) => inRange(i.qa, prevFrom, prevTo)).length,
     overdue: items.filter((i) => i.target !== null && i.target < o.today && !i[level]).length,
     unassigned: items.filter((i) => assignees.get(i.id)?.kind === "sinAsignar").length,
+    unassignedOpen: items.filter((i) => !i[level] && assignees.get(i.id)?.kind === "sinAsignar").length,
     states: [...states.values()].sort((a, b) => STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage) || b.count - a.count),
   };
 }
+
+/** Resumen sin datos de fechas (bugs): sin completados en el periodo ni vencidas. */
+const undated = (s: TypeSummary): TypeSummary => ({ ...s, doneInPeriod: 0, doneInPrev: 0, qaInPeriod: 0, qaInPrev: 0, overdue: 0 });
 
 const emptyGroup = (key: string, label: string): GroupRow => ({
   key,
@@ -273,16 +282,16 @@ export function complianceAnalysis(all: ComplianceItem[], o: ComplianceOptions):
       if (taskOverdue(t)) g.overdue += 1;
     }
   }
+  // Bugs: solo cantidades (sus fechas no son confiables, no suman vencidas)
   for (const b of bugs) {
     for (const g of [epic(b), feature(b), person(b)]) {
       g.bugs.total += 1;
       if (b.done) g.bugs.done += 1;
-      if (taskOverdue(b)) g.overdue += 1;
     }
   }
 
   // Tendencia acumulada desde el primer ítem creado hasta hoy
-  const firstCreated = [...hus, ...tasks, ...bugs].map((i) => i.created).filter((d): d is string => !!d).sort()[0] ?? o.today;
+  const firstCreated = [...hus, ...tasks].map((i) => i.created).filter((d): d is string => !!d).sort()[0] ?? o.today;
   const range = { from: new Date(`${firstCreated}T00:00:00`).getTime(), to: new Date(`${o.today}T23:59:59`).getTime() };
   const upTo = (d: string | null, end: string) => d !== null && d <= end;
   const trend = buckets(range, o.unit).map<TrendPoint>((b) => {
@@ -295,8 +304,6 @@ export function complianceAnalysis(all: ComplianceItem[], o: ComplianceOptions):
       huDone: hus.filter((i) => upTo(i.done, end)).length,
       taskScope: tasks.filter((i) => upTo(i.created, end)).length,
       taskDone: tasks.filter((i) => upTo(i.done, end)).length,
-      bugScope: bugs.filter((i) => upTo(i.created, end)).length,
-      bugDone: bugs.filter((i) => upTo(i.done, end)).length,
     };
   });
 
@@ -304,7 +311,8 @@ export function complianceAnalysis(all: ComplianceItem[], o: ComplianceOptions):
   return {
     hu: summarize(hus, "qa", assignees, o),
     tasks: summarize(tasks, "done", assignees, o),
-    bugs: o.config.bug ? summarize(bugs, "done", assignees, o) : null,
+    bugs: o.config.bug ? undated(summarize(bugs, "done", assignees, o)) : null,
+    bugItems: bugs.map((b) => ({ item: b, assignee: assignees.get(b.id)!, stage: stageOf(b), epicId: epicOf(b), feature: featureOf(b) })),
     epics: [...epicGroups.values()],
     features: [...featureGroups.values()].sort((a, b) => (a.key === "none" ? 1 : b.key === "none" ? -1 : byName(a, b))),
     hus: huRows,

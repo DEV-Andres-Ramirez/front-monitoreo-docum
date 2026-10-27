@@ -14,6 +14,16 @@ type ScheduleOptions = { zoom: GanttZoom; group: GanttGroup; sort: GanttSort; hi
 const DEFAULTS: ScheduleOptions = { zoom: "week", group: "person", sort: "start", hideClosed: false, onlyOverdue: false, types: [] };
 
 export function ScheduleView() {
+  const { view } = useApp();
+  if (!view.dated) {
+    return (
+      <EmptyState
+        variant="chart"
+        title="Los bugs no tienen cronograma"
+        description="Las fechas que llegan de Azure para los bugs no son confiables, así que no se dibujan en el Gantt. Mira su estado actual en el Resumen o en Colaboradores, o cambia a Tareas o Historias de usuario."
+      />
+    );
+  }
   return (
     <DatasetGate>
       <Schedule />
@@ -103,7 +113,7 @@ function Schedule() {
           )}
           {overdue > 0 && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-critical-soft px-2.5 py-1 font-semibold text-critical-fg">
-              <AlertTriangle className="size-3.5" /> {overdue} vencidos
+              <AlertTriangle className="size-3.5" /> {overdue} atrasados
             </span>
           )}
           {noPlan > 0 && <span className="text-subtle">{noPlan} sin fecha objetivo ni sprint con fechas</span>}

@@ -1,12 +1,25 @@
 // Métricas de flujo y desempeño sobre el modelo filtrado (TypeScript puro, cliente).
-import { isBusinessDay, isoLocalDate } from "@/lib/dates";
+import type { WorkView } from "@/lib/config";
+import { addDaysISO, businessDaysBetween, isBusinessDay, isoLocalDate } from "@/lib/dates";
 import { businessDaysElapsed, personHealth, type Health } from "./health";
 import type { PeriodPreset } from "./period";
 import type { StateCategory } from "./types";
 import { DAY, capacityHours, categoryAt, endOfDay, type Item, type Model, type Person } from "./model";
 
-/** `epics`: épicas monitoreadas seleccionadas (vacío = todas las del proyecto). `tag`: tag de Azure (null = todos). */
-export type Filters = { from: string; to: string; people: string[]; includeOthers: boolean; epics: number[]; tag: string | null };
+/**
+ * `epics`: épicas monitoreadas seleccionadas (vacío = todas). `tag`: tag de Azure (null = todos).
+ * `view`/`types`: mundo de análisis (Tareas, HU o Bugs) y los tipos de ítem que cuentan.
+ */
+export type Filters = {
+  from: string;
+  to: string;
+  people: string[];
+  includeOthers: boolean;
+  epics: number[];
+  tag: string | null;
+  view: WorkView["key"];
+  types: string[];
+};
 export type Range = { from: number; to: number };
 
 export const CATEGORIES: StateCategory[] = ["Proposed", "InProgress", "Resolved", "Completed"];
@@ -27,9 +40,11 @@ export function periodRange(f: Pick<Filters, "from" | "to">): Range {
 /**
  * Periodo con el que se comparan los indicadores:
  * Hoy / Ayer → el día hábil anterior · semanas → los mismos días de la semana anterior ·
- * resto → periodo de igual duración inmediatamente antes.
+ * "Desde el 19 oct" → ninguno (rango vacío: antes del inicio no hay con qué comparar) ·
+ * personalizado → periodo de igual duración inmediatamente antes.
  */
 export function previousRange(r: Range, preset?: PeriodPreset): Range {
+  if (preset === "sinceStart") return { from: r.from, to: r.from - 1 };
   if (preset === "today" || preset === "yesterday") {
     const d = new Date(r.from);
     do d.setDate(d.getDate() - 1);
@@ -43,13 +58,17 @@ export function previousRange(r: Range, preset?: PeriodPreset): Range {
 
 export const MIN_TREND_DAYS = 7;
 
-/** Ventana de las gráficas de tendencia: el periodo, o los últimos 7 días si es más corto (p. ej. "Hoy"). */
+/** Ventana de las gráficas de tendencia: el periodo, o los últimos 7 días hábiles si es más corto (p. ej. "Hoy"). */
 export function trendRange(r: Range): Range {
-  if (r.to - r.from >= (MIN_TREND_DAYS - 1) * DAY) return r;
-  const d = new Date(r.to);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - (MIN_TREND_DAYS - 1));
-  return { from: d.getTime(), to: r.to };
+  const to = isoLocalDate(r.to);
+  if (businessDaysBetween(isoLocalDate(r.from), to).length >= MIN_TREND_DAYS) return r;
+  let d = to;
+  let count = isBusinessDay(d) ? 1 : 0;
+  for (let guard = 0; count < MIN_TREND_DAYS && guard < 60; guard++) {
+    d = addDaysISO(d, -1);
+    if (isBusinessDay(d)) count += 1;
+  }
+  return { from: Math.min(r.from, startOfDay(d)), to: r.to };
 }
 
 /** Personas visibles según el filtro (personal del proyecto ± fuera de Global). */
@@ -65,14 +84,17 @@ export const inEpics = (i: Item, epics: number[]) => i.inMonitoredEpics && (!epi
 /** ¿El ítem tiene el tag? (sin distinguir mayúsculas; null = sin filtro) */
 export const inTag = (i: Item, tag: string | null) => !tag || i.tagList.some((t) => t.toLowerCase() === tag.toLowerCase());
 
-/** Ítems de trabajo dentro del alcance: épicas monitoreadas + tag + personas seleccionadas. */
+/** ¿El ítem es de un tipo del mundo elegido? (vacío = todos) */
+export const inTypes = (i: Item, types: string[]) => !types.length || types.includes(i.type);
+
+/** Ítems de trabajo dentro del alcance: épicas monitoreadas + mundo (tipos) + tag + personas seleccionadas. */
 export function scopedWork(model: Model, f: Filters): Item[] {
   const selected = new Set(f.people);
   return model.work.filter((i) => {
     const p = model.people.get(i.personKey!);
     if (!p || (!p.inRoster && !f.includeOthers)) return false;
     if (selected.size && !selected.has(p.key)) return false;
-    return inEpics(i, f.epics) && inTag(i, f.tag);
+    return inTypes(i, f.types) && inEpics(i, f.epics) && inTag(i, f.tag);
   });
 }
 
@@ -80,16 +102,8 @@ export function scopedWork(model: Model, f: Filters): Item[] {
 export const isAlive = (i: Item, r: Range) =>
   i.cat !== "Removed" && (i.createdAt <= r.to || deliveredIn(i, r)) && (i.completedAt === null || i.completedAt >= r.from);
 export const deliveredIn = (i: Item, r: Range) => i.deliveredAt !== null && i.deliveredAt >= r.from && i.deliveredAt <= r.to;
-export const completedIn = (i: Item, r: Range) => i.completedAt !== null && i.completedAt >= r.from && i.completedAt <= r.to;
-
-export function percentile(values: number[], p: number) {
-  if (!values.length) return null;
-  const s = [...values].sort((a, b) => a - b);
-  const idx = (s.length - 1) * p;
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  return s[lo] + (s[hi] - s[lo]) * (idx - lo);
-}
+/** Atrasado y genera alerta: sin entregar con objetivo pasado, salvo que la persona tenga una marca (vacaciones u otro proyecto). */
+export const alertable = (i: Item) => i.overdue && !i.excused;
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const round = (n: number, d = 1) => Math.round(n * 10 ** d) / 10 ** d;
@@ -102,19 +116,16 @@ export type KpiSet = {
   wip: number;
   hoursWip: number;
   resolvedPending: number;
+  /** Atrasados que generan alerta (excluye a personas con marca) */
   overdue: number;
   onTimeRate: number | null;
   onTimeBase: number;
-  cycleP50: number | null;
-  cycleP85: number | null;
-  leadP50: number | null;
   completedWork: number;
 };
 
 export function kpis(items: Item[], r: Range, now: number): KpiSet {
   const alive = items.filter((i) => isAlive(i, r));
   const delivered = items.filter((i) => deliveredIn(i, r));
-  const completed = items.filter((i) => completedIn(i, r));
   const withTarget = delivered.filter((i) => i.onTime !== null);
   const current = r.to >= now - DAY; // el periodo llega hasta hoy → el WIP es el actual
   const wipItems = current ? alive.filter((i) => i.cat === "InProgress") : alive.filter((i) => categoryAt(i, r.to) === "InProgress");
@@ -125,65 +136,67 @@ export function kpis(items: Item[], r: Range, now: number): KpiSet {
     wip: wipItems.length,
     hoursWip: round(sum(wipItems.map((i) => i.countedHours))),
     resolvedPending: alive.filter((i) => (current ? i.cat : categoryAt(i, r.to)) === "Resolved").length,
-    overdue: alive.filter((i) => i.overdue).length,
+    overdue: alive.filter(alertable).length,
     onTimeRate: withTarget.length ? withTarget.filter((i) => i.onTime).length / withTarget.length : null,
     onTimeBase: withTarget.length,
-    cycleP50: percentile(completed.map((i) => i.cycleTime).filter((v): v is number => v !== null), 0.5),
-    cycleP85: percentile(completed.map((i) => i.cycleTime).filter((v): v is number => v !== null), 0.85),
-    leadP50: percentile(completed.map((i) => i.leadTime).filter((v): v is number => v !== null), 0.5),
     completedWork: round(sum(delivered.map((i) => i.completedWork ?? 0))),
   };
 }
 
-// ------------------------------------------------------------------ Series temporales
-export function days(r: Range, maxPoints = 120) {
-  const out: number[] = [];
-  const total = Math.ceil((r.to - r.from) / DAY);
-  const step = Math.max(1, Math.ceil(total / maxPoints));
-  for (let t = r.from; t <= r.to; t += step * DAY) out.push(endOfDay(t));
-  if (out[out.length - 1] !== endOfDay(r.to)) out.push(endOfDay(r.to));
-  return out;
+// ------------------------------------------------------------------ Series temporales (solo días hábiles)
+/**
+ * Cubeta de tiempo. `start` = inicio del día (o de la semana) que la nombra; `from`/`end` = lo que cuenta.
+ * En las cubetas por día, lo hecho en fin de semana o festivo cae en el siguiente día hábil (o en el último
+ * del periodo, si el periodo termina en un día no hábil): así no aparecen días no laborables.
+ */
+export type Bucket = { start: number; from: number; end: number };
+
+/** Días hábiles del periodo; cada uno cuenta desde el día siguiente al hábil anterior hasta su fin. */
+export function dayBuckets(r: Range): Bucket[] {
+  const days = businessDaysBetween(isoLocalDate(r.from), isoLocalDate(r.to));
+  return days.map((iso, i) => {
+    const start = startOfDay(iso);
+    return {
+      start,
+      from: i === 0 ? r.from : endOfDay(startOfDay(days[i - 1])) + 1,
+      end: i === days.length - 1 ? r.to : endOfDay(start),
+    };
+  });
 }
 
-export function weeks(r: Range) {
-  const out: { start: number; end: number }[] = [];
+/** Semanas lunes → domingo que tocan el periodo. */
+export function weeks(r: Range): Bucket[] {
+  const out: Bucket[] = [];
   const d = new Date(r.from);
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // lunes
   d.setHours(0, 0, 0, 0);
-  for (let t = d.getTime(); t <= r.to; t += 7 * DAY) out.push({ start: t, end: t + 7 * DAY - 1 });
+  for (let t = d.getTime(); t <= r.to; t += 7 * DAY) out.push({ start: t, from: t, end: t + 7 * DAY - 1 });
   return out;
 }
 
 export type TimeUnit = "day" | "week";
 
-/** Días calendario del periodo (00:00 → 23:59:59 locales). */
-export function dayBuckets(r: Range) {
-  const out: { start: number; end: number }[] = [];
-  const d = new Date(r.from);
-  d.setHours(0, 0, 0, 0);
-  while (d.getTime() <= r.to) {
-    const start = d.getTime();
-    d.setDate(d.getDate() + 1);
-    out.push({ start, end: d.getTime() - 1 });
-  }
-  return out;
-}
-
-/** Cubetas del periodo por día o por semana (lunes → domingo; los extremos se recortan al contar). */
+/** Cubetas del periodo por día hábil o por semana (los extremos se recortan al contar). */
 export const buckets = (r: Range, unit: TimeUnit) => (unit === "day" ? dayBuckets(r) : weeks(r));
 
-/** Ítems y horas entregadas por día o por semana. */
+/** Cierres de los días hábiles del periodo (para series acumuladas como el flujo de estados). */
+export function businessCloses(r: Range) {
+  return dayBuckets(r).map((b) => Math.min(endOfDay(b.start), r.to));
+}
+
+/** Ítems y horas entregadas por día hábil o por semana. */
 export function throughput(items: Item[], r: Range, unit: TimeUnit) {
-  const delivered = items.filter((i) => i.deliveredAt !== null && i.deliveredAt >= r.from && i.deliveredAt <= r.to);
+  const delivered = items.filter((i) => deliveredIn(i, r));
   return buckets(r, unit).map((b) => {
-    const done = delivered.filter((i) => i.deliveredAt! >= b.start && i.deliveredAt! <= b.end);
+    const done = delivered.filter((i) => i.deliveredAt! >= Math.max(b.from, r.from) && i.deliveredAt! <= Math.min(b.end, r.to));
     return { start: b.start, items: done.length, hours: round(sum(done.map((i) => i.countedHours))) };
   });
 }
 
+/** Ítems por categoría de estado al cierre de cada día hábil. */
 export function cumulativeFlow(items: Item[], r: Range) {
   const relevant = items.filter((i) => isAlive(i, r));
-  return days(r).map((t) => {
+  return businessCloses(r).map((t) => {
     const counts: Record<StateCategory, number> = { Proposed: 0, InProgress: 0, Resolved: 0, Completed: 0, Removed: 0 };
     for (const i of relevant) {
       const cat = categoryAt(i, t);
@@ -193,31 +206,21 @@ export function cumulativeFlow(items: Item[], r: Range) {
   });
 }
 
-export function burnup(items: Item[], r: Range) {
-  const relevant = items.filter((i) => isAlive(i, r) && i.countedHours > 0);
-  return days(r).map((t) => ({
-    t,
-    scope: round(sum(relevant.filter((i) => i.createdAt <= t).map((i) => i.countedHours))),
-    done: round(sum(relevant.filter((i) => i.deliveredAt !== null && i.deliveredAt <= t).map((i) => i.countedHours))),
-  }));
+/** Días hábiles completos transcurridos desde `since` hasta `now` (sin contar el día de inicio). */
+export function businessAge(since: number, now: number) {
+  const from = addDaysISO(isoLocalDate(since), 1);
+  const to = isoLocalDate(now);
+  return from > to ? 0 : businessDaysBetween(from, to).length;
 }
 
-export function cycleScatter(items: Item[], r: Range) {
-  const points = items
-    .filter((i) => completedIn(i, r) && i.cycleTime !== null)
-    .map((i) => ({ item: i, x: i.completedAt!, y: round(i.cycleTime!, 2) }));
-  const values = points.map((p) => p.y);
-  return { points, p50: percentile(values, 0.5), p85: percentile(values, 0.85) };
-}
-
-/** Trabajo en curso con su antigüedad en el estado actual. */
+/** Trabajo en curso con los días hábiles que lleva en su estado actual. */
 export function agingWip(items: Item[], now: number) {
   return items
     .filter((i) => i.cat === "InProgress" || i.cat === "Resolved")
     .map((i) => {
       const seg = [...i.segments].reverse().find((s) => s.cat === i.cat);
       const since = seg?.from ?? i.actualStart ?? i.createdAt;
-      return { item: i, since, ageDays: round((now - since) / DAY, 1) };
+      return { item: i, since, ageDays: businessAge(since, now) };
     })
     .sort((a, b) => b.ageDays - a.ageDays);
 }
@@ -242,14 +245,13 @@ export type PersonRow = {
   onTimeRate: number | null;
   /** Entregas con fecha objetivo (base de onTimeRate) */
   onTimeBase: number;
-  cycleP50: number | null;
   /** Capacidad a la fecha: días hábiles del periodo transcurridos hasta hoy (sin días futuros) */
   capacity: number | null;
   utilization: number | null;
   byCat: Record<StateCategory, number>;
   /** Días hábiles del periodo transcurridos hasta hoy */
   elapsedDays: number;
-  /** Semáforo: Va mal / En riesgo / Va bien / Sin carga (health.ts) */
+  /** Semáforo: Va mal / En riesgo / Va bien / Sin carga / No evaluado (health.ts) */
   health: Health;
 };
 
@@ -280,17 +282,16 @@ export function perPerson(people: Person[], items: Item[], r: Range, now = Date.
       completedWork: round(sum(delivered.map((i) => i.completedWork ?? 0))),
       onTimeRate: k.onTimeRate,
       onTimeBase: k.onTimeBase,
-      cycleP50: k.cycleP50,
       capacity,
       utilization,
       byCat,
       elapsedDays,
-      health: personHealth({ ...k, active: alive.length, utilization, proposed }, elapsedDays),
+      health: personHealth({ ...k, active: alive.length, utilization, proposed }, elapsedDays, person.flag),
     };
   });
 }
 
-/** Horas entregadas por persona y día o semana (heatmap). */
+/** Horas entregadas por persona y día hábil o semana (heatmap). */
 export function workloadMatrix(people: Person[], items: Item[], r: Range, unit: TimeUnit = "week") {
   const bs = buckets(r, unit);
   return {
@@ -300,7 +301,7 @@ export function workloadMatrix(people: Person[], items: Item[], r: Range, unit: 
       return {
         person: p,
         cells: bs.map((w) => {
-          const done = mine.filter((i) => i.deliveredAt! >= Math.max(w.start, r.from) && i.deliveredAt! <= Math.min(w.end, r.to));
+          const done = mine.filter((i) => i.deliveredAt! >= Math.max(w.from, r.from) && i.deliveredAt! <= Math.min(w.end, r.to));
           return { hours: round(sum(done.map((i) => i.countedHours))), items: done.length };
         }),
       };

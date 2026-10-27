@@ -4,10 +4,11 @@ import "server-only";
 import { db } from "./supabase";
 
 type AuditEvent = {
-  action: "login_success" | "login_failed" | "logout" | "azure_refresh" | "alias_linked" | "alias_unlinked";
+  action: "login_success" | "login_failed" | "logout" | "azure_refresh" | "alias_linked" | "alias_unlinked" | "member_flag_set" | "member_flag_cleared";
   entity?: string;
   entityId?: string;
   projectKey?: string;
+  oldData?: Record<string, unknown> | null;
   newData?: Record<string, unknown>;
 };
 
@@ -20,6 +21,7 @@ export async function audit(request: Request, event: AuditEvent) {
         entity: event.entity ?? null,
         entity_id: event.entityId ?? null,
         project_key: event.projectKey ?? null,
+        old_data: event.oldData ?? null,
         new_data: event.newData ?? null,
         ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
         user_agent: request.headers.get("user-agent"),

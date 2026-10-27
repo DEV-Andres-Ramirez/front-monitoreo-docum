@@ -25,33 +25,66 @@ Reglas de negocio (decididas con el usuario):
   - **Sin doble conteo:** si un padre tiene hijos con horas, suman los hijos.
   - Se compara contra `CompletedWork`.
 - **Personas:** **Global** es la base de personal de LinkTic. En la UI **siempre se dice "Global", nunca "Excel" ni "planeación"**. Hoy se carga desde `context/…xlsx` → `0002_seed.sql` (55 personas, `in_global = true`).
-  - El **personal del proyecto** es Global **+ miembros No Global**: `project_members.in_global = false`, sin cargo ni % (sin capacidad), con la etiqueta `NoGlobalBadge` junto al nombre. Cuentan en el análisis como cualquier miembro (`Person.inRoster = true`, `inGlobal = false`, `isNoGlobal()` / `personRoleLabel()` en `model.ts`).
+  - El **personal del proyecto** es Global **+ miembros No Global**: `project_members.in_global = false`, sin cargo ni % (sin capacidad). En la UI **se dicen "Sin asignación al proyecto"** (nunca "No Global"); etiqueta `NoGlobalBadge` junto al nombre, vía `PersonBadges`. Cuentan en el análisis como cualquier miembro (`Person.inRoster = true`, `inGlobal = false`, `isNoGlobal()` / `personRoleLabel()` en `model.ts`).
   - Hoy, en 348: David Felipe Vergara Bogota y Jhostin Alexander Ladino Gonzalez (0009). En 005: Cristian Roa, Carlos Cansina, Josimar Bonilla, Dario Lopez y Jose Fernando Lozano Murcia (0011; se quitó el alias que hacía contar a Dario como Luis Gabriel Melendez Gongora). Para agregar otro: insertar en `employees` (la cédula es opcional) y en `project_members` con `in_global = false`, `role` y `allocation` en null y `assignment_type = 'No Global'`.
   - Quien tenga ítems en las épicas sin ser personal del proyecto aparece en "Fuera de Global" (no cuenta en los indicadores salvo `includeOthers`) y se puede **vincular** (alias).
+  - **Marcas especiales** (`member_flags`, 0012; `RosterMember.flag` / `Person.flag`):
+    - "En vacaciones", "Asignado al proyecto de Acueducto" u otra, con `until` opcional;
+    - con marca **no se evalúa** en el semáforo (nivel `excused`, "No evaluado") y sus atrasos no generan alertas (`Item.excused`, `alertable()`), pero **lo que entrega sí cuenta**;
+    - se ponen y quitan desde la ficha (`FlagControl` en `member-sheet.tsx` → `PUT/DELETE /api/members/flag`, auditoría `member_flag_set|cleared`);
+    - `FlagBadge` reemplaza a "Sin asignación al proyecto" cuando hay marca;
+    - hoy: Angie Hernandez (vacaciones, 348 y 005) y, en 005, Jhostin Ladino y Jose Fernando Lozano (asignados a Acueducto).
 - **Alcance:** **solo** HU, Tareas y Bugs que cuelgan de las épicas monitoreadas (`AZURE_<p>_EPIC_IDS`). Hay un filtro por épica (en 348: botones Todas / CORE / Temáticos; con más de 2 épicas, como en 005, `EpicPanel` con casillas de selección múltiple), pero nunca se sale de ellas.
+- **Mundos de análisis** (`ProjectMeta.views`, `Filters.view` / `Filters.types`, `scopedWork()` filtra por tipo):
+  - **348:** solo **Tareas** en todo el análisis (Resumen, Colaboradores, semáforo, Gantt): decisión del usuario.
+  - **005:** **Tareas · Historias de usuario · Bugs** separados, con el selector `ViewFilter` (solo en Resumen, Colaboradores y Cronograma); por defecto, Tareas.
+  - Los **Bugs** (`dated: false`) **no usan fechas**: las de Azure no son confiables y daban alertas falsas. Solo se ven cantidades y estado actual (`bugs-board.tsx`, datos de `/compliance`), sin periodo, atrasos, semáforo ni Gantt. En Cumplimiento, los bugs no tienen "en el periodo", atrasadas ni tendencia.
+- **Periodo** (`period.ts`):
+  - por defecto `sinceStart` ("Desde el 19 oct", `ANALYSIS_START` en `config.ts`) hasta hoy;
+  - atajos: solo Hoy, Ayer (= **día hábil anterior**), Esta semana y Semana pasada, más un rango personalizado;
+  - se guarda en **sessionStorage** (`docum:period:<p>`, `useSessionStored`): cada visita vuelve al predeterminado;
+  - con `sinceStart` no hay comparación (`comparisonLabel` → null; `previousRange` vacío).
+- **Días hábiles en toda la UI:**
+  - ningún eje ni tabla muestra fines de semana o festivos (`dayBuckets()`, `businessCloses()`, `trendRange()` con 7 días hábiles, Meta y Gantt en tiempo hábil);
+  - lo entregado en un día no hábil cuenta en el **siguiente día hábil** (o en el último del periodo).
 - **Gantt plan vs. real:**
   - plan = `StartDate`/`TargetDate` del ítem; si no existen, las fechas del **sprint**;
   - real = `InProgressDate` → entrega (`Custom.FechadeEntregaReal` ?? `ResolvedDate` ?? `CompletedDate`);
   - a tiempo si la entrega ≤ fin del día objetivo.
-- **Capacidad** = 8 h × % asignado × días hábiles vigentes **transcurridos** en el periodo (`capacityHours(p, r.from, min(r.to, now))` en `perPerson`: sin días futuros); **utilización** = horas entregadas ÷ capacidad.
+- **Capacidad a hoy** = 8 h × % asignado × días hábiles vigentes **transcurridos** en el periodo (`capacityHours(p, r.from, min(r.to, now))` en `perPerson`: sin días futuros); **uso de capacidad** (antes "utilización") = horas estimadas entregadas ÷ capacidad.
+- **Lenguaje de la UI:**
+  - "atrasadas" (no "vencidas");
+  - "uso de capacidad";
+  - "Sin asignación al proyecto";
+  - preguntas en los títulos de las gráficas;
+  - cada KPI con su explicación y un (i) con la fórmula.
+  - Se quitaron Burnup, Cycle time por ítem y las tarjetas WIP y Cycle time; no volver a mostrarlos sin pedirlo.
 - **Semáforo (ambos proyectos, `src/lib/analytics/health.ts`; `PersonRow.health` en `perPerson`):**
   - **Sin carga** = sin ítems en el periodo;
-  - **Va mal** = 3+ vencidos, o sin entregas con 3+ días hábiles transcurridos, o utilización < 50 % (solo con capacidad), o a tiempo < 60 % (con 3+ entregas con objetivo);
-  - **En riesgo** = 1–2 vencidos, utilización 50–80 %, a tiempo 60–80 % o nada en curso con ítems por iniciar;
-  - **Va bien** = nada de lo anterior. Con menos de 3 días hábiles transcurridos solo cuentan vencidos y puntualidad;
+  - **Va mal** = 3+ atrasados, o sin entregas con 3+ días hábiles transcurridos, o uso de capacidad < 50 % (solo con capacidad), o a tiempo < 60 % (con 3+ entregas con objetivo);
+  - **En riesgo** = 1–2 atrasados, uso de capacidad 50–80 %, a tiempo 60–80 % o nada en curso con ítems por iniciar;
+  - **Va bien** = nada de lo anterior. Con menos de 3 días hábiles transcurridos solo cuentan atrasos y puntualidad;
+  - **No evaluado** = tiene marca especial; **Sin carga** se cuenta aparte;
+  - se mide con el mundo elegido (348: tareas; 005: Tareas o HU; en Bugs no hay semáforo). La columna de Cumplimiento se mide siempre con tareas;
   - umbrales en `HEALTH_RULES`; UI en `team-health.tsx` (`TeamHealthCard` del Resumen, contadores, `useTeamRows()`), `HealthBadge` en `primitives.tsx`, Colaboradores, detalle y tabla por persona de Cumplimiento. Colores de estado reservados, siempre con ícono y texto.
 - **Días hábiles** = lunes a viernes **sin festivos de Colombia** (`colombianHolidays()` / `isBusinessDay()` en `src/lib/dates.ts`).
 - **Cumplimiento (solo 005, `PROJECTS["005"].compliance` en `config.ts`; vista `/cumplimiento` + tarjeta en el Resumen):**
   - total, completados y % de HU, Tareas y Bugs (`compliance.bug`) de las épicas; cuenta **todo** lo de las épicas (de quien sea o sin asignar; con personas elegidas, solo lo de ellas; con épicas elegidas, solo lo de ellas);
   - HU en dos niveles: **cumplida = en producción** (Completed) y **entregada a QA o más** (Resolved o Completed); tarea y bug cumplidos = Completed (`Closed` / `4. Cerrado`); en bugs también se muestra "en revisión QA o más";
-  - vencida = objetivo (o fin del sprint) pasado sin cumplir (HU: sin QA);
+  - atrasada = objetivo (o fin del sprint) pasado sin cumplir (HU: sin QA); los bugs nunca cuentan como atrasados;
+  - en el Resumen, `ComplianceSummary` muestra solo el mundo elegido;
   - "Lista para QA" = HU con todas sus tareas cerradas que sigue en Por iniciar o En desarrollo.
 - **Meta de cierre (solo 348, `PROJECTS["348"].goal` en `config.ts`):**
   - 24 tareas `Video` y 24 `Informe` por día hábil desde el 19-oct; cierre el 13-nov;
   - cuenta **todas** las tareas con esos tags de ambas épicas, **sin** filtrar por persona ni por Global (decisión del usuario: las de Informe son de David Vergara, No Global);
-  - completada = Entregado o Cerrado, en el día de su fecha de entrega real;
-  - la meta acumulada es diaria × días hábiles desde `start`, con tope en el total;
-  - lo cerrado antes de `start` cuenta como avance.
+  - completada = Entregado o Cerrado, en el día de su fecha de entrega real (si es día no hábil, el siguiente hábil);
+  - lo cerrado antes de `start` cuenta como avance previo;
+  - **en vivo**, "frente a lo esperado" y el ritmo usan los días **cerrados** (hasta el hábil anterior), y "completadas hoy" va aparte. El día de hoy no se marca como incumplido mientras sigue abierto;
+  - esperado = diaria × días hábiles cerrados desde `start` (tope en el total);
+  - **ritmo actual** = completadas desde el 19-oct hasta el último día cerrado ÷ días hábiles (también en el Total);
+  - no hay "ritmo necesario";
+  - **snapshots**: `goalProgress(goal, tasks, { asOf, live, tag })` recalcula todo al cierre de un día hábil (`snapshotDays()`); el total es el actual;
+  - la línea acumulada llega al último día cerrado.
 
 ## 🚫 REGLA DE ORO: Azure DevOps es SOLO LECTURA
 
@@ -62,7 +95,7 @@ Reglas de negocio (decididas con el usuario):
   - **POST** solo a `/_apis/wit/wiql` (consulta).
   - No agregues otros métodos o endpoints, ni hagas `fetch` directo a Azure.
 - Los PAT tienen *Work Items (Read)*, *Project and Team (Read)* y *Analytics (Read)*.
-- Lo único que se escribe va a **Supabase**: la copia sincronizada, los alias y la bitácora.
+- Lo único que se escribe va a **Supabase**: la copia sincronizada, los alias, las marcas especiales y la bitácora.
 
 ## Arquitectura
 
@@ -101,11 +134,11 @@ Reglas de negocio (decididas con el usuario):
 - **Motor de análisis (cliente, TS puro)** en `src/lib/analytics/`:
   - `model.ts`: `buildModel()` resuelve identidad (alias → correo exacto → parte local → tokens del nombre), horas sin doble conteo, fechas plan/real, puntualidad, vencidos, segmentos de estado, ancestros (feature, `epicId` = épica monitoreada de la que cuelga, `inMonitoredEpics`), `model.epics` (id + título) e iteraciones;
   - `scopedWork()` / `inEpics()` en `metrics.ts` exigen `inMonitoredEpics` (defensa además del RPC) y aplican el filtro por épica;
-  - `metrics.ts`: KPIs, throughput semanal, CFD, burnup, cycle time (P50/P85), antigüedad del WIP, `perPerson` y `workloadMatrix`. Recibe `now` explícito: no llames `Date.now()` en render;
-  - `period.ts`: presets. Los rápidos son `today`, `yesterday`, `thisWeek` (`DEFAULT_PRESET`) y `lastWeek`, con semana de lunes a domingo. El resto (`MORE_PRESETS`) incluye "Sprint actual", deducido de las iteraciones conocidas guardadas en localStorage. `comparisonLabel()` describe el periodo con que se compara (`previousRange(range, preset)` en `metrics.ts`: Hoy y Ayer contra el día hábil anterior; semanas, desplazadas 7 días);
-  - `compliance.ts`: `complianceAnalysis(items, opts)` calcula los resúmenes por tipo (HU, tareas y bugs), el flujo, la tendencia, las tablas por épica (`epicOf()`, con `opts.epicIds` / `opts.epics`), Feature, HU y persona, y los hallazgos. Los datos vienen de `GET /api/projects/[p]/compliance` → RPC `azure_compliance_items` (0010). La identidad usa `buildIdentity()` + `classifyAssignee()` de `model.ts`, con el dataset; el hook es `useCompliance()` (`src/components/views/use-compliance.ts`);
+  - `metrics.ts`: KPIs, throughput por día hábil o semana, flujo de estados (CFD), antigüedad del WIP en días hábiles, `perPerson` y `workloadMatrix`. Recibe `now` explícito: no llames `Date.now()` en render. Las cubetas (`Bucket = { start, from, end }`) usan `from`/`end` para contar y `start` para la etiqueta;
+  - `period.ts`: presets `sinceStart` (`DEFAULT_PRESET`), `today`, `yesterday` (día hábil anterior), `thisWeek` y `lastWeek` (lunes a domingo), más `custom`. `comparisonLabel()` describe el periodo con que se compara, o devuelve null (`previousRange(range, preset)` en `metrics.ts`: Hoy y Ayer, contra el día hábil anterior; semanas, desplazadas 7 días; `sinceStart`, rango vacío);
+  - `compliance.ts`: `complianceAnalysis(items, opts)` calcula los resúmenes por tipo (HU, tareas y bugs; los de bugs sin campos de fecha), el flujo, la tendencia (HU y tareas), `bugItems` para el tablero de Bugs, las tablas por épica (`epicOf()`, con `opts.epicIds` / `opts.epics`), Feature, HU y persona, y los hallazgos. Los datos vienen de `GET /api/projects/[p]/compliance` → RPC `azure_compliance_items` (0010). La identidad usa `buildIdentity()` + `classifyAssignee()` de `model.ts`, con el dataset; el hook es `useCompliance()` (`src/components/views/use-compliance.ts`);
   - menú por proyecto: `navItems(projectKey)` en `nav.ts` (`NavItem.projects` limita una vista a ciertos proyectos; los atajos 1…n siguen el orden del menú). `navFor(pathname, projectKey)` sirve para el título;
-  - `goal.ts`: `goalProgress(goal, tasks, today, tag)` calcula, por tag y en total, el avance, la serie diaria de `start` a `deadline`, el acumulado frente a la meta, el ritmo necesario y el actual (últimos 5 días hábiles cerrados) y la proyección. Los datos vienen de `GET /api/projects/[p]/goal` → RPC `azure_goal_tasks` (0008), no del dataset del periodo. Colores de tag fijos (violeta y magenta), validados con dataviz;
+  - `goal.ts`: `goalProgress(goal, tasks, { asOf, live, tag })` calcula, por tag y en total y solo en días hábiles, el avance, lo completado el día de corte, "frente a lo esperado" (días cerrados), el ritmo actual (desde `start` hasta el último día cerrado), la proyección y la serie acumulada. `snapshotDays()` lista los días hábiles cerrados para los snapshots. Los datos vienen de `GET /api/projects/[p]/goal` → RPC `azure_goal_tasks` (0008), no del dataset del periodo. Colores de tag fijos (violeta y magenta), validados con dataviz;
   - filtro de tag: `Filters.tag` + `inTag()`. Las opciones salen de `goal.tags` del proyecto (348); `Item.tagList` son los tags separados por ";";
   - cubetas de tiempo: `throughput()` y `workloadMatrix()` aceptan `TimeUnit` (`"day" | "week"`). La preferencia es global (`docum:chart-unit`, por defecto `"day"`; `chartUnit` en `useApp()`);
   - `state-colors.ts`: colores por `StateCategory`, validados con dataviz (no cambiar el orden).
@@ -113,7 +146,7 @@ Reglas de negocio (decididas con el usuario):
 - **Estado global** en `AppProvider` (`src/components/shell/app-provider.tsx`):
   - proyecto, periodo, filtros (`people`, `includeOthers`, `epics`: épicas seleccionadas, vacío = todas), dataset (SWR, con polling mientras `sync.running`), `model`, `scoped` (ítems en el alcance), `people`, sincronización y paneles globales (`WorkItemSheet`, `MemberSheet`, `CommandPalette`, `ShortcutsDialog`).
   - Las vistas usan `useApp()` y se envuelven en `<DatasetGate>`.
-  - Los filtros se guardan por proyecto (`docum:filters:<p>`) con `useStored()` (`client-api.ts`). `v: 2` marca los guardados con los periodos nuevos; sin esa marca se conservan personas y épicas, pero el periodo vuelve a "Esta semana".
+  - Los filtros (personas, épicas, tag y mundo) se guardan por proyecto (`docum:filters:<p>`) con `useStored()`. El periodo va aparte en sessionStorage (`docum:period:<p>`, `useSessionStored()` de `client-api.ts`).
   - **Fechas en tablas y etiquetas:** usa `bucketLabel()` o `format()` en hora local. Nunca `new Date(t).toISOString().slice(0, 10)` sobre marcas locales: el fin de día de Bogotá cae al día siguiente en UTC.
 - **Acento por proyecto:** `<div data-project className="contents">` en el provider; los paneles nuevos van dentro.
 - **Supabase:** `db()` es server-only con la llave secreta. **Nunca** crear un cliente en el navegador.
@@ -124,17 +157,19 @@ Reglas de negocio (decididas con el usuario):
 - `azure_work_items(project_key, id, type, title, state, state_category, parent_id, assigned_email, assigned_name, iteration_*, created/changed/activated/in_progress/resolved/completed/closed_at, start/target/delivery_date, story_points, effort, original_estimate, completed_work, remaining_work, lead/cycle_time_days, …)`.
 - `azure_revisions(project_key, work_item_id, revision, state, state_category, assigned_email, changed_at)`.
 - `azure_sync_runs` (traza de sincronizaciones) y `employee_aliases(project_key, alias_email, employee_id)`.
+- `member_flags(project_key, employee_id, kind, label, until)`: marcas especiales (una por persona y proyecto; vigente si `until` es null o ≥ hoy).
 - `audit_log`, con las acciones:
   - `login_success|failed`, `logout`;
   - `azure_sync`, `azure_sync_failed`;
   - `alias_linked|unlinked`;
+  - `member_flag_set|cleared`;
   - y las `activity_*` del legado.
 - **Legado (sin uso, no borrar):** `activity_logs`, el trigger `audit_activity_changes` y las funciones `activity_stats` / `activity_totals` (0003).
 - **Seguridad de las tablas nuevas:**
   - RLS activo **sin políticas** y `revoke all … from anon, authenticated`;
   - RPC con `revoke execute … from public, anon, authenticated` + `grant … to service_role`;
   - tras cualquier DDL, revisar `get_advisors`.
-- **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004), `azure_dataset_assigned` (0005), `dataset_monitored_epics` (0006), `dataset_backfilled_delivery` (0007), `goal_tags` (0008), `no_global_members` (0009), `compliance_items` (0010) y `no_global_005` (0011).
+- **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004), `azure_dataset_assigned` (0005), `dataset_monitored_epics` (0006), `dataset_backfilled_delivery` (0007), `goal_tags` (0008), `no_global_members` (0009), `compliance_items` (0010), `no_global_005` (0011) y `member_flags` (0012).
   - Se aplican con el MCP del proyecto (`.mcp.json`, ref `klrierizueihrenhcema`) o con `scripts/apply-migrations.mjs`.
   - Antes de escribir con cualquier conector de Supabase, confirma con `list_projects` (solo lectura) que ve `klrierizueihrenhcema`. El 19-oct el conector `claude.ai Supabase` estaba en otra cuenta; el 27-oct se reconectó con la cuenta dueña y con él se aplicó la 0011.
 - **Nueva carga de Global:** reemplazar el archivo de `context/` → `python3 scripts/generate-seed.py` → aplicar `0002_seed.sql`. Es un upsert con `in_global = true`, no borra a los No Global; si Global incluye a uno de ellos, deja de ser No Global.

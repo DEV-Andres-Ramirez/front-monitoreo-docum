@@ -5,20 +5,18 @@ import type { ChartData, ChartOptions } from "chart.js";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useMemo } from "react";
-import { Bar, Chart, Doughnut, Line } from "react-chartjs-2";
+import { Bar, Doughnut, Line } from "react-chartjs-2";
 import { CATEGORIES, CATEGORY_LABEL, type PersonRow, type Range, type TimeUnit } from "@/lib/analytics/metrics";
-import { isNoGlobal, type Item, type Person } from "@/lib/analytics/model";
+import { isNoGlobal, type Person } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import type { StateCategory } from "@/lib/analytics/types";
 import { axes, baseOptions, tooltipStyle, verticalGradient, withAlpha, type ChartTheme } from "./chart-theme";
 
 const fmtDay = (t: number) => format(t, "d MMM", { locale: es });
 const fmtHours = (v: number) => `${(Math.round(v * 10) / 10).toLocaleString("es-CO")} h`;
-const fmtDays = (v: number) => `${(Math.round(v * 10) / 10).toLocaleString("es-CO")} d`;
 
-/** Etiqueta de una cubeta de tiempo: "lun 19 oct" (día) o "Sem. 19 oct" (semana). */
+/** Etiqueta de una cubeta de tiempo: "lun 19 oct" (día hábil) o "Sem. 19 oct" (semana). */
 export const bucketLabel = (t: number, unit: TimeUnit) => (unit === "day" ? format(t, "EEE d MMM", { locale: es }) : `Sem. ${fmtDay(t)}`);
-const isWeekend = (t: number) => [0, 6].includes(new Date(t).getDay());
 
 // ------------------------------------------------------------------ Throughput (por día o por semana)
 export function ThroughputChart({
@@ -26,11 +24,14 @@ export function ThroughputChart({
   unit,
   metric,
   highlight,
+  noun = "ítems",
   theme,
 }: {
   buckets: { start: number; items: number; hours: number }[];
   unit: TimeUnit;
   metric: "items" | "hours";
+  /** Qué se entrega ("tareas", "HU"…), para el texto de la gráfica */
+  noun?: string;
   /** Periodo seleccionado: las barras fuera de él (contexto de 7 días) se atenúan */
   highlight?: Range;
   theme: ChartTheme;
@@ -40,12 +41,10 @@ export function ThroughputChart({
       labels: buckets.map((b) => bucketLabel(b.start, unit)),
       datasets: [
         {
-          label: metric === "items" ? "Ítems entregados" : "Horas entregadas",
+          label: metric === "items" ? `${noun.charAt(0).toUpperCase()}${noun.slice(1)} entregadas` : "Horas estimadas entregadas",
           data: buckets.map((b) => (metric === "items" ? b.items : b.hours)),
-          // Atenuadas: fuera del periodo seleccionado o fin de semana (vista por días)
-          backgroundColor: buckets.map((b) =>
-            withAlpha(theme.accent, (highlight && (b.start < highlight.from || b.start > highlight.to)) || (unit === "day" && isWeekend(b.start)) ? 0.35 : 0.8),
-          ),
+          // Atenuadas: fuera del periodo seleccionado (contexto de 7 días hábiles)
+          backgroundColor: buckets.map((b) => withAlpha(theme.accent, highlight && (b.start < highlight.from || b.start > highlight.to) ? 0.35 : 0.8)),
           hoverBackgroundColor: theme.accent,
           borderRadius: { topLeft: theme.px(4), topRight: theme.px(4) },
           borderSkipped: "start",
@@ -53,7 +52,7 @@ export function ThroughputChart({
         },
       ],
     }),
-    [buckets, unit, metric, highlight, theme],
+    [buckets, unit, metric, highlight, theme, noun],
   );
   const options = useMemo<ChartOptions<"bar">>(() => {
     const base = baseOptions<"bar">(theme);
@@ -68,25 +67,34 @@ export function ThroughputChart({
             label: (i) => ` ${i.dataset.label}: ${metric === "hours" ? fmtHours(Number(i.raw)) : i.raw}`,
             footer: (items) => {
               const b = buckets[items[0].dataIndex];
-              return metric === "items" ? `${fmtHours(b.hours)} entregadas` : `${b.items} ítems entregados`;
+              return metric === "items" ? `${fmtHours(b.hours)} estimadas` : `${b.items} ${noun} entregadas`;
             },
           },
         },
       },
     };
-  }, [theme, metric, buckets]);
+  }, [theme, metric, buckets, noun]);
   return <Bar data={data} options={options} />;
 }
 
 // ------------------------------------------------------------------ Flujo acumulado (CFD)
-export function CumulativeFlowChart({ series, theme }: { series: ({ t: number } & Record<StateCategory, number>)[]; theme: ChartTheme }) {
+export function CumulativeFlowChart({
+  series,
+  labels = CATEGORY_LABEL,
+  theme,
+}: {
+  series: ({ t: number } & Record<StateCategory, number>)[];
+  /** Nombre de cada etapa (p. ej. las de HU: En desarrollo, En QA…) */
+  labels?: Record<StateCategory, string>;
+  theme: ChartTheme;
+}) {
   // De abajo hacia arriba: Cerrado → Entregado → En curso → Por iniciar
   const order: StateCategory[] = ["Completed", "Resolved", "InProgress", "Proposed"];
   const data = useMemo<ChartData<"line", number[], string>>(
     () => ({
-      labels: series.map((p) => fmtDay(p.t)),
+      labels: series.map((p) => format(p.t, "EEE d MMM", { locale: es })),
       datasets: order.map((cat, idx) => ({
-        label: CATEGORY_LABEL[cat],
+        label: labels[cat],
         data: series.map((p) => p[cat]),
         borderColor: categoryColor(cat, theme.dark),
         backgroundColor: withAlpha(categoryColor(cat, theme.dark), theme.dark ? 0.55 : 0.45),
@@ -98,7 +106,7 @@ export function CumulativeFlowChart({ series, theme }: { series: ({ t: number } 
       })),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [series, theme],
+    [series, theme, labels],
   );
   const options = useMemo<ChartOptions<"line">>(() => {
     const base = baseOptions<"line">(theme);
@@ -108,63 +116,10 @@ export function CumulativeFlowChart({ series, theme }: { series: ({ t: number } 
       scales: { x: { ...a.x, ticks: { ...a.x.ticks, maxTicksLimit: 10, autoSkip: true } }, y: { ...a.y, stacked: true } },
       plugins: {
         ...base.plugins,
-        tooltip: { ...base.plugins?.tooltip, itemSort: (x, y) => y.datasetIndex - x.datasetIndex, callbacks: { label: (i) => ` ${i.dataset.label}: ${i.raw} ítems` } },
-      },
-    };
-  }, [theme]);
-  return <Line data={data} options={options} />;
-}
-
-// ------------------------------------------------------------------ Burnup
-export function BurnupChart({ series, theme }: { series: { t: number; scope: number; done: number }[]; theme: ChartTheme }) {
-  const done = categoryColor("Completed", theme.dark);
-  const data = useMemo<ChartData<"line", number[], string>>(
-    () => ({
-      labels: series.map((p) => fmtDay(p.t)),
-      datasets: [
-        {
-          label: "Horas completadas",
-          data: series.map((p) => p.done),
-          borderColor: done,
-          backgroundColor: verticalGradient(done, theme.dark ? 0.4 : 0.3),
-          fill: "origin",
-          borderWidth: theme.px(2),
-          pointRadius: 0,
-          pointHoverRadius: theme.px(5),
-          tension: 0.3,
-        },
-        {
-          label: "Alcance (horas)",
-          data: series.map((p) => p.scope),
-          borderColor: theme.reference,
-          borderDash: [theme.px(6), theme.px(4)],
-          borderWidth: theme.px(2),
-          pointRadius: 0,
-          pointHoverRadius: theme.px(4),
-          fill: false,
-          tension: 0,
-        },
-      ],
-    }),
-    [series, theme, done],
-  );
-  const options = useMemo<ChartOptions<"line">>(() => {
-    const base = baseOptions<"line">(theme);
-    const a = axes(theme, { suffix: " h" });
-    return {
-      ...base,
-      scales: { x: { ...a.x, ticks: { ...a.x.ticks, maxTicksLimit: 10, autoSkip: true } }, y: a.y },
-      plugins: {
-        ...base.plugins,
         tooltip: {
           ...base.plugins?.tooltip,
-          callbacks: {
-            label: (i) => ` ${i.dataset.label}: ${fmtHours(Number(i.raw))}`,
-            footer: (items) => {
-              const p = series[items[0].dataIndex];
-              return p.scope ? `Avance: ${Math.round((p.done / p.scope) * 100)} %` : "";
-            },
-          },
+          itemSort: (x, y) => y.datasetIndex - x.datasetIndex,
+          callbacks: { title: (items) => `Al cierre del ${format(series[items[0].dataIndex].t, "EEEE d 'de' MMMM", { locale: es })}`, label: (i) => ` ${i.dataset.label}: ${i.raw}` },
         },
       },
     };
@@ -172,97 +127,24 @@ export function BurnupChart({ series, theme }: { series: { t: number; scope: num
   return <Line data={data} options={options} />;
 }
 
-// ------------------------------------------------------------------ Dispersión de cycle time
-export function CycleScatterChart({
-  points,
-  p50,
-  p85,
-  range,
-  theme,
-  onSelect,
-}: {
-  points: { item: Item; x: number; y: number }[];
-  p50: number | null;
-  p85: number | null;
-  range: { from: number; to: number };
-  theme: ChartTheme;
-  onSelect?: (id: number) => void;
-}) {
-  const data = useMemo(
-    () => ({
-      datasets: [
-        {
-          type: "scatter" as const,
-          label: "Ítems cerrados",
-          data: points.map((p) => ({ x: p.x, y: p.y })),
-          backgroundColor: withAlpha(theme.accent, 0.65),
-          borderColor: theme.surface,
-          borderWidth: theme.px(1),
-          pointRadius: theme.px(4.5),
-          pointHoverRadius: theme.px(7),
-        },
-        ...(p50 !== null
-          ? [{ type: "line" as const, label: "P50", data: [{ x: range.from, y: p50 }, { x: range.to, y: p50 }], borderColor: theme.reference, borderDash: [theme.px(6), theme.px(4)], borderWidth: theme.px(1.5), pointRadius: 0 }]
-          : []),
-        ...(p85 !== null
-          ? [{ type: "line" as const, label: "P85", data: [{ x: range.from, y: p85 }, { x: range.to, y: p85 }], borderColor: theme.muted, borderDash: [theme.px(2), theme.px(3)], borderWidth: theme.px(1.5), pointRadius: 0 }]
-          : []),
-      ],
-    }),
-    [points, p50, p85, range, theme],
-  );
-  const options = useMemo<ChartOptions<"scatter">>(() => {
-    const a = axes(theme, { suffix: " d" });
-    return {
-      interaction: { mode: "nearest", intersect: true },
-      layout: { padding: { top: theme.px(8), right: theme.px(8) } },
-      onHover: (e, el) => {
-        const target = e.native?.target as HTMLElement | undefined;
-        if (target) target.style.cursor = el.length && el[0].datasetIndex === 0 ? "pointer" : "default";
-      },
-      onClick: (_e, el) => {
-        if (el.length && el[0].datasetIndex === 0 && onSelect) onSelect(points[el[0].index].item.id);
-      },
-      scales: {
-        x: {
-          type: "linear",
-          min: range.from,
-          max: range.to,
-          border: { display: false },
-          grid: { display: false },
-          ticks: { color: theme.muted, font: { family: theme.font, size: theme.px(11) }, maxTicksLimit: 8, callback: (v) => fmtDay(Number(v)) },
-        },
-        y: a.y,
-      },
-      plugins: {
-        crosshair: { enabled: false },
-        tooltip: {
-          ...(tooltipStyle(theme) as object),
-          filter: (i) => i.datasetIndex === 0,
-          callbacks: {
-            title: (items) => {
-              const p = points[items[0].dataIndex];
-              return `#${p.item.id} · ${(p.item.title ?? "").slice(0, 60)}`;
-            },
-            label: (i) => {
-              const p = points[i.dataIndex];
-              return [` Cycle time: ${fmtDays(p.y)}`, ` Cerrado: ${fmtDay(p.x)}`, ` ${p.item.type} · ${p.item.name ?? ""}`];
-            },
-          },
-        },
-      },
-    } as ChartOptions<"scatter">;
-  }, [theme, range, points, onSelect]);
-  return <Chart type="scatter" data={data as ChartData<"scatter">} options={options} />;
-}
-
 // ------------------------------------------------------------------ Dona por categoría
-export function StateDonut({ counts, theme }: { counts: Record<StateCategory, number>; theme: ChartTheme }) {
+export function StateDonut({
+  counts,
+  labels = CATEGORY_LABEL,
+  noun = "ítems",
+  theme,
+}: {
+  counts: Record<StateCategory, number>;
+  labels?: Record<StateCategory, string>;
+  /** Qué se cuenta ("tareas", "HU"…), para el centro y el tooltip */
+  noun?: string;
+  theme: ChartTheme;
+}) {
   const cats = CATEGORIES.filter((c) => counts[c] > 0);
   const total = cats.reduce((s, c) => s + counts[c], 0);
   const data = useMemo<ChartData<"doughnut", number[], string>>(
     () => ({
-      labels: cats.map((c) => CATEGORY_LABEL[c]),
+      labels: cats.map((c) => labels[c]),
       datasets: [
         {
           data: cats.map((c) => counts[c]),
@@ -278,7 +160,7 @@ export function StateDonut({ counts, theme }: { counts: Record<StateCategory, nu
       ],
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [counts, theme],
+    [counts, theme, labels],
   );
   const options = useMemo<ChartOptions<"doughnut">>(
     () => ({
@@ -286,10 +168,10 @@ export function StateDonut({ counts, theme }: { counts: Record<StateCategory, nu
       layout: { padding: theme.px(6) },
       plugins: {
         crosshair: { enabled: false },
-        tooltip: { ...(tooltipStyle(theme) as object), callbacks: { label: (i) => ` ${i.raw} ítems · ${Math.round((Number(i.raw) / total) * 100)} %` } },
+        tooltip: { ...(tooltipStyle(theme) as object), callbacks: { label: (i) => ` ${i.raw} ${noun} · ${Math.round((Number(i.raw) / total) * 100)} %` } },
       },
     }),
-    [theme, total],
+    [theme, total, noun],
   );
   return (
     <div className="relative h-full">
@@ -297,7 +179,7 @@ export function StateDonut({ counts, theme }: { counts: Record<StateCategory, nu
       <div className="pointer-events-none absolute inset-0 grid place-items-center">
         <div className="text-center">
           <p className="font-display text-2xl font-semibold tabular-nums text-foreground">{total.toLocaleString("es-CO")}</p>
-          <p className="text-[0.6875rem] uppercase tracking-wider text-muted">ítems activos</p>
+          <p className="text-[0.6875rem] uppercase tracking-wider text-muted">{noun} en el periodo</p>
         </div>
       </div>
     </div>
@@ -309,8 +191,8 @@ const short = (name: string) => {
   const p = name.split(/\s+/);
   return p.length >= 3 ? `${p[0]} ${p[p.length - 2]}` : name;
 };
-/** Etiqueta del eje: nombre corto, marcado si es miembro No Global */
-const personLabel = (p: Person) => (isNoGlobal(p) ? `${short(p.name)} (No Global)` : short(p.name));
+/** Etiqueta del eje: nombre corto, marcado si no tiene asignación en Global para el proyecto */
+const personLabel = (p: Person) => (isNoGlobal(p) ? `${short(p.name)} (sin asignación)` : short(p.name));
 
 export function PersonStatesChart({ rows, theme, onSelect }: { rows: PersonRow[]; theme: ChartTheme; onSelect?: (key: string) => void }) {
   const data = useMemo<ChartData<"bar", number[], string>>(
@@ -350,7 +232,7 @@ export function PersonStatesChart({ rows, theme, onSelect }: { rows: PersonRow[]
         tooltip: {
           ...base.plugins?.tooltip,
           callbacks: {
-            title: (items) => `${rows[items[0].dataIndex].person.name}${isNoGlobal(rows[items[0].dataIndex].person) ? " · No Global" : ""}`,
+            title: (items) => `${rows[items[0].dataIndex].person.name}${isNoGlobal(rows[items[0].dataIndex].person) ? " · Sin asignación al proyecto" : ""}`,
             label: (i) => ` ${i.dataset.label}: ${i.raw}`,
             footer: (items) => `${rows[items[0].dataIndex].active} ítems activos`,
           },
@@ -405,7 +287,7 @@ export function EstimateChart({ rows, theme }: { rows: PersonRow[]; theme: Chart
         tooltip: {
           ...base.plugins?.tooltip,
           callbacks: {
-            title: (items) => `${rows[items[0].dataIndex].person.name}${isNoGlobal(rows[items[0].dataIndex].person) ? " · No Global" : ""}`,
+            title: (items) => `${rows[items[0].dataIndex].person.name}${isNoGlobal(rows[items[0].dataIndex].person) ? " · Sin asignación al proyecto" : ""}`,
             label: (i) => ` ${i.dataset.label}: ${fmtHours(Number(i.raw))}`,
             footer: (items) => {
               const r = rows[items[0].dataIndex];

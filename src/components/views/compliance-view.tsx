@@ -11,7 +11,7 @@ import { useChartTheme } from "@/components/charts/chart-theme";
 import { ComplianceTrendChart } from "@/components/charts/compliance-charts";
 import { bucketLabel } from "@/components/charts/flow-charts";
 import { useApp } from "@/components/shell/app-provider";
-import { Avatar, Chip, EmptyState, HealthBadge, NoGlobalBadge, Segmented, Skeleton } from "@/components/ui/primitives";
+import { Avatar, Chip, EmptyState, HealthBadge, NoGlobalBadge, PersonBadges, Segmented, Skeleton } from "@/components/ui/primitives";
 import { useTheme } from "@/components/ui/theme";
 import {
   BUG_STAGE_LABEL,
@@ -26,10 +26,10 @@ import {
   type TypeSummary,
 } from "@/lib/analytics/compliance";
 import type { Health } from "@/lib/analytics/health";
+import { perPerson, scopedWork } from "@/lib/analytics/metrics";
 import { normalizeText, type Assignee } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import { DatasetGate } from "./dataset-gate";
-import { useTeamRows } from "./team-health";
 import { useCompliance } from "./use-compliance";
 
 export const pctText = (v: number) => `${(Math.round(v * 1000) / 10).toLocaleString("es-CO")} %`;
@@ -83,11 +83,10 @@ function Compliance() {
         {analysis.bugs && <TypeCard kind="bugs" s={analysis.bugs} className="md:col-span-2 2xl:col-span-1" />}
       </div>
       <Findings a={analysis} onOpen={openItem} />
-      <div className={clsx("grid grid-cols-1 gap-4", withBugs ? "xl:grid-cols-2" : "xl:grid-cols-3")}>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <FlowCard a={analysis} />
         <TrendCard a={analysis} kind="hu" />
         <TrendCard a={analysis} kind="tasks" />
-        {withBugs && <TrendCard a={analysis} kind="bugs" />}
       </div>
       {analysis.epics.length > 1 && (
         <GroupTable
@@ -104,7 +103,7 @@ function Compliance() {
         withBugs={withBugs}
         icon={FolderTree}
         title="Cumplimiento por Feature"
-        subtitle={`HU en producción y en QA o más, y tareas${withBugs ? " y bugs" : ""} cerrados, sobre el total de cada Feature`}
+        subtitle={`HU en producción y en QA o producción, y tareas${withBugs ? " y bugs" : ""} cerrados, sobre el total de cada Feature`}
         label="Feature"
       />
       <HuTable rows={analysis.hus} onOpen={openItem} />
@@ -193,11 +192,13 @@ function Stat({ label, value, hint, tone }: { label: string; value: React.ReactN
 }
 
 function AssigneeName({ a }: { a: Assignee }) {
+  const { model } = useApp();
   if (a.kind === "sinAsignar") return <span className="italic text-subtle">Sin asignar</span>;
+  const person = model?.people.get(a.key);
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       <span className="truncate">{a.name}</span>
-      {a.kind === "noGlobal" && <NoGlobalBadge />}
+      {person ? <PersonBadges person={person} /> : a.kind === "noGlobal" && <NoGlobalBadge />}
       {a.kind === "fuera" && (
         <span className="shrink-0 whitespace-nowrap rounded-md bg-surface-3 px-1.5 py-px text-[0.625rem] font-semibold uppercase tracking-wide text-muted" title="No es personal de Global de este proyecto">
           Fuera de Global
@@ -210,9 +211,9 @@ function AssigneeName({ a }: { a: Assignee }) {
 // ------------------------------------------------------------------ Tarjetas por tipo
 type Kind = "hu" | "tasks" | "bugs";
 const KIND: Record<Kind, { title: string; icon: LucideIcon; done: string; qa: string | null; labels: Record<Stage, string> }> = {
-  hu: { title: "Historias de usuario", icon: ClipboardList, done: "en producción", qa: "Entregadas a QA o más", labels: HU_STAGE_LABEL },
+  hu: { title: "Historias de usuario", icon: ClipboardList, done: "en producción", qa: "Entregadas a QA (o ya en producción)", labels: HU_STAGE_LABEL },
   tasks: { title: "Tareas", icon: ListChecks, done: "cerradas", qa: null, labels: TASK_STAGE_LABEL },
-  bugs: { title: "Bugs", icon: Bug, done: "cerrados", qa: "En revisión QA o más", labels: BUG_STAGE_LABEL },
+  bugs: { title: "Bugs", icon: Bug, done: "cerrados", qa: "En revisión QA (o ya cerrados)", labels: BUG_STAGE_LABEL },
 };
 const capitalize = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
@@ -266,25 +267,39 @@ function TypeCard({ kind, s, withoutTasks, className }: { kind: Kind; s: TypeSum
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {kind === "hu" ? (
-          <Stat label="En el periodo" value={`+${s.qaInPeriod} QA · +${s.doneInPeriod} prod.`} hint={`${comparison}: +${s.qaInPrev} · +${s.doneInPrev}`} />
+        {kind === "bugs" ? (
+          // Bugs: sin fechas (no son confiables): solo cantidades por estado
+          <>
+            <Stat label="Abiertos" value={s.total - s.done} hint="sin cerrar" />
+            <Stat label={k.labels.Proposed} value={s.byStage.Proposed} />
+            <Stat label={k.labels.InProgress} value={s.byStage.InProgress} />
+            <Stat label={k.labels.Resolved} value={s.byStage.Resolved} hint="incluye devueltos y bloqueados" />
+            <Stat label="Abiertos sin asignar" value={s.unassignedOpen} hint="nadie los tiene asignados" tone={s.unassignedOpen > 0 ? "warning" : undefined} />
+            <Stat label="Cerrados" value={s.done} hint={`${pctText(s.pctDone)} del total`} />
+          </>
         ) : (
-          <Stat label={`${capitalize(k.done)} en el periodo`} value={`+${s.doneInPeriod}`} hint={`${comparison}: +${s.doneInPrev}`} />
+          <>
+            {kind === "hu" ? (
+              <Stat label="En el periodo" value={`+${s.qaInPeriod} a QA · +${s.doneInPeriod} a prod.`} hint={comparison ? `${comparison}: +${s.qaInPrev} · +${s.doneInPrev}` : "desde el 19 oct"} />
+            ) : (
+              <Stat label={`${capitalize(k.done)} en el periodo`} value={`+${s.doneInPeriod}`} hint={comparison ? `${comparison}: +${s.doneInPrev}` : "desde el 19 oct"} />
+            )}
+            <Stat label={k.labels.InProgress} value={s.byStage.InProgress} />
+            <Stat label={kind === "hu" ? "Por iniciar" : k.labels.Proposed} value={s.byStage.Proposed} />
+            <Stat
+              label="Atrasadas"
+              value={s.overdue}
+              hint={kind === "hu" ? "sin llegar a QA y con la fecha objetivo pasada" : "sin cerrar y con la fecha objetivo pasada"}
+              tone={s.overdue > 0 ? "critical" : undefined}
+            />
+            {kind === "hu" ? (
+              <Stat label="Sin tareas" value={withoutTasks ?? 0} hint="HU sin tareas creadas" tone={withoutTasks ? "warning" : undefined} />
+            ) : (
+              <Stat label="Pendientes sin asignar" value={s.unassignedOpen} hint="sin cerrar y sin responsable" tone={s.unassignedOpen > 0 ? "warning" : undefined} />
+            )}
+            {kind === "tasks" ? <Stat label="Cumplimiento" value={pctText(s.pctDone)} /> : <Stat label={k.labels.Resolved} value={s.byStage.Resolved} />}
+          </>
         )}
-        <Stat label={k.labels.InProgress} value={s.byStage.InProgress} />
-        <Stat label={kind === "hu" ? "Por iniciar" : k.labels.Proposed} value={s.byStage.Proposed} />
-        <Stat
-          label={kind === "bugs" ? "Vencidos" : "Vencidas"}
-          value={s.overdue}
-          hint={kind === "hu" ? "sin llegar a QA y con objetivo pasado" : "sin cerrar y con objetivo pasado"}
-          tone={s.overdue > 0 ? "critical" : undefined}
-        />
-        {kind === "hu" ? (
-          <Stat label="Sin tareas" value={withoutTasks ?? 0} hint="HU sin tareas creadas" tone={withoutTasks ? "warning" : undefined} />
-        ) : (
-          <Stat label="Sin asignar" value={s.unassigned} tone={s.unassigned > 0 ? "warning" : undefined} />
-        )}
-        {kind === "tasks" ? <Stat label="Cumplimiento" value={pctText(s.pctDone)} /> : <Stat label={k.labels.Resolved} value={s.byStage.Resolved} />}
       </div>
     </section>
   );
@@ -296,8 +311,8 @@ function Findings({ a, onOpen }: { a: ComplianceAnalysis; onOpen: (id: number) =
   const list = [
     { key: "ready", tone: "good" as const, icon: CheckCircle2, label: "HU con todas sus tareas cerradas que aún no pasan a QA", items: a.findings.readyForQa.map((r) => ({ item: r.item, who: r.assignee })) },
     { key: "noTasks", tone: "warning" as const, icon: ClipboardList, label: "HU sin tareas creadas", items: a.findings.huWithoutTasks.map((r) => ({ item: r.item, who: r.assignee })) },
-    { key: "overdueHu", tone: "critical" as const, icon: AlertTriangle, label: "HU vencidas (sin llegar a QA)", items: a.findings.overdueHu.map((r) => ({ item: r.item, who: r.assignee })) },
-    { key: "overdueTasks", tone: "critical" as const, icon: AlertTriangle, label: "Tareas vencidas (sin cerrar)", items: a.findings.overdueTasks.map((item) => ({ item, who: null })) },
+    { key: "overdueHu", tone: "critical" as const, icon: AlertTriangle, label: "HU atrasadas (sin llegar a QA y con la fecha objetivo pasada)", items: a.findings.overdueHu.map((r) => ({ item: r.item, who: r.assignee })) },
+    { key: "overdueTasks", tone: "critical" as const, icon: AlertTriangle, label: "Tareas atrasadas (sin cerrar y con la fecha objetivo pasada)", items: a.findings.overdueTasks.map((item) => ({ item, who: null })) },
     { key: "unassigned", tone: "warning" as const, icon: UserX, label: "Tareas sin asignar (pendientes)", items: a.findings.unassignedTasks.map((item) => ({ item, who: null })) },
     { key: "unassignedBugs", tone: "warning" as const, icon: Bug, label: "Bugs abiertos sin asignar", items: a.findings.unassignedBugs.map((item) => ({ item, who: null })) },
   ].filter((f) => f.items.length > 0);
@@ -404,16 +419,16 @@ function FlowCard({ a }: { a: ComplianceAnalysis }) {
 }
 
 // ------------------------------------------------------------------ Avance acumulado
-function TrendCard({ a, kind }: { a: ComplianceAnalysis; kind: Kind }) {
+function TrendCard({ a, kind }: { a: ComplianceAnalysis; kind: "hu" | "tasks" }) {
   const { projectKey, chartUnit, setChartUnit } = useApp();
   const theme = useChartTheme(projectKey);
   const hu = kind === "hu";
-  const scopeOf = (p: ComplianceAnalysis["trend"][number]) => (hu ? p.huScope : kind === "tasks" ? p.taskScope : p.bugScope);
-  const doneOf = (p: ComplianceAnalysis["trend"][number]) => (hu ? p.huDone : kind === "tasks" ? p.taskDone : p.bugDone);
-  const noun = { hu: "HU", tasks: "tareas", bugs: "bugs" }[kind];
+  const scopeOf = (p: ComplianceAnalysis["trend"][number]) => (hu ? p.huScope : p.taskScope);
+  const doneOf = (p: ComplianceAnalysis["trend"][number]) => (hu ? p.huDone : p.taskDone);
+  const noun = hu ? "HU" : "tareas";
   return (
     <ChartCard
-      title={`Avance acumulado · ${{ hu: "HU", tasks: "Tareas", bugs: "Bugs" }[kind]}`}
+      title={`Avance acumulado · ${hu ? "HU" : "Tareas"}`}
       subtitle={hu ? "Total frente a entregadas a QA y en producción" : `Total frente a ${KIND[kind].done}`}
       icon={TrendingUp}
       actions={
@@ -429,12 +444,12 @@ function TrendCard({ a, kind }: { a: ComplianceAnalysis; kind: Kind }) {
       }
       legend={[
         { label: capitalize(KIND[kind].done), color: categoryColor("Completed", theme.dark) },
-        ...(hu ? [{ label: "QA o más", color: categoryColor("Resolved", theme.dark) }] : []),
+        ...(hu ? [{ label: "En QA o producción", color: categoryColor("Resolved", theme.dark) }] : []),
         { label: "Total", color: theme.reference, dashed: true },
       ]}
       summary={`Avance acumulado de ${noun} frente al total.`}
       table={{
-        columns: [chartUnit === "day" ? "Día" : "Semana", "Total", ...(hu ? ["QA o más", "En producción"] : [capitalize(KIND[kind].done)]), "Cumplimiento"],
+        columns: [chartUnit === "day" ? "Día hábil" : "Semana", "Total", ...(hu ? ["En QA o producción", "En producción"] : [capitalize(KIND[kind].done)]), "Cumplimiento"],
         rows: a.trend.map((p) => {
           const total = scopeOf(p);
           const done = doneOf(p);
@@ -480,10 +495,10 @@ function GroupTable({ rows, withBugs, icon: Icon, title, subtitle, label }: { ro
           <thead className="bg-surface-2 text-[0.6875rem] uppercase tracking-wider text-subtle">
             <tr>
               <th className="px-4 py-2.5 text-left font-semibold">{label}</th>
-              <th className="px-3 py-2.5 text-left font-semibold">HU (producción · QA+)</th>
+              <th className="px-3 py-2.5 text-left font-semibold">HU (en producción · en QA o más)</th>
               <th className="px-3 py-2.5 text-left font-semibold">Tareas cerradas</th>
               {withBugs && <th className="px-3 py-2.5 text-left font-semibold">Bugs cerrados</th>}
-              <th className="px-4 py-2.5 text-right font-semibold">Vencidas</th>
+              <th className="px-4 py-2.5 text-right font-semibold" title="Sin cumplir y con la fecha objetivo pasada (los bugs no cuentan: sus fechas no son confiables)">Atrasadas</th>
             </tr>
           </thead>
           <tbody>
@@ -587,7 +602,7 @@ function HuTable({ rows, onOpen }: { rows: HuRow[]; onOpen: (id: number) => void
     { key: "pending", label: "Con tareas pendientes" },
     { key: "complete", label: "Tareas completas" },
     { key: "noTasks", label: "Sin tareas" },
-    { key: "overdue", label: "Vencidas" },
+    { key: "overdue", label: "Atrasadas" },
   ];
 
   return (
@@ -671,7 +686,7 @@ function HuTable({ rows, onOpen }: { rows: HuRow[]; onOpen: (id: number) => void
                     </td>
                     <td className={clsx("px-4 py-2.5 text-right text-xs tabular-nums", r.overdue ? "font-semibold text-critical-fg" : "text-muted")}>
                       {r.item.target ? shortDate(r.item.target) : "—"}
-                      {r.overdue && <span className="block text-[0.625rem] font-semibold uppercase">vencida</span>}
+                      {r.overdue && <span className="block text-[0.625rem] font-semibold uppercase">atrasada</span>}
                     </td>
                   </tr>
                 ))}
@@ -691,7 +706,7 @@ function HuTable({ rows, onOpen }: { rows: HuRow[]; onOpen: (id: number) => void
                     <StagePill item={r.item} />
                     <span className={clsx("tabular-nums", r.overdue ? "font-semibold text-critical-fg" : "text-muted")}>
                       {r.item.target ? `obj. ${shortDate(r.item.target)}` : "sin objetivo"}
-                      {r.overdue && " · vencida"}
+                      {r.overdue && " · atrasada"}
                     </span>
                   </div>
                   <TasksProgress r={r} />
@@ -713,9 +728,13 @@ function PeopleTable({ rows, withBugs }: { rows: (GroupRow & { assignee: Assigne
   const { model, openPerson } = useApp();
   const { resolved } = useTheme();
   const dark = resolved === "dark";
-  // Semáforo del periodo (mismo cálculo que Colaboradores), por la misma clave de persona
-  const team = useTeamRows();
-  const health = useMemo(() => new Map<string, Health>(team.map((r) => [r.person.key, r.health])), [team]);
+  // Semáforo del periodo medido con tareas (los tres mundos se ven aquí juntos), por la misma clave de persona
+  const { people, filters, range } = useApp();
+  const health = useMemo(() => {
+    if (!model) return new Map<string, Health>();
+    const tasks = scopedWork(model, { ...filters, types: ["Task"] });
+    return new Map<string, Health>(perPerson(people, tasks, range, model.now).map((r) => [r.person.key, r.health]));
+  }, [model, people, filters, range]);
   return (
     <section className="card overflow-hidden">
       <header className="flex items-center gap-3 border-b border-line px-4 py-3 sm:px-5">
@@ -725,7 +744,7 @@ function PeopleTable({ rows, withBugs }: { rows: (GroupRow & { assignee: Assigne
         <div>
           <h3 className="font-display text-[0.9375rem] font-semibold">Cumplimiento por persona</h3>
           <p className="text-xs text-muted">
-            HU, tareas{withBugs ? " y bugs" : ""} asignados a cada persona y cuántos ha cumplido · el estado es el semáforo del periodo elegido
+            HU, tareas{withBugs ? " y bugs" : ""} asignados a cada persona y cuántos ha cumplido · el semáforo se mide con sus tareas en el periodo elegido
           </p>
         </div>
       </header>
@@ -734,13 +753,13 @@ function PeopleTable({ rows, withBugs }: { rows: (GroupRow & { assignee: Assigne
           <thead className="bg-surface-2 text-[0.6875rem] uppercase tracking-wider text-subtle">
             <tr>
               <th className="px-4 py-2.5 text-left font-semibold">Persona</th>
-              <th className="px-3 py-2.5 text-left font-semibold">Estado del periodo</th>
+              <th className="px-3 py-2.5 text-left font-semibold">Semáforo (tareas)</th>
               <th className="px-3 py-2.5 text-right font-semibold">HU</th>
-              <th className="px-3 py-2.5 text-right font-semibold">QA o más</th>
+              <th className="px-3 py-2.5 text-right font-semibold">En QA o más</th>
               <th className="px-3 py-2.5 text-right font-semibold">Producción</th>
               <th className="px-3 py-2.5 text-left font-semibold">Tareas cerradas</th>
               {withBugs && <th className="px-3 py-2.5 text-left font-semibold">Bugs cerrados</th>}
-              <th className="px-4 py-2.5 text-right font-semibold">Vencidas</th>
+              <th className="px-4 py-2.5 text-right font-semibold" title="Sin cumplir y con la fecha objetivo pasada (los bugs no cuentan: sus fechas no son confiables)">Atrasadas</th>
             </tr>
           </thead>
           <tbody>

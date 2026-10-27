@@ -3,16 +3,17 @@
 import clsx from "clsx";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarRange, Check, ChevronDown, Layers, RefreshCw, Search, SlidersHorizontal, Tag, Users, X } from "lucide-react";
+import { Bug, CalendarRange, Check, ChevronDown, ClipboardList, Layers, ListChecks, RefreshCw, Search, SlidersHorizontal, Tag, Users, X } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Avatar, NoGlobalBadge, Segmented } from "@/components/ui/primitives";
+import { Avatar, PersonBadges, Segmented } from "@/components/ui/primitives";
 import { Popover } from "@/components/ui/popover";
 import { inEpics, isAlive } from "@/lib/analytics/metrics";
-import { isNoGlobal, normalizeText, personRoleLabel, type EpicRef } from "@/lib/analytics/model";
-import { MORE_PRESETS, PRESET_LABEL, QUICK_PRESETS, type PeriodPreset } from "@/lib/analytics/period";
-import { formatShort, formatTime } from "@/lib/dates";
+import { normalizeText, personRoleLabel, type EpicRef } from "@/lib/analytics/model";
+import { DEFAULT_PRESET, PRESET_LABEL, QUICK_PRESETS, resolvePreset, type PeriodPreset } from "@/lib/analytics/period";
+import type { WorkView } from "@/lib/config";
+import { formatDayMonth, formatShort, formatTime } from "@/lib/dates";
 import { useApp } from "./app-provider";
-
 
 const triggerClass = (active: boolean) =>
   clsx(
@@ -25,30 +26,34 @@ export function PeriodPanel({ onDone }: { onDone?: () => void }) {
   const { period, setPreset, setCustomPeriod, today } = useApp();
   const [from, setFrom] = useState(period.from);
   const [to, setTo] = useState(period.to);
-  const presetButton = (p: PeriodPreset, primary = false) => (
-    <button
-      key={p}
-      onClick={() => {
-        setPreset(p);
-        onDone?.();
-      }}
-      className={clsx(
-        "rounded-xl px-3 text-left text-sm transition",
-        primary ? "py-2.5 font-semibold" : "py-2",
-        period.preset === p ? "bg-accent text-white" : "bg-surface-2 text-foreground hover:bg-surface-3",
-      )}
-    >
-      {PRESET_LABEL[p]}
-    </button>
-  );
+  // Cada atajo muestra las fechas que cubre ("Ayer" es el día hábil anterior)
+  const presetButton = (p: PeriodPreset, className?: string) => {
+    const r = resolvePreset(p, today);
+    const dates = r.from === r.to ? formatDayMonth(r.from) : `${formatDayMonth(r.from)} – ${formatDayMonth(r.to)}`;
+    return (
+      <button
+        key={p}
+        onClick={() => {
+          setPreset(p);
+          onDone?.();
+        }}
+        aria-pressed={period.preset === p}
+        className={clsx(
+          "rounded-xl px-3 py-2 text-left transition",
+          period.preset === p ? "bg-accent text-white" : "bg-surface-2 text-foreground hover:bg-surface-3",
+          className,
+        )}
+      >
+        <span className="block text-sm font-semibold">{p === "yesterday" && r.label !== PRESET_LABEL.yesterday ? "Ayer (día hábil)" : PRESET_LABEL[p]}</span>
+        <span className={clsx("block text-[0.6875rem]", period.preset === p ? "text-white/80" : "text-subtle")}>{dates}</span>
+      </button>
+    );
+  };
   return (
     <div className="space-y-3">
       <p className="text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">Periodo de análisis</p>
-      <div className="grid grid-cols-2 gap-1.5">{QUICK_PRESETS.map((p) => presetButton(p, true))}</div>
-      <div className="border-t border-line pt-3">
-        <p className="mb-2 text-xs font-medium text-muted">Más periodos</p>
-        <div className="grid grid-cols-2 gap-1.5">{MORE_PRESETS.map((p) => presetButton(p))}</div>
-      </div>
+      {presetButton(DEFAULT_PRESET, "w-full")}
+      <div className="grid grid-cols-2 gap-1.5">{QUICK_PRESETS.map((p) => presetButton(p))}</div>
       <div className="border-t border-line pt-3">
         <p className="mb-2 text-xs font-medium text-muted">Rango personalizado</p>
         <div className="grid grid-cols-2 gap-2">
@@ -145,7 +150,7 @@ export function PeoplePanel({ autoFocus = false }: { autoFocus?: boolean }) {
                 <span className="min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-1.5 text-sm">
                     <span className="truncate">{p.name}</span>
-                    {isNoGlobal(p) && <NoGlobalBadge />}
+                    <PersonBadges person={p} />
                   </span>
                   <span className="block truncate text-[0.6875rem] text-subtle">{personRoleLabel(p)}</span>
                 </span>
@@ -369,10 +374,44 @@ export function SyncChip({ compact = false }: { compact?: boolean }) {
   );
 }
 
+// ------------------------------------------------------------------ Mundo de análisis (Tareas / HU / Bugs)
+const VIEW_ICON: Record<WorkView["key"], typeof ListChecks> = { tasks: ListChecks, hu: ClipboardList, bugs: Bug };
+/** Vistas donde aplica el mundo de análisis (Cumplimiento muestra los tres a la vez). */
+const VIEW_ROUTES = ["/", "/colaboradores", "/cronograma"];
+
+/** ¿Se muestra el selector de mundo en esta ruta? (solo proyectos con más de un mundo) */
+export function useViewFilterVisible() {
+  const { views } = useApp();
+  const pathname = usePathname();
+  return views.length > 1 && VIEW_ROUTES.includes(pathname);
+}
+
+/** Selector "Tareas | Historias de usuario | Bugs": separa los tres mundos en Resumen, Colaboradores y Cronograma. */
+export function ViewFilter({ className, full = false }: { className?: string; full?: boolean }) {
+  const { views, view, setView } = useApp();
+  if (views.length < 2) return null;
+  return (
+    <Segmented
+      className={className}
+      size="sm"
+      value={view.key}
+      onChange={setView}
+      options={views.map((v) => ({
+        value: v.key,
+        label: full ? v.label : v.short,
+        icon: VIEW_ICON[v.key],
+        title: v.dated ? `Analizar solo ${v.label.toLowerCase()}` : `${v.label}: solo cantidades y estado actual (sus fechas no son confiables)`,
+      }))}
+    />
+  );
+}
+
 /** Barra completa de filtros (escritorio). */
 export function FilterBar() {
+  const showView = useViewFilterVisible();
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {showView && <ViewFilter />}
       <PeriodPicker />
       <PeopleFilter />
       <EpicFilter />
@@ -383,12 +422,14 @@ export function FilterBar() {
 
 /** Botón que resume los filtros y abre el panel en móvil. */
 export function MobileFiltersButton() {
-  const { period, filters, epics, setFiltersOpen } = useApp();
+  const { period, filters, epics, setFiltersOpen, view } = useApp();
   const epic = epicSelectionLabel(epics, filters.epics);
+  const showView = useViewFilterVisible();
   return (
     <button onClick={() => setFiltersOpen(true)} className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm shadow-sm">
       <SlidersHorizontal className="size-4 shrink-0 text-accent-fg" />
       <span className="truncate">
+        {showView && `${view.short} · `}
         {period.label}
         {filters.people.length > 0 && ` · ${filters.people.length} pers.`}
         {epic && ` · ${epic}`}

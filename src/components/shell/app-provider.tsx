@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { createContext, use, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import useSWR, { useSWRConfig, type KeyedMutator } from "swr";
-import { api, fetcher, readStored, useProjectKey, useStored, writeStored } from "@/components/dashboard/client-api";
+import { api, fetcher, useProjectKey, useSessionStored, useStored } from "@/components/dashboard/client-api";
 import { MemberSheet } from "@/components/dashboard/member-sheet";
 import { WorkItemSheet } from "@/components/dashboard/work-item-sheet";
 import { toggleFullscreen } from "@/components/ui/display";
@@ -12,22 +12,21 @@ import { changeScale } from "@/components/ui/display-controls";
 import { isSheetOpen } from "@/components/ui/sheet";
 import { periodRange, previousRange, scopedWork, trendRange, visiblePeople, type Filters, type Range, type TimeUnit } from "@/lib/analytics/metrics";
 import { buildModel, type EpicRef, type Item, type Model, type Person } from "@/lib/analytics/model";
-import { DEFAULT_PRESET, comparisonLabel, resolvePreset, type PeriodPreset } from "@/lib/analytics/period";
+import { DEFAULT_PRESET, comparisonLabel, isPreset, resolvePreset, type PeriodPreset } from "@/lib/analytics/period";
 import type { DatasetResponse, SyncInfo } from "@/lib/analytics/types";
-import { PROJECT_KEYS, PROJECTS, type ProjectKey, type ProjectMeta } from "@/lib/config";
+import { PROJECT_KEYS, PROJECTS, type ProjectKey, type ProjectMeta, type WorkView } from "@/lib/config";
 import { todayISO } from "@/lib/dates";
 import { CommandPalette } from "./command-palette";
 import { navItems } from "./nav";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 
-// `epics` vacío = todas las épicas monitoreadas del proyecto (el antiguo `scope` guardado se ignora)
-// `v: 2` marca los filtros guardados con los periodos nuevos (Hoy / Ayer / semanas): los anteriores
-// conservan personas y épicas pero vuelven al periodo por defecto.
-type StoredFilters = { v?: number; preset: PeriodPreset; from: string; to: string; people: string[]; includeOthers: boolean; epics?: number[]; tag?: string | null };
-type StoredIteration = { name: string; start: number; end: number; count: number };
-const DEFAULT_FILTERS: StoredFilters = { v: 2, preset: DEFAULT_PRESET, from: "", to: "", people: [], includeOthers: false, epics: [] };
+// Filtros guardados por proyecto en localStorage: personas, épicas (vacío = todas), tag y mundo de análisis.
+// El periodo va aparte en sessionStorage: cada visita nueva arranca en "Desde el 19 oct".
+type StoredFilters = { people: string[]; includeOthers: boolean; epics?: number[]; tag?: string | null; view?: WorkView["key"] };
+type StoredPeriod = { preset: PeriodPreset; from: string; to: string };
+const DEFAULT_FILTERS: StoredFilters = { people: [], includeOthers: false, epics: [] };
+const DEFAULT_PERIOD: StoredPeriod = { preset: DEFAULT_PRESET, from: "", to: "" };
 const NO_EPICS: EpicRef[] = [];
-const NO_ITERATIONS: StoredIteration[] = [];
 
 type AutoSyncResponse = { results: Record<ProjectKey, { status: "ok" | "skipped" | "error" }>; nextAutoAt: string | null };
 const MINUTE = 60_000;
@@ -41,8 +40,8 @@ type AppContextValue = {
   today: string;
   /** Periodo resuelto + etiqueta */
   period: { preset: PeriodPreset; from: string; to: string; label: string };
-  /** Texto de la comparación de los indicadores ("vs. día hábil anterior", …) */
-  comparison: string;
+  /** Texto de la comparación de los indicadores ("frente al día hábil anterior", …); null = sin comparación */
+  comparison: string | null;
   /** Ventana de las gráficas de tendencia (el periodo, o 7 días si es más corto) */
   trend: Range;
   /** Gráficas por día o por semana (preferencia compartida) */
@@ -60,6 +59,10 @@ type AppContextValue = {
   /** Tags filtrables del proyecto (los de su meta; vacío si no tiene) */
   tags: string[];
   setTag: (tag: string | null) => void;
+  /** Mundo de análisis activo (Tareas, HU o Bugs) y los disponibles del proyecto */
+  view: WorkView;
+  views: WorkView[];
+  setView: (key: WorkView["key"]) => void;
   range: Range;
   prevRange: Range;
   dataset: { data?: DatasetResponse; error?: Error; isLoading: boolean; mutate: KeyedMutator<DatasetResponse> };
@@ -106,7 +109,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [projectKey, setProjectKeyRaw] = useProjectKey();
   const [today] = useState(todayISO);
   const [stored, setStored] = useStored<StoredFilters>(`docum:filters:${projectKey}`, DEFAULT_FILTERS);
-  const [iterations] = useStored<StoredIteration[]>(`docum:iterations:${projectKey}`, NO_ITERATIONS);
+  const [storedPeriod, setStoredPeriod] = useSessionStored<StoredPeriod>(`docum:period:${projectKey}`, DEFAULT_PERIOD);
   const [workItemId, setWorkItemId] = useState<number | null>(null);
   const [personKey, setPersonKey] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -117,14 +120,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [nextAutoSync, setNextAutoSync] = useState<number | null>(null);
   const { mutate } = useSWRConfig();
 
-  // --- Periodo (los presets son relativos a hoy; "Sprint actual" usa las iteraciones conocidas) ---
-  const storedPreset = stored.v === 2 ? stored.preset : DEFAULT_PRESET;
+  // --- Periodo (los presets son relativos a hoy) ---
+  const storedPreset = isPreset(storedPeriod.preset) ? storedPeriod.preset : DEFAULT_PRESET;
   const period = useMemo(() => {
-    if (storedPreset === "custom" && stored.from && stored.to) {
-      return { preset: "custom" as const, from: stored.from, to: stored.to, label: "Personalizado" };
+    if (storedPreset === "custom" && storedPeriod.from && storedPeriod.to) {
+      return { preset: "custom" as const, from: storedPeriod.from, to: storedPeriod.to, label: "Personalizado" };
     }
-    return resolvePreset(storedPreset === "custom" ? DEFAULT_PRESET : storedPreset, today, iterations);
-  }, [storedPreset, stored.from, stored.to, today, iterations]);
+    return resolvePreset(storedPreset === "custom" ? DEFAULT_PRESET : storedPreset, today);
+  }, [storedPreset, storedPeriod.from, storedPeriod.to, today]);
 
   const range = useMemo(() => periodRange(period), [period]);
   const prevRange = useMemo(() => previousRange(range, period.preset), [range, period.preset]);
@@ -143,6 +146,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const model = useMemo(() => (data ? buildModel(data) : undefined), [data]);
   const epics = model?.epics ?? NO_EPICS;
   const tags = useMemo(() => PROJECTS[projectKey].goal?.tags.map((t) => t.tag) ?? [], [projectKey]);
+  const views = PROJECTS[projectKey].views;
+  const view = views.find((v) => v.key === stored.view) ?? views[0];
 
   // El dataset trae siempre las épicas monitoreadas; el filtro descarta IDs que ya no estén configurados
   const filters: Filters = useMemo(
@@ -153,27 +158,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       includeOthers: stored.includeOthers,
       epics: (stored.epics ?? []).filter((id) => epics.some((e) => e.id === id)),
       tag: stored.tag && tags.includes(stored.tag) ? stored.tag : null,
+      view: view.key,
+      types: view.types,
     }),
-    [period.from, period.to, stored.people, stored.includeOthers, stored.epics, epics, stored.tag, tags],
+    [period.from, period.to, stored.people, stored.includeOthers, stored.epics, epics, stored.tag, tags, view],
   );
-
-  // Guarda las iteraciones conocidas (para resolver "Sprint actual" sin depender del periodo)
-  useEffect(() => {
-    if (!model?.iterations.length) return;
-    const key = `docum:iterations:${projectKey}`;
-    const known = readStored<StoredIteration[]>(key, NO_ITERATIONS);
-    const merged = new Map(known.map((i) => [`${i.name}|${i.start}`, i]));
-    for (const i of model.iterations) merged.set(`${i.name}|${i.start}`, i);
-    if (merged.size !== known.length) writeStored(key, [...merged.values()]);
-  }, [model, projectKey]);
 
   const people = useMemo(() => (model ? visiblePeople(model, filters) : []), [model, filters]);
   const scoped = useMemo(() => (model ? scopedWork(model, filters) : []), [model, filters]);
 
-  const update = useCallback(
-    (patch: Partial<StoredFilters>) => setStored({ ...stored, v: 2, preset: storedPreset, ...patch }),
-    [stored, storedPreset, setStored],
-  );
+  const update = useCallback((patch: Partial<StoredFilters>) => setStored({ ...stored, ...patch }), [stored, setStored]);
 
   const setProjectKey = useCallback(
     (key: ProjectKey) => {
@@ -307,8 +301,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     trend,
     chartUnit,
     setChartUnit,
-    setPreset: (preset) => update({ preset }),
-    setCustomPeriod: (from, to) => update({ preset: "custom", from, to }),
+    setPreset: (preset) => setStoredPeriod({ preset, from: "", to: "" }),
+    setCustomPeriod: (from, to) => setStoredPeriod({ preset: "custom", from, to }),
     filters,
     setPeople: (keys) => update({ people: keys }),
     togglePerson: (key) => update({ people: stored.people.includes(key) ? stored.people.filter((k) => k !== key) : [...stored.people, key] }),
@@ -318,6 +312,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setEpics: (ids) => update({ epics: ids }),
     tags,
     setTag: (tag) => update({ tag }),
+    view,
+    views,
+    setView: (key) => update({ view: key }),
     range,
     prevRange,
     dataset: { data, error: dataset.error, isLoading: !data && !dataset.error, mutate: dataset.mutate },

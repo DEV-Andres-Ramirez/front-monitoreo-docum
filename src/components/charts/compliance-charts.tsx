@@ -11,18 +11,17 @@ import { axes, baseOptions, verticalGradient, type ChartTheme } from "./chart-th
 import { bucketLabel } from "./flow-charts";
 
 /**
- * Avance acumulado de un tipo (HU, Tareas o Bugs): alcance (ítems creados) frente a completados
- * y, en HU, también entregados a QA. Un solo eje Y.
+ * Avance acumulado de HU o Tareas por día hábil o semana: alcance (ítems creados) frente a completados
+ * y, en HU, también entregados a QA. Un solo eje Y. (Los bugs no tienen tendencia: sus fechas no son confiables.)
  */
-const SCOPE = { hu: (p: TrendPoint) => p.huScope, tasks: (p: TrendPoint) => p.taskScope, bugs: (p: TrendPoint) => p.bugScope };
-const DONE = { hu: (p: TrendPoint) => p.huDone, tasks: (p: TrendPoint) => p.taskDone, bugs: (p: TrendPoint) => p.bugDone };
+const SCOPE = { hu: (p: TrendPoint) => p.huScope, tasks: (p: TrendPoint) => p.taskScope };
+const DONE = { hu: (p: TrendPoint) => p.huDone, tasks: (p: TrendPoint) => p.taskDone };
 const LABELS = {
   hu: { done: "HU en producción", total: "Total de HU" },
   tasks: { done: "Tareas cerradas", total: "Total de tareas" },
-  bugs: { done: "Bugs cerrados", total: "Total de bugs" },
 };
 
-export function ComplianceTrendChart({ trend, kind, unit, theme }: { trend: TrendPoint[]; kind: "hu" | "tasks" | "bugs"; unit: TimeUnit; theme: ChartTheme }) {
+export function ComplianceTrendChart({ trend, kind, unit, theme }: { trend: TrendPoint[]; kind: "hu" | "tasks"; unit: TimeUnit; theme: ChartTheme }) {
   const done = categoryColor("Completed", theme.dark);
   const qa = categoryColor("Resolved", theme.dark);
   const data = useMemo<ChartData<"line", number[], string>>(() => {

@@ -6,18 +6,19 @@ import { es } from "date-fns/locale";
 import { AlertTriangle, CheckCircle2, ChevronRight, CircleDot, Diamond } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useBreakpoint } from "@/components/ui/display";
-import { Avatar, NoGlobalBadge, TypeBadge } from "@/components/ui/primitives";
+import { Avatar, PersonBadges, TypeBadge } from "@/components/ui/primitives";
 import { useTheme } from "@/components/ui/theme";
 import { CATEGORY_LABEL } from "@/lib/analytics/metrics";
-import { DAY, isNoGlobal, personRoleLabel, type Item, type Model, type Person } from "@/lib/analytics/model";
+import { DAY, personRoleLabel, type Item, type Model, type Person } from "@/lib/analytics/model";
+import { isBusinessDay, isoLocalDate } from "@/lib/dates";
 import { DELAY_COLOR, categoryColor } from "@/lib/analytics/state-colors";
 
 export type GanttZoom = "day" | "week" | "month";
 export type GanttGroup = "person" | "feature" | "sprint";
 export type GanttSort = "start" | "target" | "state";
 
-/** rem por día según el zoom */
-const DAY_REM: Record<GanttZoom, number> = { day: 2.4, week: 0.85, month: 0.28 };
+/** rem por día hábil según el zoom (el eje solo tiene días hábiles: sin fines de semana ni festivos) */
+const DAY_REM: Record<GanttZoom, number> = { day: 3.2, week: 1.2, month: 0.4 };
 const LABEL_REM_WIDE = 21;
 const LABEL_REM_NARROW = 12;
 const ROW_REM = 2.75;
@@ -94,10 +95,34 @@ export function Gantt({
     const maxTarget = items.reduce((m, i) => Math.max(m, i.plannedEnd ?? 0), range.to);
     return Math.min(Math.max(range.to, maxTarget), range.to + 60 * DAY);
   }, [items, range.to]);
-  const totalDays = Math.max(1, Math.ceil((end - start) / DAY));
+  // Eje en tiempo hábil: cada día hábil ocupa `unit` rem y los fines de semana y festivos miden 0
+  const businessDays = useMemo(() => {
+    const out: number[] = [];
+    const d = new Date(start);
+    while (d.getTime() <= end) {
+      if (isBusinessDay(isoLocalDate(d.getTime()))) out.push(d.getTime());
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }, [start, end]);
+  const totalDays = Math.max(1, businessDays.length);
   const unit = Math.max(DAY_REM[zoom], availableRem > 0 ? availableRem / totalDays : 0);
   const width = totalDays * unit;
-  const x = (t: number) => ((Math.min(Math.max(t, start), end) - start) / DAY) * unit;
+  const x = (t: number) => {
+    const c = Math.min(Math.max(t, start), end + DAY - 1);
+    const day = new Date(c);
+    day.setHours(0, 0, 0, 0);
+    // Días hábiles que empiezan antes de este día (búsqueda binaria)
+    let lo = 0;
+    let hi = businessDays.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (businessDays[mid] < day.getTime()) lo = mid + 1;
+      else hi = mid;
+    }
+    const business = businessDays[lo] === day.getTime();
+    return Math.min(totalDays, lo + (business ? (c - day.getTime()) / DAY : 0)) * unit;
+  };
 
   const groups = useMemo<Group[]>(() => {
     const map = new Map<string, Group>();
@@ -143,15 +168,21 @@ export function Gantt({
     }
     return out;
   }, [start, end, zoom]);
+  // Marcas: cada día hábil (zoom días) o el primer día hábil de cada semana
   const ticks = useMemo(() => {
-    const out: { t: number; label: string; weekend: boolean }[] = [];
-    const step = zoom === "day" ? 1 : 7;
-    for (let t = start; t <= end; t += step * DAY) {
-      const dow = new Date(t).getDay();
-      out.push({ t, label: zoom === "day" ? format(t, "EEEEEE d", { locale: es }) : format(t, "d MMM", { locale: es }), weekend: dow === 0 || dow === 6 });
+    if (zoom === "day") return businessDays.map((t) => ({ t, label: format(t, "EEEEEE d", { locale: es }) }));
+    const out: { t: number; label: string }[] = [];
+    let lastWeek = -1;
+    for (const t of businessDays) {
+      const d = new Date(t);
+      const monday = new Date(d);
+      monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+      const week = monday.setHours(0, 0, 0, 0);
+      if (week !== lastWeek) out.push({ t, label: format(t, "d MMM", { locale: es }) });
+      lastWeek = week;
     }
     return out;
-  }, [start, end, zoom]);
+  }, [businessDays, zoom]);
   const sprints = model.iterations.filter((s) => s.end >= start && s.start <= end);
 
   const today = model.now;
@@ -177,7 +208,7 @@ export function Gantt({
                 ticks.map((t) => (
                   <span
                     key={t.t}
-                    className={clsx("absolute bottom-1.5 pl-1 text-[0.625rem] tabular-nums", t.weekend && zoom === "day" ? "text-subtle/60" : "text-subtle")}
+                    className="absolute bottom-1.5 pl-1 text-[0.625rem] tabular-nums text-subtle"
                     style={{ left: `${x(t.t)}rem` }}
                   >
                     {t.label}
@@ -193,12 +224,8 @@ export function Gantt({
 
           {/* Cuerpo */}
           <div className="relative">
-            {/* Fondo: fines de semana, semanas, sprints y hoy */}
+            {/* Fondo: días o semanas hábiles, sprints y hoy (sin fines de semana ni festivos) */}
             <div className="pointer-events-none absolute inset-y-0" style={{ left: `${LABEL_REM}rem`, width: `${width}rem` }} aria-hidden>
-              {zoom === "day" &&
-                ticks
-                  .filter((t) => t.weekend)
-                  .map((t) => <div key={t.t} className="absolute inset-y-0 bg-surface-3/60" style={{ left: `${x(t.t)}rem`, width: `${unit}rem` }} />)}
               {ticks.map((t) => (
                 <div key={`l${t.t}`} className="absolute inset-y-0 border-l border-line/70" style={{ left: `${x(t.t)}rem` }} />
               ))}
@@ -249,11 +276,11 @@ export function Gantt({
                       >
                         <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold">
                           <span className="truncate">{g.title}</span>
-                          {g.person && isNoGlobal(g.person) && <NoGlobalBadge />}
+                          {g.person && <PersonBadges person={g.person} />}
                         </span>
                         <span className="block truncate text-[0.6875rem] text-subtle">
                           {g.items.length} ítems{onTime !== null && ` · ${onTime} % a tiempo`}
-                          {overdue > 0 && <span className="font-semibold text-critical-fg"> · {overdue} vencidos</span>}
+                          {overdue > 0 && <span className="font-semibold text-critical-fg"> · {overdue} atrasados</span>}
                         </span>
                       </button>
                     </div>
@@ -348,7 +375,7 @@ function GanttRow({
             {i.countedHours > 0 && <span>· {i.countedHours} h</span>}
           </span>
         </span>
-        {i.overdue && <AlertTriangle className="size-3.5 shrink-0 text-critical-fg" aria-label="Vencido" />}
+        {i.overdue && <AlertTriangle className="size-3.5 shrink-0 text-critical-fg" aria-label="Atrasado" />}
       </button>
 
       <button className="relative flex-1 cursor-pointer" onClick={() => onOpen(i.id)} aria-label={`Ver detalle de #${i.id}`}>
@@ -427,7 +454,7 @@ function GanttTooltip({ hover, now }: { hover: { item: Item; x: number; y: numbe
         <dd className="text-right tabular-nums">{fmt(i.deliveredAt)}</dd>
         {i.cycleTime !== null && (
           <>
-            <dt className="text-subtle">Cycle time</dt>
+            <dt className="text-subtle">De en curso a cerrado</dt>
             <dd className="text-right tabular-nums">{i.cycleTime.toLocaleString("es-CO", { maximumFractionDigits: 1 })} d</dd>
           </>
         )}
@@ -446,7 +473,7 @@ function GanttTooltip({ hover, now }: { hover: { item: Item; x: number; y: numbe
       >
         {i.overdue ? (
           <>
-            <AlertTriangle className="size-3.5" /> Vencido hace {Math.ceil(i.delayDays)} d
+            <AlertTriangle className="size-3.5" /> Atrasado: la fecha objetivo pasó hace {Math.ceil(i.delayDays)} d
           </>
         ) : i.onTime === false ? (
           <>

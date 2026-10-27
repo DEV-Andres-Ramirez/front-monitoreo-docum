@@ -46,17 +46,23 @@ function subscribe(cb: () => void) {
   };
 }
 
-function readRaw(key: string) {
+type StoreKind = "local" | "session";
+const storage = (kind: StoreKind) => (kind === "session" ? sessionStorage : localStorage);
+const memKey = (key: string, kind: StoreKind) => (kind === "session" ? `session:${key}` : key);
+
+function readRaw(key: string, kind: StoreKind = "local") {
+  const mem = memKey(key, kind);
   try {
-    return localStorage.getItem(key) ?? memory.get(key) ?? null;
+    return storage(kind).getItem(key) ?? memory.get(mem) ?? null;
   } catch {
-    return memory.get(key) ?? null;
+    return memory.get(mem) ?? null;
   }
 }
 
-export function readStored<T>(key: string, fallback: T): T {
-  const raw = readRaw(key);
-  const hit = cache.get(key);
+export function readStored<T>(key: string, fallback: T, kind: StoreKind = "local"): T {
+  const raw = readRaw(key, kind);
+  const cacheKey = memKey(key, kind);
+  const hit = cache.get(cacheKey);
   if (hit && hit.raw === raw) return hit.value as T;
   let value: T = fallback;
   if (raw !== null) {
@@ -66,15 +72,15 @@ export function readStored<T>(key: string, fallback: T): T {
       value = fallback;
     }
   }
-  cache.set(key, { raw, value });
+  cache.set(cacheKey, { raw, value });
   return value;
 }
 
-export function writeStored<T>(key: string, value: T) {
+export function writeStored<T>(key: string, value: T, kind: StoreKind = "local") {
   const raw = JSON.stringify(value);
-  memory.set(key, raw);
+  memory.set(memKey(key, kind), raw);
   try {
-    localStorage.setItem(key, raw);
+    storage(kind).setItem(key, raw);
   } catch {
     /* almacenamiento bloqueado: queda en memoria */
   }
@@ -88,6 +94,16 @@ export function useStored<T>(key: string, fallback: T): [T, (value: T) => void] 
     () => fallback,
   );
   return [value, (next: T) => writeStored(key, next)];
+}
+
+/** Como useStored, pero en sessionStorage: dura mientras la pestaña esté abierta (una visita nueva vuelve al valor por defecto). */
+export function useSessionStored<T>(key: string, fallback: T): [T, (value: T) => void] {
+  const value = useSyncExternalStore(
+    subscribe,
+    () => readStored(key, fallback, "session"),
+    () => fallback,
+  );
+  return [value, (next: T) => writeStored(key, next, "session")];
 }
 
 const PROJECT_FALLBACK = "348";
