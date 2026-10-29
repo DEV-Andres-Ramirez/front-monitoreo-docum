@@ -11,12 +11,13 @@ Tablero interno de **monitoreo automático** del trabajo de cada colaborador en 
 
 El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Master** (único usuario, común a ambos proyectos) **no registra nada a mano**. El tablero cruza **por correo** al personal de cada proyecto con los ítems asignados en Azure DevOps (HU, Tareas y Bugs) **que cuelgan de las épicas monitoreadas** de ese proyecto. Lo que está en otras épicas no se analiza.
 
-> **Global** es la base de personal (planeación) de LinkTic. En la interfaz siempre se dice "Global", **nunca "Excel"**. Hoy Global se carga desde el archivo de planeación en `context/` con `scripts/generate-seed.py`.
+> **Global** es la base de personal (planeación) de LinkTic. En la interfaz siempre se dice "Global", **nunca "Excel"**. Hoy Global se carga desde los CSV de cada proyecto en `context/` (`Planeacion_005_Positiva.csv` y `Planeacion_348_Acueducto.csv`) con `scripts/generate-seed.py`. Quien sale de Global queda inactivo (no se borra) y sus ítems pasan a "Fuera de Global".
 >
-> El **personal del proyecto** es el de Global **más los miembros "No Global"** (internamente): personas que trabajan en las épicas sin estar en Global para ese proyecto. Cuentan en el análisis, pero no tienen cargo ni %. En la interfaz llevan la etiqueta **"Sin asignación al proyecto"** junto al nombre. Hoy son:
+> El **personal del proyecto** es el de Global **más los miembros "No Global"** (internamente): personas que trabajan en las épicas sin estar en Global para ese proyecto. Cuentan en el análisis, pero no tienen cargo ni %. En la interfaz llevan la etiqueta **"Sin asignación al proyecto"** junto al nombre. Desde la carga de Global del 29-oct solo queda uno:
 >
-> - **348:** David Felipe Vergara Bogota (`david.vergara@linktic.com`) y Jhostin Alexander Ladino Gonzalez (`jhostin.ladino@linktic.com`) (0009).
-> - **005:** Cristian Roa, Carlos Cansina, Josimar Bonilla y Dario Lopez (`@3tcapital.co`), y Jose Fernando Lozano Murcia (Global de 348) (0011). El alias que hacía contar a Dario Lopez como Luis Gabriel Melendez Gongora se quitó, con traza en la bitácora.
+> - **005:** Jose Fernando Lozano Murcia (Global de 348).
+>
+> Los que había antes (348: David Vergara y Jhostin Ladino, 0009; 005: Cristian Roa, Carlos Cansina, Josimar Bonilla y Dario Lopez, 0011) ahora están en Global. Conservan su registro y sus marcas. En Azure de 005 aparecen con `@3tcapital.co` y en Global con `@linktic.com`; se cruzan por la parte local del correo.
 >
 > **Marcas especiales** (`member_flags`, 0012): "En vacaciones", "Asignado al proyecto de Acueducto" u otra, con fecha de fin opcional. Quien tiene marca **no se evalúa** en el semáforo ("No evaluado") y **sus pendientes no generan alertas**, pero **lo que entrega sí cuenta**. Se ponen y quitan desde la ficha del colaborador y quedan en la Bitácora. Hoy: Angie Tatiana Hernandez (en vacaciones, en ambos proyectos) y, en 005, Jhostin Ladino y Jose Fernando Lozano (asignados a Acueducto). La marca se muestra en lugar de "Sin asignación al proyecto".
 
@@ -128,7 +129,7 @@ Compromiso con EAAB para las dos épicas sumadas (Certificación CORE y Certific
 - **Cierre:** viernes 13 de noviembre de 2026.
 - **Productividad:** **24 tareas de Video y 24 de Informe por día hábil**, de lunes a viernes sin festivos de Colombia, desde el lunes 19-oct.
 - **Configuración:** `PROJECTS["348"].goal` en `src/lib/config.ts`. Si cambia la meta o la fecha, se edita ahí; no hay variables de entorno.
-- **Qué cuenta:** **todas** las tareas (tipo `Task`) con tag `Video` o `Informe` de ambas épicas, sin importar el colaborador. Incluye a quienes no están en Global; por ejemplo, las 398 de Informe son de David Vergara (No Global).
+- **Qué cuenta:** **todas** las tareas (tipo `Task`) con tag `Video` o `Informe` de ambas épicas, sin importar el colaborador. Incluye a quienes no están en Global (las 398 de Informe son de David Vergara, que estuvo fuera de Global hasta el 29-oct).
 - **Completada:** estado Entregado o Cerrado, en el día de su fecha de entrega real (o de resolución o cierre). Si cae en fin de semana o festivo, cuenta el siguiente día hábil; lo cerrado antes del 19-oct cuenta como avance previo.
 - **Panel "Meta de cierre" (inicio del Resumen):** la pieza principal de Acueducto. Por tag y en el Total:
   - **% de avance** (completadas ÷ total) con la marca de lo esperado a la fecha;
@@ -214,7 +215,7 @@ pnpm dev               # http://localhost:3000
 | Migración | Contenido |
 |---|---|
 | `0001_schema.sql` | Proyectos, colaboradores, asignaciones, `audit_log`, RLS (y `activity_logs`, legado) |
-| `0002_seed.sql` | Personal de Global (lo genera `python3 scripts/generate-seed.py` desde el archivo de `context/`; idempotente; marca `in_global = true`) |
+| `0002_seed.sql` | Personal de Global (lo genera `python3 scripts/generate-seed.py` desde los CSV de `context/`; idempotente; marca `in_global = true`, conserva el registro de quien era No Global y deja inactivo a quien sale de Global) |
 | `0003_stats_and_restore.sql` | Funciones del registro manual (**legado**, sin uso) |
 | `0004_azure_sync.sql` | `azure_work_items`, `azure_revisions`, `azure_sync_runs`, `employee_aliases`, RPC `azure_dataset` |
 | `0005_azure_dataset_assigned.sql` | `azure_dataset(p, desde, hasta)` solo con ítems asignados (**legado**: se conserva para despliegues anteriores) |
@@ -244,7 +245,7 @@ pnpm dev               # http://localhost:3000
 | Comando | Descripción |
 |---|---|
 | `pnpm dev` / `pnpm build` / `pnpm start` / `pnpm lint` | Desarrollo, build, producción y lint |
-| `python3 scripts/generate-seed.py [excel]` | Regenera la semilla del personal |
+| `python3 scripts/generate-seed.py [carpeta_csv]` | Regenera la semilla del personal desde los `Planeacion_*.csv` |
 | `node --env-file=.env scripts/apply-migrations.mjs [archivo.sql]` | Aplica migraciones vía Management API (alternativa al MCP) |
 
 ## Estructura
@@ -281,5 +282,5 @@ src/
     ui/         # primitives, sheet, popover, theme, display (escala TV + pantalla completa)…
 supabase/migrations/   # 0001 → 0012
 scripts/               # generate-seed.py, apply-migrations.mjs
-context/               # archivo de planeación de Global (contiene datos personales)
+context/               # CSV de Global por proyecto (contienen datos personales)
 ```

@@ -25,9 +25,9 @@ Reglas de negocio (decididas con el usuario):
   - **Horas trabajadas** = Completed Work de las tareas **entregadas** en el periodo. Casi siempre se llena al cerrar la tarea.
   - **Sin doble conteo:** si un padre tiene hijos con horas, suman los hijos.
   - **No hay capacidad, "horas posibles" ni "uso de capacidad":** se quitaron.
-- **Personas:** **Global** es la base de personal de LinkTic. En la UI **siempre se dice "Global", nunca "Excel" ni "planeación"**. Hoy se carga desde `context/…xlsx` → `0002_seed.sql` (55 personas, `in_global = true`).
+- **Personas:** **Global** es la base de personal de LinkTic. En la UI **siempre se dice "Global", nunca "Excel" ni "planeación"**. Hoy se carga desde los CSV de `context/` (`Planeacion_005_Positiva.csv`, `Planeacion_348_Acueducto.csv`, uno por proyecto) → `0002_seed.sql` (carga del 29-oct: 62 personas; 55 asignaciones en 005 y 11 en 348; `in_global = true`).
   - El **personal del proyecto** es Global **+ miembros No Global**: `project_members.in_global = false`, sin cargo ni % (sin capacidad). En la UI **se dicen "Sin asignación al proyecto"** (nunca "No Global"); etiqueta `NoGlobalBadge` junto al nombre, vía `PersonBadges`. Cuentan en el análisis como cualquier miembro (`Person.inRoster = true`, `inGlobal = false`, `isNoGlobal()` / `personRoleLabel()` en `model.ts`).
-  - Hoy, en 348: David Felipe Vergara Bogota y Jhostin Alexander Ladino Gonzalez (0009). En 005: Cristian Roa, Carlos Cansina, Josimar Bonilla, Dario Lopez y Jose Fernando Lozano Murcia (0011; se quitó el alias que hacía contar a Dario como Luis Gabriel Melendez Gongora). Para agregar otro: insertar en `employees` (la cédula es opcional) y en `project_members` con `in_global = false`, `role` y `allocation` en null y `assignment_type = 'No Global'`.
+  - Hoy, solo Jose Fernando Lozano Murcia en 005 (Global de 348). Los demás No Global de 0009 (348: David Vergara y Jhostin Ladino) y 0011 (005: Cristian Roa, Carlos Cansina, Josimar Bonilla y Dario Lopez) entraron a Global en la carga del 29-oct y conservan su registro y sus marcas. Azure de 005 los tiene con `@3tcapital.co` y Global con `@linktic.com`: se cruzan por la parte local del correo. Para agregar otro: insertar en `employees` (la cédula es opcional) y en `project_members` con `in_global = false`, `role` y `allocation` en null y `assignment_type = 'No Global'`.
   - Quien tenga ítems en las épicas sin ser personal del proyecto aparece en "Fuera de Global" (no cuenta en los indicadores salvo `includeOthers`) y se puede **vincular** (alias).
   - **Marcas especiales** (`member_flags`, 0012; `RosterMember.flag` / `Person.flag`):
     - "En vacaciones", "Asignado al proyecto de Acueducto" u otra, con `until` opcional;
@@ -80,7 +80,7 @@ Reglas de negocio (decididas con el usuario):
   - "Lista para QA" = HU con todas sus tareas cerradas que sigue en Por iniciar o En desarrollo.
 - **Meta de cierre (solo 348, `PROJECTS["348"].goal` en `config.ts`):**
   - 24 tareas `Video` y 24 `Informe` por día hábil desde el 19-oct; cierre el 13-nov;
-  - cuenta **todas** las tareas con esos tags de ambas épicas, **sin** filtrar por persona ni por Global (decisión del usuario: las de Informe son de David Vergara, No Global);
+  - cuenta **todas** las tareas con esos tags de ambas épicas, **sin** filtrar por persona ni por Global (decisión del usuario: las de Informe son de David Vergara, que estuvo fuera de Global hasta el 29-oct);
   - completada = Entregado o Cerrado, en el día de su fecha de entrega real (si es día no hábil, el siguiente hábil);
   - lo cerrado antes de `start` cuenta como avance previo;
   - **en vivo**, "frente a lo esperado" y el ritmo usan los días **cerrados** (hasta el hábil anterior), y "completadas hoy" va aparte. El día de hoy no se marca como incumplido mientras sigue abierto;
@@ -176,7 +176,11 @@ Reglas de negocio (decididas con el usuario):
 - **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004), `azure_dataset_assigned` (0005), `dataset_monitored_epics` (0006), `dataset_backfilled_delivery` (0007), `goal_tags` (0008), `no_global_members` (0009), `compliance_items` (0010), `no_global_005` (0011) y `member_flags` (0012).
   - Se aplican con el MCP del proyecto (`.mcp.json`, ref `klrierizueihrenhcema`) o con `scripts/apply-migrations.mjs`.
   - Antes de escribir con cualquier conector de Supabase, confirma con `list_projects` (solo lectura) que ve `klrierizueihrenhcema`. El conector `claude.ai Supabase` cambia de cuenta: el 27-oct estaba en la dueña (con él se aplicaron 0011 y 0012) y el 29-oct volvió a la personal (`baas-amo`). Si no ve el proyecto, no escribas. Para solo leer está la API REST con la llave del servidor.
-- **Nueva carga de Global:** reemplazar el archivo de `context/` → `python3 scripts/generate-seed.py` → aplicar `0002_seed.sql`. Es un upsert con `in_global = true`, no borra a los No Global; si Global incluye a uno de ellos, deja de ser No Global.
+- **Nueva carga de Global:** reemplazar los CSV de `context/` (`Planeacion_<proyecto>_*.csv`; el proyecto sale de la columna CUENTA ANALITICA) → `python3 scripts/generate-seed.py` → aplicar `0002_seed.sql` (con `execute_sql`, en una transacción).
+  - Quien estaba sin cédula (No Global) se empareja por correo o parte local y recibe la cédula: el upsert actualiza su mismo registro y **conserva marcas, alias e historial**. Si Global lo incluye, deja de ser No Global.
+  - Upsert de colaboradores y asignaciones con `in_global = true`.
+  - Quien sale de Global queda `active = false` (no se borra; pasa a "Fuera de Global"). Los No Global no se tocan.
+  - 29-oct: salieron de 005 Juan Sebastian Suarez Alonso y Karen Sofia Contreras Alfonso; entraron Andres David Ramirez Albarracin, John Alejandro Hernandez Rodriguez, John Alexander Rojas Diaz y Mary Julieth Chiquillo Parra.
 
 ## Convenciones
 
