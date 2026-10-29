@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { ChartCard } from "@/components/charts/chart-card";
 import { useChartTheme, withAlpha } from "@/components/charts/chart-theme";
-import { GoalCumulativeChart, GoalDailyChart, goalDayLabel, goalDayTitle, type CumulativeSeries } from "@/components/charts/goal-charts";
+import { GoalCumulativeChart, GoalDailyChart, goalDayTitle, type CumulativeSeries } from "@/components/charts/goal-charts";
 import { fetcher } from "@/components/dashboard/client-api";
 import { useApp } from "@/components/shell/app-provider";
 import { Popover } from "@/components/ui/popover";
@@ -252,7 +252,6 @@ function Verdict({ ok, children }: { ok: boolean; children: React.ReactNode }) {
 /** Tarjeta de un tag o del total, con las métricas en lenguaje claro. */
 function GoalTile({ p, t, title, color, today }: { p: GoalProgress; t: TagProgress | GoalTotal; title: string; color?: string; today: string }) {
   const { goal, live, asOf, closedThrough, closedDays } = p;
-  const late = t.projectedEnd !== null && t.projectedEnd > goal.deadline;
   const daysMet = "daysMet" in t ? t.daysMet : null;
   const todayOpen = live && isBusinessDay(today);
   const range = closedThrough ? `${dayShort(goal.start)} al ${dayShort(closedThrough)}` : "";
@@ -305,23 +304,12 @@ function GoalTile({ p, t, title, color, today }: { p: GoalProgress; t: TagProgre
         <Stat label="Ritmo actual" hint={t.currentPace === null ? "aún no hay días hábiles cerrados" : `promedio por día hábil, del ${range}`}>
           {t.currentPace === null ? "—" : `${num(t.currentPace)} por día`}
         </Stat>
-        <Stat label="Si seguimos así, terminamos el" hint={late ? `después del cierre (${dayShort(goal.deadline)})` : t.remaining <= 0 ? undefined : "al ritmo actual"}>
-          {t.remaining <= 0 ? (
-            <Verdict ok>completado</Verdict>
-          ) : t.projectedEnd === null ? (
-            <Verdict ok={false}>sin ritmo para proyectar</Verdict>
-          ) : (
-            <Verdict ok={!late}>
-              <span title={goalDayTitle(t.projectedEnd)}>{capitalizeFirst(goalDayLabel(t.projectedEnd, today))}</span>
-            </Verdict>
-          )}
-        </Stat>
         {daysMet !== null ? (
-          <Stat label="Días con la meta cumplida" hint="días hábiles cerrados" className="@xs:col-span-2">
+          <Stat label="Días con la meta cumplida" hint="días hábiles cerrados">
             {daysMet} de {closedDays}
           </Stat>
         ) : (
-          <Stat label="Pendientes" hint="tareas por completar" className="@xs:col-span-2">
+          <Stat label="Pendientes" hint="tareas por completar">
             {num(t.remaining, 0)}
           </Stat>
         )}

@@ -42,8 +42,6 @@ export type TagProgress = {
   remaining: number;
   /** Promedio de completadas por día hábil cerrado desde el inicio (null si aún no hay días cerrados) */
   currentPace: number | null;
-  /** Fecha estimada de cierre al ritmo actual (null si el ritmo es 0 o no hay) */
-  projectedEnd: string | null;
   /** Días hábiles cerrados en que se cumplió la meta diaria */
   daysMet: number;
   /** Serie acumulada por día hábil de inicio a cierre: real (hasta el último día cerrado; null después) y esperada */
@@ -73,20 +71,6 @@ export type GoalProgress = {
 
 /** Día en que cuenta una entrega: lo previo al inicio se queda (avance anterior); lo no hábil pasa al siguiente hábil. */
 const effectiveDay = (d: string, start: string) => (d < start ? d : businessDayOnOrAfter(d));
-
-/** Fecha en que se completan `remaining` tareas a `pace` por día hábil, desde `from` (incluido). */
-function projectEnd(from: string, remaining: number, pace: number | null) {
-  if (remaining <= 0) return from;
-  if (!pace || pace <= 0) return null;
-  let left = remaining;
-  let d = from;
-  for (let guard = 0; guard < 3660; guard++, d = addDaysISO(d, 1)) {
-    if (!isBusinessDay(d)) continue;
-    left -= pace;
-    if (left <= 0) return d;
-  }
-  return null;
-}
 
 /** Días hábiles ya cerrados (desde el inicio) que se pueden ver como snapshot, del más reciente al más antiguo. */
 export function snapshotDays(goal: ProjectGoal, today: string) {
@@ -143,7 +127,6 @@ export function goalProgress(goal: ProjectGoal, tasks: GoalTask[], opts: { asOf:
       gap: doneClosed - expected,
       remaining,
       currentPace,
-      projectedEnd: projectEnd(leftFrom, remaining, currentPace),
       daysMet: closedDates.filter((d) => (days[dayIndex.get(d)!]?.done[tag] ?? 0) >= daily).length,
       cumulative: dates.map((date, i) => ({ date, actual: lineEnd && date <= lineEnd ? upTo(date) : null, goal: Math.min(total, daily * (i + 1)) })),
     };
@@ -176,7 +159,6 @@ export function goalProgress(goal: ProjectGoal, tasks: GoalTask[], opts: { asOf:
       gap: doneClosed - expected,
       remaining: total - done,
       currentPace,
-      projectedEnd: projectEnd(leftFrom, total - done, currentPace),
     },
   };
 }

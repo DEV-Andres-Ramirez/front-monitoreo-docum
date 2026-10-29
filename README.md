@@ -135,7 +135,8 @@ Compromiso con EAAB para las dos épicas sumadas (Certificación CORE y Certific
   - **Completadas hoy** (en vivo, mientras el día sigue en curso, sin marcarlo como incumplido) o **completadas ese día** (snapshot);
   - **Frente a lo esperado:** "+56 adelante" o "15 atrás", con la cuenta explicada ("al cierre de ayer llevábamos 200; se esperaban 144 = 24 × 6 días hábiles"). Usa los días ya cerrados: en vivo, hasta ayer;
   - **Ritmo actual:** completadas por día hábil desde el 19-oct hasta el último día cerrado (en vivo, el hábil anterior), también en el Total;
-  - **Si seguimos así, terminamos el…** (proyección al ritmo actual) y **días con la meta cumplida**;
+  - **días con la meta cumplida** (en el Total, **pendientes**);
+  - ya no hay proyección de cierre ("Si seguimos así, terminamos el…"): se quitó porque no era necesaria;
   - ya no hay "ritmo necesario".
 - **Snapshots:** el selector "Ver al cierre de" muestra el panel y sus gráficas como quedaron al cierre de cualquier día hábil desde el 19-oct (se reconstruye con la fecha de entrega real de cada tarea; el total es el actual). Una franja avisa que se está viendo un día pasado, con "Volver a hoy".
 - **Gráficas:**
