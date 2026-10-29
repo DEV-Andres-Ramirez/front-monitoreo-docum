@@ -247,7 +247,10 @@ function PersonCard({ row: r, index, dark, onOpen }: { row: PersonRow; index: nu
       </div>
       <div className="mt-3">
         <StateBar row={r} dark={dark} />
-        <p className="mt-1.5 text-[0.6875rem] text-subtle">
+        <p
+          className="mt-1.5 text-[0.6875rem] text-subtle"
+          title="Según el periodo elegido arriba: lo que tuvo abierto o entregó en esas fechas (lo entregado antes no cuenta, aunque se cierre después). En curso y entregados sin cerrar, al cierre del periodo."
+        >
           {r.active} en el periodo · {r.byCat.InProgress} en curso · {r.byCat.Resolved} entregados sin cerrar
         </p>
       </div>

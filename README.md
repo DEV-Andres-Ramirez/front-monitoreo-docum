@@ -103,7 +103,7 @@ Vista **Cumplimiento** (2.ª en el menú de 005), más una tarjeta compacta arri
   - **cumplimiento = en producción** (categoría Completed, estado `10. En Producción`);
   - también **entregadas a QA o más** (categoría Resolved: `7. Backlog QA`, `7.1`, `7.2`).
 - **Tarea:** cumplida al **cerrarse** (`Closed`).
-- **Bug:** cumplido al **cerrarse** (`4. Cerrado`); también se muestra cuántos están en revisión QA o más (`3. Revisión QA`, `3.1 Devuelto`, `3.2 Bloqueado`, `3.4 Certificado Para Prod`). **Sin fechas:** los bugs no tienen "cerrados en el periodo", atrasos ni tendencia (sus fechas de Azure no son confiables), y no suman atrasadas en las tablas.
+- **Bug:** cumplido al **cerrarse** (`4. Cerrado`); también se muestra cuántos están en revisión QA o más (`3. Revisión QA`, `3.1 Devuelto`, `3.2 Bloqueado`, `3.4 Certificado Para Prod`). **Sin fechas:** los bugs no tienen "cerrados en el periodo", atrasos ni tendencia (sus fechas de Azure no son confiables), y no suman atrasadas en las tablas. En los tableros de bugs (Resumen y Colaboradores), **Certificado para prod.** va en su propia columna, aparte de En revisión QA.
 - **Atrasada** (solo tareas): objetivo (o fin del sprint) pasado sin cerrar.
 - **Tableros de HU y de Bugs** (mundos HU y Bugs de Resumen y Colaboradores, `undated-board.tsx`): totales por etapa y por estado de Azure, pendientes y completados por épica o Feature, quién tiene cada uno y lista de pendientes. Siempre con el estado actual, sin periodo.
 - **HU sin tiempo:** sus tarjetas no tienen "en el periodo" ni atrasadas, no hay avance acumulado de HU y la tabla por HU no muestra fecha objetivo. Solo las tareas conservan el tiempo.
@@ -171,7 +171,13 @@ Está **prohibido** crear, modificar o borrar cualquier cosa en Azure DevOps.
    - La primera vez que se abre el tablero, si no hay datos, `GET /api/projects/[p]/dataset` hace la sincronización completa y espera. Fuera de ese caso, el dataset solo lee de Supabase.
 4. **Manual:** **"Sincronizar ahora"** (`POST /api/projects/[p]/sync`) y "Resincronizar todo" (`?full=1`).
    - En la Bitácora, cada corrida indica si fue automática, manual o inicial.
-5. **Lectura de la UI:** el RPC `azure_dataset(proyecto, desde, hasta, épicas)` recorre el árbol de las épicas monitoreadas (`AZURE_<p>_EPIC_IDS`) y devuelve solo los ítems asignados "vivos" en el periodo que cuelgan de ellas, sus ancestros hasta la épica, las épicas mismas y las transiciones de estado. La sincronización copia todo el proyecto, para detectar lo que entra o sale de las épicas; el recorte se hace en este RPC. El motor de análisis (`src/lib/analytics/*`) calcula todo **en el navegador**, así que los filtros responden al instante.
+5. **Lectura de la UI:** el RPC `azure_dataset(proyecto, desde, hasta, épicas)` recorre el árbol de las épicas monitoreadas (`AZURE_<p>_EPIC_IDS`) y devuelve los ítems asignados "vivos" en el periodo que cuelgan de ellas (un superconjunto; el recorte fino lo hace `isAlive()`, ver abajo), sus ancestros hasta la épica, las épicas mismas y las transiciones de estado. La sincronización copia todo el proyecto, para detectar lo que entra o sale de las épicas; el recorte se hace en este RPC. El motor de análisis (`src/lib/analytics/*`) calcula todo **en el navegador**, así que los filtros responden al instante.
+
+   **Qué está "en el periodo"** (todo el tablero, `isAlive()`):
+   - lo que estuvo en curso o se entregó dentro del rango, según sus fechas reales;
+   - lo **entregado antes** del rango no aparece, aunque se cierre dentro (entregado ayer y cerrado hoy → sale en Ayer);
+   - lo **por iniciar** cuenta solo si su plan (inicio u objetivo; sin fechas, el sprint) empieza en el rango o antes (atrasado); lo planeado para después no;
+   - "en curso" y "entregados sin cerrar" se cuentan **al cierre del periodo** (el estado actual si el periodo llega hasta hoy).
 
 **Identidad (`src/lib/analytics/model.ts`):** un correo de Azure se vincula a un colaborador en este orden:
 1. alias manual;

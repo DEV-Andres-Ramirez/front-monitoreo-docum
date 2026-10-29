@@ -12,8 +12,8 @@ import { Sheet } from "@/components/ui/sheet";
 import { useTheme } from "@/components/ui/theme";
 import { PersonItems } from "@/components/views/undated-board";
 import { HEALTH_RULES } from "@/lib/analytics/health";
-import { CATEGORIES, CATEGORY_LABEL, inEpics, inTag, inTypes, isAlive, perPerson } from "@/lib/analytics/metrics";
-import { personRoleLabel, type Person } from "@/lib/analytics/model";
+import { CATEGORIES, CATEGORY_LABEL, inEpics, inTag, inTypes, isAlive, isCurrent, perPerson, periodCategory } from "@/lib/analytics/metrics";
+import { personRoleLabel, type Item, type Person } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import type { MemberFlagKind, StateCategory } from "@/lib/analytics/types";
 import { PROJECTS } from "@/lib/config";
@@ -201,6 +201,17 @@ function FlagControl({ person }: { person: Person }) {
   );
 }
 
+/** Estado del ítem: el de Azure hoy y, en un periodo pasado donde era otro, el que tenía al cierre del periodo. */
+function PeriodState({ item, cat, dark }: { item: Item; cat: StateCategory; dark: boolean }) {
+  const changed = cat !== item.cat;
+  return (
+    <span className="flex w-36 shrink-0 items-center gap-1.5 text-xs text-muted" title={changed ? `Al cierre del periodo: ${CATEGORY_LABEL[cat]} · hoy: ${item.state}` : (item.state ?? undefined)}>
+      <span className="size-1.5 shrink-0 rounded-full" style={{ background: categoryColor(cat, dark) }} />
+      <span className="truncate">{changed ? `${CATEGORY_LABEL[cat]} (hoy: ${item.state})` : item.state}</span>
+    </span>
+  );
+}
+
 function DatedBody({ person }: { person: Person }) {
   const { model, range, filters, openWorkItem, openPerson } = useApp();
   const { resolved } = useTheme();
@@ -212,12 +223,16 @@ function DatedBody({ person }: { person: Person }) {
     [model, person.key, range, filters.types, filters.epics, filters.tag],
   );
   const row = useMemo(() => perPerson([person], items, range, model!.now)[0], [person, items, range, model]);
-  const listed = items.filter((i) => cat === "all" || i.cat === cat).sort((a, b) => (b.deliveredAt ?? b.createdAt) - (a.deliveredAt ?? a.createdAt));
+  // Los chips agrupan por el estado al cierre del periodo (el actual si el periodo llega hasta hoy), igual que row.byCat
+  const listed = items
+    .filter((i) => cat === "all" || periodCategory(i, range, model!.now) === cat)
+    .sort((a, b) => (b.deliveredAt ?? b.createdAt) - (a.deliveredAt ?? a.createdAt));
+  const current = isCurrent(range, model!.now);
 
   const stats = [
     { label: "Entregó", value: String(row.delivered), hint: "en el periodo" },
     { label: "Horas trabajadas", value: `${fmt(row.hoursDelivered)} h`, hint: "Completed Work de lo entregado" },
-    { label: "En curso", value: String(row.wip), hint: "ahora mismo" },
+    { label: "En curso", value: String(row.wip), hint: current ? "ahora mismo" : "al cierre del periodo" },
     {
       label: "A tiempo",
       value: row.onTimeRate === null ? "—" : `${Math.round(row.onTimeRate * 100)} %`,
@@ -299,10 +314,7 @@ function DatedBody({ person }: { person: Person }) {
                     <span className="font-mono text-[0.6875rem] text-subtle">#{i.id}</span>
                     <span className="min-w-0 flex-1 truncate">{i.title}</span>
                     {i.countedHours > 0 && <span className="text-xs tabular-nums text-muted" title="Completed Work">{i.countedHours} h</span>}
-                    <span className="flex w-36 shrink-0 items-center gap-1.5 text-xs text-muted">
-                      <span className="size-1.5 shrink-0 rounded-full" style={{ background: categoryColor(i.cat, dark) }} />
-                      <span className="truncate">{i.state}</span>
-                    </span>
+                    <PeriodState item={i} cat={periodCategory(i, range, model!.now)} dark={dark} />
                     {(i.overdue || i.onTime === false) && <span className="rounded-md bg-critical-soft px-1.5 text-[0.6875rem] font-semibold text-critical-fg">+{Math.ceil(i.delayDays)} d</span>}
                   </button>
                 </li>

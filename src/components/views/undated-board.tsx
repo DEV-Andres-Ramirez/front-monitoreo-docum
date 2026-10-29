@@ -7,7 +7,7 @@ import { ChartCard } from "@/components/charts/chart-card";
 import { useApp } from "@/components/shell/app-provider";
 import { Avatar, Button, EmptyState, NoGlobalBadge, PersonBadges, Skeleton } from "@/components/ui/primitives";
 import { useTheme } from "@/components/ui/theme";
-import { BUG_STAGE_LABEL, HU_STAGE_LABEL, STAGES, type ComplianceAnalysis, type ItemRow, type Stage } from "@/lib/analytics/compliance";
+import { BUG_STAGE_LABEL, HU_STAGE_LABEL, STAGES, isCertifiedBug, type ComplianceAnalysis, type ItemRow, type Stage } from "@/lib/analytics/compliance";
 import type { Assignee } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import { pctText } from "./compliance-view";
@@ -29,8 +29,8 @@ const META: Record<
     the: string;
     o: "a" | "o";
     icon: LucideIcon;
-    labels: Record<Stage, string>;
-    hints: Record<Stage, string>;
+    /** Columnas de etapa de las tarjetas, la tabla por persona y la ficha, en orden del flujo */
+    columns: Column[];
     open: string;
     done: string;
     why: string;
@@ -42,13 +42,12 @@ const META: Record<
     the: "las",
     o: "a",
     icon: ClipboardList,
-    labels: HU_STAGE_LABEL,
-    hints: {
+    columns: byStage(HU_STAGE_LABEL, {
       Proposed: "pendiente de levantamiento, levantamiento o nueva",
       InProgress: "en desarrollo o esperando despliegue",
       Resolved: "backlog QA, pruebas QA o aprobación del cliente",
       Completed: "10. En producción",
-    },
+    }),
     open: "Sin terminar",
     done: "en producción",
     why: "Las HU se siguen por su estado, no por fechas: aquí se ve quién las tiene y en qué etapa van.",
@@ -59,18 +58,33 @@ const META: Record<
     the: "los",
     o: "o",
     icon: Bug,
-    labels: BUG_STAGE_LABEL,
-    hints: {
-      Proposed: "1. Nuevo",
-      InProgress: "2. En desarrollo",
-      Resolved: "3. Revisión QA, devuelto, bloqueado o certificado",
-      Completed: "4. Cerrado",
-    },
+    // "Certificado para prod." va aparte de "En revisión QA" (las dos son Resolved en Azure)
+    columns: byStage(BUG_STAGE_LABEL, { Proposed: "1. Nuevo", InProgress: "2. En desarrollo", Resolved: "3. Revisión QA, devuelto o bloqueado", Completed: "4. Cerrado" }).flatMap((c) =>
+      c.stage === "Resolved"
+        ? [
+            { ...c, match: (r: StageRow) => r.stage === "Resolved" && !isCertifiedBug(r.item) },
+            { key: "certified", stage: "Resolved" as const, label: "Certificado para prod.", hint: "3.4 Certificado Para Prod: aprobado por QA, falta pasar a producción", match: (r: StageRow) => r.stage === "Resolved" && isCertifiedBug(r.item) },
+          ]
+        : [c],
+    ),
     open: "Abiertos",
     done: "cerrados",
     why: "Las fechas que llegan de Azure para los bugs no son confiables y generaban alertas falsas.",
   },
 };
+
+/** Lo que necesita una columna para decidir: la etapa (categoría) y el estado de Azure. */
+type StageRow = { stage: Stage; item: { state: string | null } };
+
+/** Columna de etapa: la categoría de Azure (su color) y qué filas cuenta. */
+type Column = { key: string; stage: Stage; label: string; hint: string; match: (r: StageRow) => boolean };
+
+function byStage(labels: Record<Stage, string>, hints: Record<Stage, string>): Column[] {
+  return STAGES.map((st) => ({ key: st, stage: st, label: labels[st], hint: hints[st], match: (r) => r.stage === st }));
+}
+
+/** Columna en la que cae una fila (o un estado de Azure con su etapa). */
+const columnOf = (kind: UndatedKind, r: StageRow) => META[kind].columns.find((c) => c.match(r)) ?? META[kind].columns[0];
 
 const rowsOf = (a: ComplianceAnalysis, kind: UndatedKind) => (kind === "hu" ? a.huItems : a.bugItems);
 const statesOf = (a: ComplianceAnalysis, kind: UndatedKind) => (kind === "hu" ? a.hu.states : (a.bugs?.states ?? []));
@@ -127,20 +141,23 @@ function StageTiles({ kind, rows }: { kind: UndatedKind; rows: ItemRow[] }) {
   const m = META[kind];
   const dark = resolved === "dark";
   const total = rows.length;
-  const byStage = Object.fromEntries(STAGES.map((st) => [st, rows.filter((r) => r.stage === st).length])) as Record<Stage, number>;
-  const open = total - byStage.Completed;
+  const open = rows.filter((r) => r.stage !== "Completed").length;
   const unassignedOpen = rows.filter((r) => r.stage !== "Completed" && r.assignee.kind === "sinAsignar").length;
+  const tiles = 2 + m.columns.length + (unassignedOpen > 0 ? 1 : 0);
   return (
-    <div className={clsx("grid grid-cols-2 gap-3 md:grid-cols-4", unassignedOpen > 0 ? "2xl:grid-cols-7" : "2xl:grid-cols-6")}>
+    <div className={clsx("grid grid-cols-2 gap-3 md:grid-cols-4", WIDE_COLS[tiles] ?? "2xl:grid-cols-8")}>
       <Tile label={`${m.title} en total`} value={total} hint="en las épicas elegidas" />
       <Tile label={m.open} value={open} hint={`${pctText(total ? open / total : 0)} del total · aún no ${m.done}`} />
-      {STAGES.map((st) => (
-        <Tile key={st} label={m.labels[st]} value={byStage[st]} hint={m.hints[st]} color={categoryColor(st, dark)} />
+      {m.columns.map((c) => (
+        <Tile key={c.key} label={c.label} value={rows.filter(c.match).length} hint={c.hint} color={categoryColor(c.stage, dark)} />
       ))}
       {unassignedOpen > 0 && <Tile label={`${m.open} sin asignar`} value={unassignedOpen} hint={`nadie ${m.the} tiene asignad${m.o}s`} tone="warning" />}
     </div>
   );
 }
+
+/** Columnas de las tarjetas en pantallas anchas según cuántas haya (clases completas para Tailwind). */
+const WIDE_COLS: Record<number, string> = { 6: "2xl:grid-cols-6", 7: "2xl:grid-cols-7", 8: "2xl:grid-cols-8" };
 
 function Tile({ label, value, hint, color, tone }: { label: string; value: number; hint: string; color?: string; tone?: "warning" }) {
   return (
@@ -165,7 +182,7 @@ function StatesCard({ kind, states, total }: { kind: UndatedKind; states: { stat
       subtitle="Cantidad por estado de Azure (hoy)"
       icon={m.icon}
       summary={`Cantidad de ${m.noun} por estado de Azure.`}
-      table={{ columns: ["Estado en Azure", "Etapa", m.title, "%"], rows: states.map((s) => [s.state, m.labels[s.stage], s.count, pctText(total ? s.count / total : 0)]) }}
+      table={{ columns: ["Estado en Azure", "Etapa", m.title, "%"], rows: states.map((s) => [s.state, columnOf(kind, { stage: s.stage, item: s }).label, s.count, pctText(total ? s.count / total : 0)]) }}
       height={Math.max(220, states.length * 44)}
     >
       <ul className="flex h-full flex-col justify-center gap-3">
@@ -281,18 +298,20 @@ export function ItemsByPerson({ kind, rows: given }: { kind: UndatedKind; rows?:
   const m = META[kind];
   const rows = useMemo(() => given ?? (analysis ? rowsOf(analysis, kind) : []), [given, analysis, kind]);
   const people = useMemo(() => {
-    const map = new Map<string, { assignee: Assignee; byStage: Record<Stage, number>; total: number }>();
+    const map = new Map<string, { assignee: Assignee; byColumn: Record<string, number>; done: number; total: number }>();
     for (const r of rows) {
-      const g = map.get(r.assignee.key) ?? { assignee: r.assignee, byStage: { Proposed: 0, InProgress: 0, Resolved: 0, Completed: 0 }, total: 0 };
-      g.byStage[r.stage] += 1;
+      const g = map.get(r.assignee.key) ?? { assignee: r.assignee, byColumn: {}, done: 0, total: 0 };
+      const col = columnOf(kind, r).key;
+      g.byColumn[col] = (g.byColumn[col] ?? 0) + 1;
+      if (r.stage === "Completed") g.done += 1;
       g.total += 1;
       map.set(r.assignee.key, g);
     }
-    const open = (g: { byStage: Record<Stage, number>; total: number }) => g.total - g.byStage.Completed;
+    const open = (g: { done: number; total: number }) => g.total - g.done;
     return [...map.values()].sort(
       (a, b) => Number(a.assignee.kind === "sinAsignar") - Number(b.assignee.kind === "sinAsignar") || open(b) - open(a) || b.total - a.total || a.assignee.name.localeCompare(b.assignee.name, "es"),
     );
-  }, [rows]);
+  }, [rows, kind]);
   if (!analysis) return <Skeleton className="h-64 w-full rounded-2xl" />;
   return (
     <section className="card overflow-hidden">
@@ -311,14 +330,14 @@ export function ItemsByPerson({ kind, rows: given }: { kind: UndatedKind; rows?:
         <EmptyState variant="search" title={`Sin ${m.noun} para estos filtros`} className="border-none" />
       ) : (
         <div className="scrollbar-thin overflow-x-auto">
-          <table className="w-full min-w-[46rem] text-sm">
+          <table className={clsx("w-full text-sm", m.columns.length > 4 ? "min-w-[52rem]" : "min-w-[46rem]")}>
             <thead className="bg-surface-2 text-[0.6875rem] uppercase tracking-wider text-subtle">
               <tr>
                 <th className="px-4 py-2.5 text-left font-semibold">Persona</th>
                 <th className="px-3 py-2.5 text-right font-semibold">{m.open}</th>
-                {STAGES.map((st) => (
-                  <th key={st} className="px-3 py-2.5 text-right font-semibold">
-                    {m.labels[st]}
+                {m.columns.map((c) => (
+                  <th key={c.key} className="px-3 py-2.5 text-right font-semibold" title={c.hint}>
+                    {c.label}
                   </th>
                 ))}
                 <th className="px-4 py-2.5 text-right font-semibold">Total</th>
@@ -330,10 +349,10 @@ export function ItemsByPerson({ kind, rows: given }: { kind: UndatedKind; rows?:
                   <td className="px-4 py-2.5">
                     <AssigneeCell a={g.assignee} />
                   </td>
-                  <td className="px-3 py-2.5 text-right font-display font-semibold tabular-nums">{g.total - g.byStage.Completed}</td>
-                  {STAGES.map((st) => (
-                    <td key={st} className={clsx("px-3 py-2.5 text-right tabular-nums", g.byStage[st] === 0 && "text-subtle")}>
-                      {g.byStage[st]}
+                  <td className="px-3 py-2.5 text-right font-display font-semibold tabular-nums">{g.total - g.done}</td>
+                  {m.columns.map((c) => (
+                    <td key={c.key} className={clsx("px-3 py-2.5 text-right tabular-nums", !g.byColumn[c.key] && "text-subtle")}>
+                      {g.byColumn[c.key] ?? 0}
                     </td>
                   ))}
                   <td className="px-4 py-2.5 text-right tabular-nums text-muted">{g.total}</td>
@@ -362,21 +381,22 @@ export function PersonItems({ kind, personKey }: { kind: UndatedKind; personKey:
       </h3>
       <p className="mb-3 text-xs text-muted">Sin fechas: aquí no hay periodo, atrasos ni semáforo. Las métricas de tiempo están en Tareas.</p>
       <div className="mb-3 flex flex-wrap gap-2">
-        {STAGES.map((st) => (
-          <span key={st} className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 text-xs">
-            <span className="size-2 rounded-full" style={{ background: categoryColor(st, resolved === "dark") }} />
-            {m.labels[st]} <strong className="tabular-nums">{mine.filter((r) => r.stage === st).length}</strong>
+        {m.columns.map((c) => (
+          <span key={c.key} className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 text-xs" title={c.hint}>
+            <span className="size-2 rounded-full" style={{ background: categoryColor(c.stage, resolved === "dark") }} />
+            {c.label} <strong className="tabular-nums">{mine.filter(c.match).length}</strong>
           </span>
         ))}
       </div>
-      <ItemList rows={mine} onOpen={openItem} limit={80} />
+      <ItemList kind={kind} rows={mine} onOpen={openItem} limit={80} />
     </section>
   );
 }
 
-function ItemList({ rows, onOpen, limit }: { rows: ItemRow[]; onOpen: (id: number) => void; limit: number }) {
+function ItemList({ kind, rows, onOpen, limit }: { kind: UndatedKind; rows: ItemRow[]; onOpen: (id: number) => void; limit: number }) {
   const { resolved } = useTheme();
-  const sorted = [...rows].sort((a, b) => STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage) || a.item.id - b.item.id);
+  const order = (r: ItemRow) => META[kind].columns.indexOf(columnOf(kind, r));
+  const sorted = [...rows].sort((a, b) => order(a) - order(b) || a.item.id - b.item.id);
   return (
     <ul className="divide-y divide-line">
       {sorted.slice(0, limit).map((r) => (
@@ -420,7 +440,7 @@ function OpenList({ kind, rows, onOpen }: { kind: UndatedKind; rows: ItemRow[]; 
           <p className="text-xs text-muted">Ordenad{m.o}s por etapa · clic para ver el detalle</p>
         </div>
       </header>
-      <ItemList rows={open} onOpen={onOpen} limit={limit} />
+      <ItemList kind={kind} rows={open} onOpen={onOpen} limit={limit} />
       {open.length > limit && (
         <div className="border-t border-line px-4 py-2">
           <Button size="sm" variant="ghost" onClick={() => setLimit(limit + LIST_PAGE * 2)}>

@@ -98,10 +98,55 @@ export function scopedWork(model: Model, f: Filters): Item[] {
   });
 }
 
-/** Vivo en el periodo: creado antes de su fin (o entregado dentro de él aunque se registrara después) y no cerrado antes de su inicio. */
-export const isAlive = (i: Item, r: Range) =>
-  i.cat !== "Removed" && (i.createdAt <= r.to || deliveredIn(i, r)) && (i.completedAt === null || i.completedAt >= r.from);
+/**
+ * Cuándo terminó la persona su parte: la fecha de entrega de lo ya entregado o cerrado (aunque el cierre en Azure
+ * llegue después); el cierre si no hay entrega; null si sigue abierto.
+ */
+const finishedAt = (i: Item) => (i.cat === "Resolved" || i.cat === "Completed" ? (i.deliveredAt ?? i.completedAt) : i.completedAt);
+
+/** Primer día del plan (inicio u objetivo, lo que sea antes; si no tiene, el sprint). null = sin plan. */
+const planFrom = (i: Item) => {
+  const dates = [i.plannedStart, i.plannedEnd].filter((d): d is number => d !== null);
+  return dates.length ? Math.min(...dates) : null;
+};
+
+/**
+ * En el periodo (regla de todo el tablero, decidida con el usuario el 29-oct):
+ * - no se terminó antes de su inicio: lo entregado antes no aparece aunque se cierre dentro (se entregó ayer y se
+ *   cerró hoy → sale en Ayer, no en Hoy);
+ * - y se creó antes de su fin (o se entregó dentro de él, aunque se registrara después);
+ * - lo que seguía **por iniciar** al cierre del periodo solo cuenta si su plan empieza dentro del periodo o antes
+ *   (planeado para esas fechas o atrasado); lo planeado para después no. Sin plan ni sprint, cuenta.
+ */
+export const isAlive = (i: Item, r: Range) => {
+  if (i.cat === "Removed") return false;
+  const delivered = deliveredIn(i, r);
+  if (i.createdAt > r.to && !delivered) return false;
+  const end = finishedAt(i);
+  if (end !== null && end < r.from) return false;
+  if (delivered) return true;
+  const started = categoryAt(i, r.to);
+  if (started !== null && started !== "Proposed") return true;
+  const plan = planFrom(i);
+  return plan === null || plan <= r.to;
+};
 export const deliveredIn = (i: Item, r: Range) => i.deliveredAt !== null && i.deliveredAt >= r.from && i.deliveredAt <= r.to;
+/** El periodo llega hasta ahora (Hoy, Esta semana, Desde el 19 oct): los estados son los actuales. */
+export const isCurrent = (r: Range, now: number) => r.to >= now;
+
+const isDone = (c: StateCategory | null) => c === "Resolved" || c === "Completed";
+
+/**
+ * Categoría de un ítem al cierre del periodo: la actual si el periodo llega hasta hoy; si no, la de su traza en
+ * `r.to`. Lo entregado dentro del periodo cuya traza aún no lo refleja (fecha de entrega registrada a posteriori)
+ * cuenta como lo que es hoy (entregado o cerrado).
+ */
+export function periodCategory(i: Item, r: Range, now: number): StateCategory {
+  if (isCurrent(r, now)) return i.cat;
+  const at = categoryAt(i, r.to) ?? "Proposed";
+  return !isDone(at) && isDone(i.cat) && i.deliveredAt !== null && i.deliveredAt <= r.to ? i.cat : at;
+}
+
 /** Atrasado y genera alerta: sin entregar con objetivo pasado, salvo que la persona tenga una marca (vacaciones u otro proyecto). */
 export const alertable = (i: Item) => i.overdue && !i.excused;
 
@@ -126,15 +171,14 @@ export function kpis(items: Item[], r: Range, now: number): KpiSet {
   const alive = items.filter((i) => isAlive(i, r));
   const delivered = items.filter((i) => deliveredIn(i, r));
   const withTarget = delivered.filter((i) => i.onTime !== null);
-  const current = r.to >= now - DAY; // el periodo llega hasta hoy → el WIP es el actual
-  const wipItems = current ? alive.filter((i) => i.cat === "InProgress") : alive.filter((i) => categoryAt(i, r.to) === "InProgress");
+  const wipItems = alive.filter((i) => periodCategory(i, r, now) === "InProgress");
   return {
     active: alive.length,
     delivered: delivered.length,
     hoursDelivered: round(sum(delivered.map((i) => i.countedHours))),
     wip: wipItems.length,
     hoursWip: round(sum(wipItems.map((i) => i.countedHours))),
-    resolvedPending: alive.filter((i) => (current ? i.cat : categoryAt(i, r.to)) === "Resolved").length,
+    resolvedPending: alive.filter((i) => periodCategory(i, r, now) === "Resolved").length,
     overdue: alive.filter(alertable).length,
     onTimeRate: withTarget.length ? withTarget.filter((i) => i.onTime).length / withTarget.length : null,
     onTimeBase: withTarget.length,
@@ -257,9 +301,9 @@ export function perPerson(people: Person[], items: Item[], r: Range, now = Date.
     const k = kpis(mine, r, now);
     const alive = mine.filter((i) => isAlive(i, r));
     const byCat: Record<StateCategory, number> = { Proposed: 0, InProgress: 0, Resolved: 0, Completed: 0, Removed: 0 };
-    for (const i of alive) byCat[i.cat] += 1;
-    // Por iniciar al cierre del periodo (o hoy, si el periodo llega hasta hoy), igual que el WIP de kpis()
-    const proposed = r.to >= now - DAY ? byCat.Proposed : alive.filter((i) => categoryAt(i, r.to) === "Proposed").length;
+    // Estado al cierre del periodo (o el actual, si el periodo llega hasta hoy), igual que el WIP de kpis()
+    for (const i of alive) byCat[periodCategory(i, r, now)] += 1;
+    const proposed = byCat.Proposed;
     return {
       person,
       active: alive.length,

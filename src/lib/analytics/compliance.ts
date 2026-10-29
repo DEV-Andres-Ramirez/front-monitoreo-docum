@@ -49,6 +49,12 @@ export const BUG_STAGE_LABEL: Record<Stage, string> = {
   Resolved: "En revisión QA",
   Completed: "Cerrados",
 };
+/**
+ * Bug certificado por QA que espera el paso a producción ("3.4 Certificado Para Prod"). Azure lo deja en la
+ * categoría Resolved, igual que "3. Revisión QA", así que se distingue por el nombre del estado: única
+ * excepción a la regla de usar solo la categoría, para mostrarlo aparte en los tableros de bugs.
+ */
+export const isCertifiedBug = (i: { state: string | null }) => /certificad/i.test(i.state ?? "");
 
 const stageOf = (i: ComplianceItem): Stage => (i.cat === "Removed" ? "Proposed" : i.cat);
 
