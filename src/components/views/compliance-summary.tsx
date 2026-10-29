@@ -11,7 +11,7 @@ import { useCompliance } from "./use-compliance";
 
 /**
  * Tarjeta compacta de cumplimiento para el Resumen (proyectos con análisis de cumplimiento).
- * Muestra solo el mundo elegido (Tareas, HU o Bugs): los tres no se mezclan. Los bugs sin fechas.
+ * Muestra solo el mundo elegido (Tareas, HU o Bugs): los tres no se mezclan. HU y bugs, sin fechas.
  */
 export function ComplianceSummary() {
   const { project, epics, filters, view } = useApp();
@@ -34,7 +34,7 @@ export function ComplianceSummary() {
             { label: `En producción: ${hu.done}`, value: hu.pctDone, color: categoryColor("Completed", dark) },
             { label: `En QA o ya en producción: ${hu.qa} (${pctText(hu.pctQa)})`, value: hu.pctQa, color: categoryColor("Resolved", dark) },
           ],
-          note: `En el periodo: +${hu.qaInPeriod} llegaron a QA y +${hu.doneInPeriod} a producción`,
+          note: `Estado actual (sin fechas): ${hu.total - hu.done} sin terminar`,
         }
       : view.key === "bugs" && bugs
         ? {

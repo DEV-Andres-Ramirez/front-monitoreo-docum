@@ -4,7 +4,7 @@ import { addDaysISO, businessDaysBetween, isBusinessDay, isoLocalDate } from "@/
 import { businessDaysElapsed, personHealth, type Health } from "./health";
 import type { PeriodPreset } from "./period";
 import type { StateCategory } from "./types";
-import { DAY, capacityHours, categoryAt, endOfDay, type Item, type Model, type Person } from "./model";
+import { DAY, categoryAt, endOfDay, type Item, type Model, type Person } from "./model";
 
 /**
  * `epics`: épicas monitoreadas seleccionadas (vacío = todas). `tag`: tag de Azure (null = todos).
@@ -120,7 +120,6 @@ export type KpiSet = {
   overdue: number;
   onTimeRate: number | null;
   onTimeBase: number;
-  completedWork: number;
 };
 
 export function kpis(items: Item[], r: Range, now: number): KpiSet {
@@ -139,7 +138,6 @@ export function kpis(items: Item[], r: Range, now: number): KpiSet {
     overdue: alive.filter(alertable).length,
     onTimeRate: withTarget.length ? withTarget.filter((i) => i.onTime).length / withTarget.length : null,
     onTimeBase: withTarget.length,
-    completedWork: round(sum(delivered.map((i) => i.completedWork ?? 0))),
   };
 }
 
@@ -238,16 +236,11 @@ export type PersonRow = {
   delivered: number;
   wip: number;
   overdue: number;
+  /** Horas trabajadas (Completed Work) de lo entregado en el periodo */
   hoursDelivered: number;
-  hoursOpen: number;
-  estimated: number;
-  completedWork: number;
   onTimeRate: number | null;
   /** Entregas con fecha objetivo (base de onTimeRate) */
   onTimeBase: number;
-  /** Capacidad a la fecha: días hábiles del periodo transcurridos hasta hoy (sin días futuros) */
-  capacity: number | null;
-  utilization: number | null;
   byCat: Record<StateCategory, number>;
   /** Días hábiles del periodo transcurridos hasta hoy */
   elapsedDays: number;
@@ -263,11 +256,8 @@ export function perPerson(people: Person[], items: Item[], r: Range, now = Date.
     const mine = byPerson.get(person.key) ?? [];
     const k = kpis(mine, r, now);
     const alive = mine.filter((i) => isAlive(i, r));
-    const delivered = mine.filter((i) => deliveredIn(i, r));
     const byCat: Record<StateCategory, number> = { Proposed: 0, InProgress: 0, Resolved: 0, Completed: 0, Removed: 0 };
     for (const i of alive) byCat[i.cat] += 1;
-    const capacity = capacityHours(person, r.from, Math.min(r.to, now));
-    const utilization = capacity ? k.hoursDelivered / capacity : null;
     // Por iniciar al cierre del periodo (o hoy, si el periodo llega hasta hoy), igual que el WIP de kpis()
     const proposed = r.to >= now - DAY ? byCat.Proposed : alive.filter((i) => categoryAt(i, r.to) === "Proposed").length;
     return {
@@ -277,21 +267,16 @@ export function perPerson(people: Person[], items: Item[], r: Range, now = Date.
       wip: k.wip,
       overdue: k.overdue,
       hoursDelivered: k.hoursDelivered,
-      hoursOpen: round(sum(alive.filter((i) => i.deliveredAt === null).map((i) => i.countedHours))),
-      estimated: round(sum(delivered.filter((i) => i.estimate !== null).map((i) => i.estimate!))),
-      completedWork: round(sum(delivered.map((i) => i.completedWork ?? 0))),
       onTimeRate: k.onTimeRate,
       onTimeBase: k.onTimeBase,
-      capacity,
-      utilization,
       byCat,
       elapsedDays,
-      health: personHealth({ ...k, active: alive.length, utilization, proposed }, elapsedDays, person.flag),
+      health: personHealth({ ...k, active: alive.length, proposed }, elapsedDays, person.flag),
     };
   });
 }
 
-/** Horas entregadas por persona y día hábil o semana (heatmap). */
+/** Horas trabajadas (Completed Work) de lo entregado, por persona y día hábil o semana (heatmap). */
 export function workloadMatrix(people: Person[], items: Item[], r: Range, unit: TimeUnit = "week") {
   const bs = buckets(r, unit);
   return {

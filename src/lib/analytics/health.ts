@@ -21,17 +21,16 @@ export const HEALTH_ORDER: Record<HealthLevel, number> = { bad: 0, risk: 1, good
 
 /**
  * Umbrales. Con menos de `minDays` días hábiles transcurridos en el periodo (Hoy, Ayer) solo cuentan
- * vencidos y puntualidad: entregas, utilización y "nada en curso" necesitan días para ser justas.
+ * atrasos y puntualidad: entregas y "nada en curso" necesitan días para ser justas.
  */
 export const HEALTH_RULES = {
   minDays: 3,
   overdueBad: 3,
-  utilBad: 0.5,
-  utilRisk: 0.8,
   onTimeBad: 0.6,
   onTimeRisk: 0.8,
   onTimeMinBase: 3,
 };
+// Sin criterio de capacidad: el tiempo se mide solo con el Completed Work reportado (decisión del usuario).
 
 /** Lo que el semáforo necesita de una fila de perPerson(). */
 export type HealthInput = {
@@ -41,8 +40,6 @@ export type HealthInput = {
   overdue: number;
   onTimeRate: number | null;
   onTimeBase: number;
-  /** Horas entregadas ÷ capacidad a la fecha (null sin capacidad: No Global o fuera de Global) */
-  utilization: number | null;
   /** Ítems activos por iniciar */
   proposed: number;
 };
@@ -76,11 +73,6 @@ export function personHealth(r: HealthInput, elapsedDays: number, flag: MemberFl
 
   if (long && r.delivered === 0) bad.push(`Sin entregas en ${plural(elapsedDays, "día hábil", "días hábiles")}`);
 
-  if (long && r.utilization !== null) {
-    if (r.utilization < R.utilBad) bad.push(`Uso de capacidad ${pct(r.utilization)}`);
-    else if (r.utilization < R.utilRisk) risk.push(`Uso de capacidad ${pct(r.utilization)}`);
-  }
-
   if (r.onTimeRate !== null && r.onTimeBase >= R.onTimeMinBase) {
     const text = `Entregó a tiempo ${pct(r.onTimeRate)} (de ${r.onTimeBase})`;
     if (r.onTimeRate < R.onTimeBad) bad.push(text);
@@ -94,6 +86,5 @@ export function personHealth(r: HealthInput, elapsedDays: number, flag: MemberFl
   const good = r.delivered > 0 ? [plural(r.delivered, "entrega", "entregas")] : ["Sin vencidos"];
   // La puntualidad solo se menciona cuando cuenta (base suficiente), para no mostrar un "0 % a tiempo" que no pesa
   if (r.onTimeRate !== null && r.onTimeBase >= R.onTimeMinBase) good.push(`${pct(r.onTimeRate)} a tiempo (de ${r.onTimeBase})`);
-  if (long && r.utilization !== null) good.push(`uso de capacidad ${pct(r.utilization)}`);
   return { level: "good", reasons: [good.join(" · ")] };
 }

@@ -6,12 +6,11 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Gantt } from "@/components/gantt/gantt";
 import { useApp } from "@/components/shell/app-provider";
-import { Avatar, Button, Chip, EmptyState, FLAG_ICON, FlagBadge, HealthBadge, PersonBadges, ProgressRing, TypeBadge } from "@/components/ui/primitives";
+import { Avatar, Button, Chip, EmptyState, FLAG_ICON, FlagBadge, HealthBadge, PersonBadges, TypeBadge } from "@/components/ui/primitives";
 import { Popover } from "@/components/ui/popover";
 import { Sheet } from "@/components/ui/sheet";
 import { useTheme } from "@/components/ui/theme";
-import { useCompliance } from "@/components/views/use-compliance";
-import { BUG_STAGE_LABEL, STAGES } from "@/lib/analytics/compliance";
+import { PersonItems } from "@/components/views/undated-board";
 import { HEALTH_RULES } from "@/lib/analytics/health";
 import { CATEGORIES, CATEGORY_LABEL, inEpics, inTag, inTypes, isAlive, perPerson } from "@/lib/analytics/metrics";
 import { personRoleLabel, type Person } from "@/lib/analytics/model";
@@ -62,7 +61,7 @@ function Body({ person }: { person: Person }) {
   return (
     <div className="space-y-5">
       <FlagControl person={person} />
-      {view.dated ? <DatedBody person={person} /> : <PersonBugs person={person} />}
+      {view.dated ? <DatedBody person={person} /> : <PersonItems kind={view.key === "hu" ? "hu" : "bugs"} personKey={person.key} />}
     </div>
   );
 }
@@ -202,48 +201,6 @@ function FlagControl({ person }: { person: Person }) {
   );
 }
 
-/** Mundo Bugs: los bugs de la persona por estado actual (sin fechas). */
-function PersonBugs({ person }: { person: Person }) {
-  const { analysis, openItem } = useCompliance();
-  const { resolved } = useTheme();
-  const mine = (analysis?.bugItems ?? []).filter((b) => b.assignee.key === person.key);
-  if (!analysis) return null;
-  if (!mine.length) return <EmptyState title="Sin bugs asignados en las épicas elegidas" />;
-  return (
-    <section>
-      <h3 className="mb-1 font-display text-sm font-semibold">Bugs ({mine.length}) · estado actual</h3>
-      <p className="mb-3 text-xs text-muted">Sin fechas: las de los bugs no son confiables, así que aquí no hay periodo, atrasos ni semáforo.</p>
-      <div className="mb-3 flex flex-wrap gap-2">
-        {STAGES.map((st) => (
-          <span key={st} className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 text-xs">
-            <span className="size-2 rounded-full" style={{ background: categoryColor(st, resolved === "dark") }} />
-            {BUG_STAGE_LABEL[st]} <strong className="tabular-nums">{mine.filter((b) => b.stage === st).length}</strong>
-          </span>
-        ))}
-      </div>
-      <ul className="divide-y divide-line rounded-2xl border border-line">
-        {mine
-          .slice()
-          .sort((a, b) => STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage) || a.item.id - b.item.id)
-          .slice(0, 80)
-          .map((b) => (
-            <li key={b.item.id}>
-              <button onClick={() => openItem(b.item.id)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition hover:bg-surface-2">
-                <TypeBadge type="Bug" />
-                <span className="font-mono text-[0.6875rem] text-subtle">#{b.item.id}</span>
-                <span className="min-w-0 flex-1 truncate">{b.item.title}</span>
-                <span className="flex w-40 shrink-0 items-center gap-1.5 text-xs text-muted">
-                  <span className="size-1.5 shrink-0 rounded-full" style={{ background: categoryColor(b.stage, resolved === "dark") }} />
-                  <span className="truncate">{b.item.state}</span>
-                </span>
-              </button>
-            </li>
-          ))}
-      </ul>
-    </section>
-  );
-}
-
 function DatedBody({ person }: { person: Person }) {
   const { model, range, filters, openWorkItem, openPerson } = useApp();
   const { resolved } = useTheme();
@@ -258,8 +215,9 @@ function DatedBody({ person }: { person: Person }) {
   const listed = items.filter((i) => cat === "all" || i.cat === cat).sort((a, b) => (b.deliveredAt ?? b.createdAt) - (a.deliveredAt ?? a.createdAt));
 
   const stats = [
-    { label: "Entregó", value: String(row.delivered), hint: `${fmt(row.hoursDelivered)} h estimadas` },
-    { label: "En curso", value: String(row.wip), hint: `${fmt(row.hoursOpen)} h pendientes` },
+    { label: "Entregó", value: String(row.delivered), hint: "en el periodo" },
+    { label: "Horas trabajadas", value: `${fmt(row.hoursDelivered)} h`, hint: "Completed Work de lo entregado" },
+    { label: "En curso", value: String(row.wip), hint: "ahora mismo" },
     {
       label: "A tiempo",
       value: row.onTimeRate === null ? "—" : `${Math.round(row.onTimeRate * 100)} %`,
@@ -289,21 +247,7 @@ function DatedBody({ person }: { person: Person }) {
         </p>
       </section>
       <div className="flex flex-wrap items-center gap-3">
-        {row.utilization !== null && (
-          <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface-2 p-3" title="Horas estimadas entregadas ÷ horas que podía trabajar hasta hoy (8 h × % asignado × días hábiles)">
-            <div className="relative grid place-items-center">
-              <ProgressRing value={Math.min(row.utilization, 1)} size={52} />
-              <span className="absolute text-xs font-bold tabular-nums">{Math.round(row.utilization * 100)}%</span>
-            </div>
-            <div>
-              <p className="text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">Uso de capacidad</p>
-              <p className="text-sm font-semibold">
-                {fmt(row.hoursDelivered)} h entregadas de {row.capacity?.toLocaleString("es-CO", { maximumFractionDigits: 0 })} h posibles a hoy
-              </p>
-            </div>
-          </div>
-        )}
-        <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-5">
           {stats.map((s) => (
             <div key={s.label} className="rounded-2xl border border-line bg-surface-2 p-3">
               <p className="text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">{s.label}</p>
@@ -354,7 +298,7 @@ function DatedBody({ person }: { person: Person }) {
                     <TypeBadge type={i.type} />
                     <span className="font-mono text-[0.6875rem] text-subtle">#{i.id}</span>
                     <span className="min-w-0 flex-1 truncate">{i.title}</span>
-                    {i.countedHours > 0 && <span className="text-xs tabular-nums text-muted">{i.countedHours} h</span>}
+                    {i.countedHours > 0 && <span className="text-xs tabular-nums text-muted" title="Completed Work">{i.countedHours} h</span>}
                     <span className="flex w-36 shrink-0 items-center gap-1.5 text-xs text-muted">
                       <span className="size-1.5 shrink-0 rounded-full" style={{ background: categoryColor(i.cat, dark) }} />
                       <span className="truncate">{i.state}</span>

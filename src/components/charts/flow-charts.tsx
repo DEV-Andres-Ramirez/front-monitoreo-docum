@@ -41,7 +41,7 @@ export function ThroughputChart({
       labels: buckets.map((b) => bucketLabel(b.start, unit)),
       datasets: [
         {
-          label: metric === "items" ? `${noun.charAt(0).toUpperCase()}${noun.slice(1)} entregadas` : "Horas estimadas entregadas",
+          label: metric === "items" ? `${noun.charAt(0).toUpperCase()}${noun.slice(1)} entregadas` : "Horas trabajadas (Completed Work)",
           data: buckets.map((b) => (metric === "items" ? b.items : b.hours)),
           // Atenuadas: fuera del periodo seleccionado (contexto de 7 días hábiles)
           backgroundColor: buckets.map((b) => withAlpha(theme.accent, highlight && (b.start < highlight.from || b.start > highlight.to) ? 0.35 : 0.8)),
@@ -67,7 +67,7 @@ export function ThroughputChart({
             label: (i) => ` ${i.dataset.label}: ${metric === "hours" ? fmtHours(Number(i.raw)) : i.raw}`,
             footer: (items) => {
               const b = buckets[items[0].dataIndex];
-              return metric === "items" ? `${fmtHours(b.hours)} estimadas` : `${b.items} ${noun} entregadas`;
+              return metric === "items" ? `${fmtHours(b.hours)} trabajadas (Completed Work)` : `${b.items} ${noun} entregadas`;
             },
           },
         },
@@ -240,64 +240,6 @@ export function PersonStatesChart({ rows, theme, onSelect }: { rows: PersonRow[]
       },
     };
   }, [theme, rows, onSelect]);
-  return <Bar data={data} options={options} />;
-}
-
-// ------------------------------------------------------------------ Estimado vs. reportado (bullet)
-export function EstimateChart({ rows, theme }: { rows: PersonRow[]; theme: ChartTheme }) {
-  const data = useMemo<ChartData<"bar", number[], string>>(
-    () => ({
-      labels: rows.map((r) => personLabel(r.person)),
-      datasets: [
-        {
-          label: "Trabajo completado reportado",
-          data: rows.map((r) => r.completedWork),
-          backgroundColor: theme.accent,
-          hoverBackgroundColor: theme.accent,
-          borderRadius: theme.px(4),
-          borderSkipped: false,
-          barThickness: theme.px(10),
-          order: 0,
-        },
-        {
-          label: "Horas estimadas",
-          data: rows.map((r) => r.estimated),
-          backgroundColor: theme.track,
-          hoverBackgroundColor: theme.track,
-          borderRadius: theme.px(4),
-          borderSkipped: false,
-          barThickness: theme.px(18),
-          order: 1,
-        },
-      ],
-    }),
-    [rows, theme],
-  );
-  const options = useMemo<ChartOptions<"bar">>(() => {
-    const base = baseOptions<"bar">(theme);
-    return {
-      ...base,
-      indexAxis: "y",
-      datasets: { bar: { grouped: false } },
-      interaction: { mode: "index", axis: "y", intersect: false },
-      scales: axes(theme, { horizontal: true, suffix: " h" }),
-      plugins: {
-        ...base.plugins,
-        crosshair: { enabled: false },
-        tooltip: {
-          ...base.plugins?.tooltip,
-          callbacks: {
-            title: (items) => `${rows[items[0].dataIndex].person.name}${isNoGlobal(rows[items[0].dataIndex].person) ? " · Sin asignación al proyecto" : ""}`,
-            label: (i) => ` ${i.dataset.label}: ${fmtHours(Number(i.raw))}`,
-            footer: (items) => {
-              const r = rows[items[0].dataIndex];
-              return r.estimated ? `Desviación: ${Math.round(((r.completedWork - r.estimated) / r.estimated) * 100)} %` : "";
-            },
-          },
-        },
-      },
-    };
-  }, [theme, rows]);
   return <Bar data={data} options={options} />;
 }
 

@@ -13,7 +13,7 @@ El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Maste
 
 > **Global** es la base de personal (planeación) de LinkTic. En la interfaz siempre se dice "Global", **nunca "Excel"**. Hoy Global se carga desde el archivo de planeación en `context/` con `scripts/generate-seed.py`.
 >
-> El **personal del proyecto** es el de Global **más los miembros "No Global"** (internamente): personas que trabajan en las épicas sin estar en Global para ese proyecto. Cuentan en el análisis, pero no tienen cargo ni % (sin capacidad ni uso de capacidad). En la interfaz llevan la etiqueta **"Sin asignación al proyecto"** junto al nombre. Hoy son:
+> El **personal del proyecto** es el de Global **más los miembros "No Global"** (internamente): personas que trabajan en las épicas sin estar en Global para ese proyecto. Cuentan en el análisis, pero no tienen cargo ni %. En la interfaz llevan la etiqueta **"Sin asignación al proyecto"** junto al nombre. Hoy son:
 >
 > - **348:** David Felipe Vergara Bogota (`david.vergara@linktic.com`) y Jhostin Alexander Ladino Gonzalez (`jhostin.ladino@linktic.com`) (0009).
 > - **005:** Cristian Roa, Carlos Cansina, Josimar Bonilla y Dario Lopez (`@3tcapital.co`), y Jose Fernando Lozano Murcia (Global de 348) (0011). El alias que hacía contar a Dario Lopez como Luis Gabriel Melendez Gongora se quitó, con traza en la bitácora.
@@ -23,15 +23,15 @@ El cliente pidió monitorear lo que hace cada persona asignada. El **Scrum Maste
 Calcula automáticamente:
 
 - **Qué tiene asignado cada colaborador** y en qué estado está: por iniciar, en curso, entregado o cerrado.
-- **Horas:** 1 punto de esfuerzo = 1 hora. Se toman Story Points o Effort; si no hay, la Estimación original. **No hay doble conteo**: si una HU y sus tareas tienen valor, suman las tareas. Se compara con el "Trabajo completado" que reportan en Azure.
+- **Horas trabajadas:** solo el campo **Completed Work** ("Trabajo completado") que cada persona reporta en Azure. Se suma el de las tareas entregadas en el periodo. **No se usan las horas estimadas** (Story Points, Effort ni Estimación original). Sin doble conteo: si un padre y sus hijas reportan horas, suman las hijas.
 - **Tiempos:** creación → cierre (*lead time*), en curso → cerrado (*cycle time*) y la **traza completa de cambios de estado**, con la duración en cada uno.
 - **Plan vs. real:** fecha de inicio y fecha objetivo (del ítem o, si no las tiene, del sprint) frente al inicio real y la **entrega real** (campo "Fecha de entrega real" si existe, si no "Entregado" o el cierre). De ahí salen la puntualidad, los vencidos y los días de retraso.
-- **Capacidad y uso de capacidad:** capacidad a hoy = 8 h × % asignado × días hábiles vigentes **transcurridos** en el periodo (en el periodo actual no cuentan días futuros); uso de capacidad = horas estimadas entregadas ÷ capacidad.
+- **Sin capacidad:** ya no se calcula capacidad, "horas posibles" ni "uso de capacidad".
 - **Semáforo de cada colaborador** (ambos proyectos): **Va mal**, **En riesgo**, **Va bien**, **No evaluado** (con marca) o **Sin carga** en el periodo elegido, con las razones. Ver "Semáforo de colaboradores".
 - **Solo días hábiles:** ninguna gráfica ni tabla muestra fines de semana ni festivos de Colombia (entregas por día, evolución del estado, carga, Cumplimiento, Meta y Gantt). Lo entregado un día no hábil cuenta en el **siguiente día hábil** (o en el último del periodo, si el periodo termina en un día no hábil); así los días ya cerrados no cambian.
 - **Qué se mide en cada proyecto:**
   - **348:** solo **Tareas**, en Resumen, Colaboradores, semáforo y Cronograma (`PROJECTS["348"].views`).
-  - **005:** **tres mundos separados**: Tareas, Historias de usuario y Bugs, con el selector de la barra de filtros (Resumen, Colaboradores y Cronograma; por defecto, Tareas). Los **Bugs no usan fechas**, porque las de Azure no son confiables y daban alertas falsas: solo cantidades y estado actual, sin periodo, atrasos, Gantt ni semáforo.
+  - **005:** **tres mundos separados**: Tareas, Historias de usuario y Bugs, con el selector de la barra de filtros (Resumen, Colaboradores y Cronograma; por defecto, Tareas). **Solo las Tareas tienen métricas de tiempo.** Las **HU y los Bugs no usan fechas**: solo quién los tiene, cuántos hay y en qué estado van, sin periodo, atrasos, Gantt ni semáforo. En los bugs es porque las fechas de Azure no son confiables y daban alertas falsas.
 
 ## Funcionalidades (v3 · monitoreo automático)
 
@@ -45,7 +45,7 @@ Calcula automáticamente:
   - **Tag** (solo 348): "Todos los tags · Video · Informe". Aplica a todas las vistas. Las HU no llevan tags, así que con un tag elegido solo quedan sus tareas.
 - **Vistas:**
   - **Resumen** (`/`):
-    - **4 tarjetas** con título claro, una línea de "qué significa" y un ícono (i) con la fórmula: **entregadas**, **horas entregadas** (estimadas), **atrasadas** (sin entregar y con la fecha objetivo pasada) y **entregadas a tiempo**. El cambio frente al periodo de comparación se lee "12 % más / menos";
+    - **4 tarjetas** con título claro, una línea de "qué significa" y un ícono (i) con la fórmula: **entregadas**, **horas trabajadas** (Completed Work), **atrasadas** (sin entregar y con la fecha objetivo pasada) y **entregadas a tiempo**. El cambio frente al periodo de comparación se lee "12 % más / menos";
     - **¿Cuánto se entregó cada día hábil?** (por día hábil o por semana), **¿En qué estado está el trabajo?** y **Evolución del estado del trabajo** (antes CFD), con una explicación de cómo leerla;
     - si el periodo dura menos de 7 días hábiles (Hoy, Ayer, inicio de semana), las tendencias muestran los últimos 7 días hábiles y resaltan el periodo elegido;
     - tarjeta **Semáforo del equipo**: cuántos van mal, en riesgo, bien, no evaluados o sin carga, con quién va mal y quién está en riesgo (y por qué);
@@ -58,18 +58,19 @@ Calcula automáticamente:
     - Incluye línea de "hoy", bandas de sprint, zoom día/semana/mes, orden, filtros por tipo y "solo con retraso".
     - El eje es de **tiempo hábil**: los fines de semana y festivos no ocupan espacio.
   - **Colaboradores** (`/colaboradores`):
-    - **semáforo del equipo** arriba: contadores por nivel que filtran (por defecto se ve a quienes tienen carga), barra apilada y "¿Cómo se calcula?". El orden por defecto es por estado;
-    - **scorecards** (tarjetas o tabla) con entregas, uso de capacidad, puntualidad y atrasadas. Cada tarjeta lleva el color del nivel (borde, tinte y barra lateral; quien va mal, con un punto que late; sin carga, atenuada y punteada), la etiqueta y sus razones;
-    - **horas entregadas** por día hábil o por semana (mapa de calor persona × día/semana);
-    - en 005 con el mundo Bugs: tabla de bugs por persona y estado (sin semáforo);
-    - gráficas de estado por persona y de estimado frente a reportado;
+    - **semáforo del equipo** arriba: contadores por nivel que filtran, barra apilada y "¿Cómo se calcula?". El orden por defecto es por estado;
+    - **quienes no tienen carga quedan ocultos** hasta pulsar "Mostrar N sin carga", y vuelven a ocultarse en cada visita. Los que tienen una marca sí se ven;
+    - **scorecards** (tarjetas o tabla) con entregas, horas trabajadas, puntualidad y atrasadas. Cada tarjeta lleva el color del nivel (borde, tinte y barra lateral; quien va mal, con un punto que late; sin carga, atenuada y punteada), la etiqueta y sus razones;
+    - **horas trabajadas** (Completed Work) por día hábil o por semana (mapa de calor persona × día/semana);
+    - en 005, con los mundos HU o Bugs: tabla de quién los tiene y en qué estado (sin semáforo);
+    - gráfica de estado por persona;
     - sección **"Fuera de Global"**: personas con ítems en las épicas que no son personal del proyecto. No cuentan en los indicadores salvo que se active "Incluir fuera de Global", y se pueden vincular si son la misma persona con otro correo;
     - los miembros sin asignación al proyecto (No Global) y los que tienen marca aparecen con su etiqueta en tarjetas, tabla, carga, gráficas, Gantt, detalle, filtro de personas y ⌘K.
   - **Backlog Azure** (`/backlog`): árbol Épica → Feature → HU → Tarea con estado, asignado, objetivo, entrega y horas acumuladas.
   - **Bitácora** (`/bitacora`): ingresos, sincronizaciones (con conteos o errores), vinculaciones y marcas especiales.
   - **Cumplimiento** (`/cumplimiento`, solo 005): ver la sección "Cumplimiento de Positiva". El menú depende del proyecto (`navItems()` en `src/components/shell/nav.ts`), y los atajos 1…n siguen su orden.
 - **Detalle de un ítem:** ruta Épica › Feature › HU, horas y su origen, plan frente a real, puntualidad, **línea de tiempo de estados** con duraciones e ítems hijos.
-- **Detalle de un colaborador:** **marca especial** (poner o quitar), semáforo con sus razones, uso de capacidad, entregas, puntualidad, atrasadas, **mini-Gantt** e ítems por estado (en el mundo Bugs: sus bugs por estado).
+- **Detalle de un colaborador:** **marca especial** (poner o quitar), semáforo con sus razones, entregas, horas trabajadas, puntualidad, atrasadas, **mini-Gantt** e ítems por estado (en los mundos HU o Bugs: sus ítems por estado).
 - **Pantalla para TV:** tamaño de 75 % a 300 % (− / % / +) y pantalla completa. Atajos `+`, `−`, `0` y `F`.
 - **Tema** claro, oscuro o del sistema, sin parpadeo.
 - **⌘K** para buscar personas, ítems, periodos y acciones; `1–5` cambian de vista; `?` muestra la ayuda.
@@ -82,14 +83,14 @@ Para decidir rápido con quién hablar. Se calcula por persona en el periodo ele
 | Nivel | Cuándo |
 |---|---|
 | **Sin carga** | No tiene ítems en las épicas monitoreadas en el periodo. |
-| **Va mal** | 3 o más pendientes atrasados · sin entregas con 3+ días hábiles transcurridos · uso de capacidad < 50 % (solo Global) · a tiempo < 60 % (con 3+ entregas con objetivo). |
-| **En riesgo** | 1–2 atrasados · uso de capacidad 50–80 % · a tiempo 60–80 % · nada en curso teniendo ítems por iniciar. |
+| **Va mal** | 3 o más pendientes atrasados · sin entregas con 3+ días hábiles transcurridos · a tiempo < 60 % (con 3+ entregas con objetivo). |
+| **En riesgo** | 1–2 atrasados · a tiempo 60–80 % · nada en curso teniendo ítems por iniciar. |
 | **Va bien** | Entregó y nada de lo anterior. |
 | **No evaluado** | Tiene una marca (vacaciones, otro proyecto…): lo que entrega cuenta, pero no recibe alertas. |
 
-- Se mide con el mundo elegido: en 348, tareas; en 005, Tareas o Historias de usuario (en Bugs no hay semáforo). La columna de Cumplimiento se mide siempre con tareas.
+- Se mide solo con tareas (en HU y Bugs no hay semáforo). La columna de Cumplimiento también se mide con tareas.
+- "Sin carga" se oculta en Colaboradores hasta pulsar "Mostrar N sin carga".
 - Con menos de 3 días hábiles transcurridos (Hoy, Ayer, lunes de "Esta semana") solo cuentan atrasos y puntualidad, y "Va bien" no exige entregas.
-- El uso de capacidad usa la capacidad a la fecha. Quien no tiene asignación en Global y los de fuera de Global no tienen capacidad, así que no se juzgan por ella.
 - Se ve en Colaboradores (tarjetas, tabla y carga), en el detalle del colaborador, en la tarjeta del Resumen y en la tabla por persona de Cumplimiento. Siempre con ícono y texto, no solo color.
 
 ## Cumplimiento de Positiva (solo 005)
@@ -102,8 +103,9 @@ Vista **Cumplimiento** (2.ª en el menú de 005), más una tarjeta compacta arri
   - también **entregadas a QA o más** (categoría Resolved: `7. Backlog QA`, `7.1`, `7.2`).
 - **Tarea:** cumplida al **cerrarse** (`Closed`).
 - **Bug:** cumplido al **cerrarse** (`4. Cerrado`); también se muestra cuántos están en revisión QA o más (`3. Revisión QA`, `3.1 Devuelto`, `3.2 Bloqueado`, `3.4 Certificado Para Prod`). **Sin fechas:** los bugs no tienen "cerrados en el periodo", atrasos ni tendencia (sus fechas de Azure no son confiables), y no suman atrasadas en las tablas.
-- **Atrasada:** objetivo (o fin del sprint) pasado sin cumplir. En las HU, sin llegar a QA.
-- **Tablero de Bugs** (mundo Bugs de Resumen y Colaboradores, `bugs-board.tsx`): totales por etapa y por estado de Azure, abiertos y cerrados por épica o Feature, bugs por persona y lista de abiertos. Siempre con el estado actual, sin periodo.
+- **Atrasada** (solo tareas): objetivo (o fin del sprint) pasado sin cerrar.
+- **Tableros de HU y de Bugs** (mundos HU y Bugs de Resumen y Colaboradores, `undated-board.tsx`): totales por etapa y por estado de Azure, pendientes y completados por épica o Feature, quién tiene cada uno y lista de pendientes. Siempre con el estado actual, sin periodo.
+- **HU sin tiempo:** sus tarjetas no tienen "en el periodo" ni atrasadas, no hay avance acumulado de HU y la tabla por HU no muestra fecha objetivo. Solo las tareas conservan el tiempo.
 - **En el Resumen**, la tarjeta de cumplimiento muestra solo el mundo elegido (Tareas, HU o Bugs).
 - **Secciones:**
   1. tarjetas de HU, Tareas y Bugs: % de cumplimiento, barras, flujo por etapa, completadas en el periodo (HU y tareas), en curso, por iniciar, atrasadas (HU y tareas), sin tareas o pendientes sin asignar;
@@ -114,7 +116,7 @@ Vista **Cumplimiento** (2.ª en el menú de 005), más una tarjeta compacta arri
      - tareas sin asignar;
      - bugs abiertos sin asignar;
   3. **flujo por etapa** (HU, Tareas o Bugs, con tabla de estados de Azure);
-  4. **avance acumulado** de HU y tareas frente al total (por día hábil o semana);
+  4. **avance acumulado** de tareas frente al total (por día hábil o semana);
   5. cumplimiento **por épica**, **por Feature**, **por HU** (avance por sus tareas, con búsqueda, filtros y orden) y **por persona** (etiquetas y semáforo del periodo medido con tareas).
 - **Configuración:** `PROJECTS["005"].compliance` en `src/lib/config.ts`.
 - **Datos:** `GET /api/projects/[p]/compliance` → RPC `azure_compliance_items` (0010). No se filtra por periodo; se calcula en `src/lib/analytics/compliance.ts`.
@@ -140,7 +142,7 @@ Compromiso con EAAB para las dos épicas sumadas (Certificación CORE y Certific
   - **Avance diario vs. meta:** barras por tag y día hábil con la línea de la meta diaria, el día de corte resaltado y "días con la meta cumplida";
   - **Avance acumulado vs. meta:** Total, Video o Informe, con una sola línea real frente a lo esperado. La brecha va sombreada en verde (adelante) o rojo (atrás) y el rótulo final dice "N · +X adelante". En vivo llega hasta el cierre de ayer.
 - Respeta el filtro de tag, pero no los de personas ni épica (la meta es del proyecto).
-- **Días hábiles:** `isBusinessDay()` en `src/lib/dates.ts` excluye los festivos de Colombia (Ley Emiliani y Pascua). También se usan en la capacidad y en el "día hábil anterior".
+- **Días hábiles:** `isBusinessDay()` en `src/lib/dates.ts` excluye los festivos de Colombia (Ley Emiliani y Pascua). También se usan en el semáforo y en el "día hábil anterior".
 
 ## ⚠️ Regla de oro: Azure DevOps es SOLO LECTURA
 
@@ -273,7 +275,7 @@ src/
     shell/      # app-provider (filtros globales, dataset, atajos), topbar, filter-bar, sidebar, mobile-nav, command-palette…
     views/      # overview, schedule (Gantt), people, backlog, audit, dataset-gate
     gantt/      # Gantt plan vs. real (HTML/CSS en rem)
-    charts/     # Chart.js: flow-charts (throughput, CFD, burnup, cycle time, estados, estimado), chart-card, chart-theme
+    charts/     # Chart.js: flow-charts (throughput, CFD, estados por persona), chart-card, chart-theme
     dashboard/  # work-item-sheet (traza de estados), member-sheet, client-api (fetch + preferencias)
     ui/         # primitives, sheet, popover, theme, display (escala TV + pantalla completa)…
 supabase/migrations/   # 0001 → 0012

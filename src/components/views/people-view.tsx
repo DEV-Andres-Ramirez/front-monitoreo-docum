@@ -3,27 +3,27 @@
 import clsx from "clsx";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { AlertTriangle, BarChart3, Grid3x3, LayoutGrid, Link2, List, Scale, Search, UserPlus } from "lucide-react";
+import { AlertTriangle, BarChart3, CircleDashed, Grid3x3, LayoutGrid, Link2, List, Search, UserPlus } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ChartCard } from "@/components/charts/chart-card";
 import { useChartTheme } from "@/components/charts/chart-theme";
-import { EstimateChart, PersonStatesChart } from "@/components/charts/flow-charts";
+import { PersonStatesChart } from "@/components/charts/flow-charts";
 import { api, useStored } from "@/components/dashboard/client-api";
 import { useApp } from "@/components/shell/app-provider";
-import { Avatar, Button, Chip, EmptyState, HEALTH_TONE, HealthBadge, PersonBadges, ProgressRing, Segmented } from "@/components/ui/primitives";
+import { Avatar, Button, EmptyState, HEALTH_TONE, HealthBadge, PersonBadges, Segmented } from "@/components/ui/primitives";
 import { useUiScale } from "@/components/ui/display";
 import type { Health, HealthLevel } from "@/lib/analytics/health";
 import { CATEGORIES, CATEGORY_LABEL, workloadMatrix, type PersonRow } from "@/lib/analytics/metrics";
 import { normalizeText, personRoleLabel, type Person } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
-import { BugsByPerson, UndatedNote } from "./bugs-board";
+import { ItemsByPerson, UndatedNote } from "./undated-board";
 import { DatasetGate } from "./dataset-gate";
 import { HealthCounters, HealthRules, HealthStackBar, byHealth, healthCounts, shownLevels, useHealthFilter, useTeamRows } from "./team-health";
 
 type Layout = "cards" | "table" | "heatmap";
-type SortKey = "health" | "delivered" | "utilization" | "overdue" | "wip" | "name";
+type SortKey = "health" | "delivered" | "overdue" | "wip" | "name";
 
 export function PeopleView() {
   const { view } = useApp();
@@ -32,10 +32,10 @@ export function PeopleView() {
       {view.dated ? (
         <People />
       ) : (
-        // Bugs: sin fechas ni semáforo, solo cuántos tiene cada persona y en qué estado
+        // HU y Bugs (Positiva): sin fechas ni semáforo, solo cuántos tiene cada persona y en qué estado
         <div className="space-y-5">
-          <UndatedNote />
-          <BugsByPerson />
+          <UndatedNote kind={view.key === "hu" ? "hu" : "bugs"} />
+          <ItemsByPerson kind={view.key === "hu" ? "hu" : "bugs"} />
         </div>
       )}
     </DatasetGate>
@@ -45,7 +45,7 @@ export function PeopleView() {
 const fmtH = (n: number) => `${n.toLocaleString("es-CO", { maximumFractionDigits: 1 })} h`;
 const pct = (r: number | null) => (r === null ? "—" : `${Math.round(r * 100)} %`);
 
-const SORTS: SortKey[] = ["health", "delivered", "utilization", "overdue", "wip", "name"];
+const SORTS: SortKey[] = ["health", "delivered", "overdue", "wip", "name"];
 
 function People() {
   const { model, projectKey, openPerson } = useApp();
@@ -66,7 +66,6 @@ function People() {
     const by: Record<SortKey, (a: PersonRow, b: PersonRow) => number> = {
       health: byHealth,
       delivered: (a, b) => b.hoursDelivered - a.hoursDelivered || b.delivered - a.delivered,
-      utilization: (a, b) => (b.utilization ?? -1) - (a.utilization ?? -1),
       overdue: (a, b) => b.overdue - a.overdue,
       wip: (a, b) => b.wip - a.wip,
       name: (a, b) => a.person.name.localeCompare(b.person.name, "es"),
@@ -74,8 +73,8 @@ function People() {
     return filtered.sort(by[sort]);
   }, [all, levels, query, sort]);
   const selectLevel = (l: HealthLevel) => setHealthFilter(healthFilter === l ? "active" : l);
+  const showingIdle = healthFilter === "all" || healthFilter === "idle";
   const chartRows = rows.filter((r) => r.active > 0);
-  const estimateRows = rows.filter((r) => r.estimated > 0 || r.completedWork > 0);
 
   return (
     <div className="space-y-5">
@@ -85,15 +84,20 @@ function People() {
             <h2 className="font-display text-[0.9375rem] font-semibold leading-tight">Semáforo del equipo</h2>
             <p className="mt-0.5 text-xs text-muted">
               {healthFilter === "active"
-                ? `Mostrando a quienes tienen carga (${counts.bad + counts.risk + counts.good}) · clic en un nivel para ver solo ese`
+                ? `Mostrando a quienes tienen carga o una marca (${all.length - counts.idle}) · clic en un nivel para ver solo ese`
                 : healthFilter === "all"
                   ? `Mostrando a todo el personal (${all.length}), con o sin carga`
-                  : "Clic de nuevo en el nivel para volver a ver a quienes tienen carga"}
+                  : healthFilter === "idle"
+                    ? "Mostrando solo a quienes no tienen ítems en el periodo"
+                    : "Clic de nuevo en el nivel para volver a ver a quienes tienen carga"}
             </p>
           </div>
-          <Chip active={healthFilter === "all"} onClick={() => setHealthFilter(healthFilter === "all" ? "active" : "all")} count={all.length}>
-            {healthFilter === "all" ? "Todos" : "Ver todos"}
-          </Chip>
+          {counts.idle > 0 && (
+            // Quienes no tienen carga quedan ocultos hasta que se pidan (no aportan a la decisión)
+            <Button size="sm" variant={showingIdle ? "secondary" : "ghost"} icon={CircleDashed} onClick={() => setHealthFilter(showingIdle ? "active" : "all")} aria-pressed={showingIdle}>
+              {showingIdle ? "Ocultar sin carga" : `Mostrar ${counts.idle} sin carga`}
+            </Button>
+          )}
         </div>
         <HealthCounters counts={counts} active={levels} onSelect={selectLevel} />
         <HealthStackBar counts={counts} />
@@ -126,8 +130,7 @@ function People() {
           Ordenar por
           <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="h-9 rounded-lg border border-line bg-surface px-2 text-sm text-foreground">
             <option value="health">estado (semáforo)</option>
-            <option value="delivered">horas entregadas</option>
-            <option value="utilization">uso de capacidad</option>
+            <option value="delivered">horas trabajadas</option>
             <option value="overdue">atrasadas</option>
             <option value="wip">trabajo en curso</option>
             <option value="name">nombre</option>
@@ -150,7 +153,7 @@ function People() {
         <Heatmap people={rows.map((r) => r.person)} health={new Map(rows.map((r) => [r.person.key, r.health]))} />
       )}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4">
         <ChartCard
           title="Estado del trabajo por colaborador"
           subtitle="Ítems activos en el periodo por categoría · clic para ver detalle"
@@ -167,34 +170,10 @@ function People() {
             </div>
           </div>
         </ChartCard>
-        <ChartCard
-          title="Estimado vs. trabajo reportado"
-          subtitle="Ítems entregados: horas estimadas (pista) frente a 'trabajo completado' en Azure"
-          icon={Scale}
-          legend={[
-            { label: "Trabajo completado reportado", color: theme.accent },
-            { label: "Horas estimadas", color: theme.track },
-          ]}
-          summary="Comparación de horas estimadas y trabajo completado reportado por colaborador."
-          table={{ columns: ["Colaborador", "Estimado", "Reportado"], rows: estimateRows.map((r) => [r.person.name, fmtH(r.estimated), fmtH(r.completedWork)]) }}
-          empty={estimateRows.length === 0 ? { title: "Sin estimaciones ni trabajo reportado", description: "Aplica cuando las tareas tienen estimación original y trabajo completado." } : false}
-          height={360}
-        >
-          <div className="scrollbar-thin h-full overflow-y-auto pr-1">
-            <div style={{ height: Math.max(estimateRows.length * 30 + 40, 320) * scale }}>
-              <EstimateChart rows={estimateRows} theme={theme} />
-            </div>
-          </div>
-        </ChartCard>
       </div>
 
       <OutsidePlanning />
-      {model && (
-        <p className="text-xs text-subtle">
-          Capacidad a hoy = 8 h × % asignado en Global × días hábiles transcurridos del periodo. Uso de capacidad = horas estimadas entregadas ÷ capacidad a hoy (puede pasar de 100 % si
-          se entregó más de lo estimado para esos días).
-        </p>
-      )}
+      {model && <p className="text-xs text-subtle">Horas trabajadas = Completed Work reportado en Azure en las tareas entregadas en el periodo (no se usan las horas estimadas).</p>}
     </div>
   );
 }
@@ -231,21 +210,6 @@ const CARD_HEALTH: Record<HealthLevel, React.CSSProperties> = {
 };
 const SIDE_HEALTH: Record<HealthLevel, string> = { bad: "bg-critical", risk: "bg-warning", good: "bg-good", excused: "bg-info-fg/60", idle: "bg-line-strong" };
 
-/** Uso de capacidad (horas estimadas entregadas ÷ capacidad a la fecha), con el anillo topado en 100 %. */
-function CapacityRing({ r }: { r: PersonRow }) {
-  if (r.utilization === null || r.capacity === null) return null;
-  const value = Math.round(r.utilization * 100);
-  return (
-    <div className="flex shrink-0 flex-col items-center" title={`Uso de capacidad: entregó ${fmtH(r.hoursDelivered)} estimadas de ${fmtH(r.capacity)} que podía trabajar hasta hoy`}>
-      <div className="relative grid place-items-center">
-        <ProgressRing value={Math.min(r.utilization, 1)} size={44} />
-        <span className="absolute text-[0.625rem] font-bold tabular-nums">{value > 100 ? "+100" : value}%</span>
-      </div>
-      <span className="mt-0.5 text-[0.5625rem] uppercase tracking-wider text-subtle">capacidad</span>
-    </div>
-  );
-}
-
 function PersonCard({ row: r, index, dark, onOpen }: { row: PersonRow; index: number; dark: boolean; onOpen: () => void }) {
   const level = r.health.level;
   return (
@@ -280,7 +244,6 @@ function PersonCard({ row: r, index, dark, onOpen }: { row: PersonRow; index: nu
             </span>
           </div>
         </div>
-        <CapacityRing r={r} />
       </div>
       <div className="mt-3">
         <StateBar row={r} dark={dark} />
@@ -292,7 +255,7 @@ function PersonCard({ row: r, index, dark, onOpen }: { row: PersonRow; index: nu
         <div>
           <dt className="text-[0.625rem] uppercase tracking-wider text-subtle">Entregó</dt>
           <dd className="font-display text-base font-semibold tabular-nums">{r.delivered}</dd>
-          <dd className="text-[0.6875rem] text-subtle">{fmtH(r.hoursDelivered)} estimadas</dd>
+          <dd className="text-[0.6875rem] text-subtle" title="Completed Work reportado en Azure">{fmtH(r.hoursDelivered)} trabajadas</dd>
         </div>
         <div>
           <dt className="text-[0.625rem] uppercase tracking-wider text-subtle">A tiempo</dt>
@@ -302,7 +265,7 @@ function PersonCard({ row: r, index, dark, onOpen }: { row: PersonRow; index: nu
         <div>
           <dt className="text-[0.625rem] uppercase tracking-wider text-subtle">Atrasadas</dt>
           <dd className={clsx("font-display text-base font-semibold tabular-nums", r.overdue > 0 && "text-critical-fg")}>{r.overdue}</dd>
-          <dd className="text-[0.6875rem] text-subtle">{fmtH(r.hoursOpen)} pendientes</dd>
+          <dd className="text-[0.6875rem] text-subtle">fecha objetivo pasada</dd>
         </div>
       </dl>
     </motion.article>
@@ -313,7 +276,7 @@ function PeopleTable({ rows, onOpen }: { rows: PersonRow[]; onOpen: (key: string
   return (
     <div className="card overflow-hidden">
       <div className="scrollbar-thin overflow-x-auto">
-        <table className="w-full min-w-[66rem] text-sm">
+        <table className="w-full min-w-[56rem] text-sm">
           <thead className="bg-surface-2 text-left text-[0.6875rem] uppercase tracking-wider text-subtle">
             <tr>
               <th className="px-4 py-3 font-semibold">Colaborador</th>
@@ -321,9 +284,7 @@ function PeopleTable({ rows, onOpen }: { rows: PersonRow[]; onOpen: (key: string
               <th className="px-3 py-3 text-right font-semibold" title="Ítems con actividad en el periodo">En el periodo</th>
               <th className="px-3 py-3 text-right font-semibold">En curso</th>
               <th className="px-3 py-3 text-right font-semibold">Entregó</th>
-              <th className="px-3 py-3 text-right font-semibold" title="Suma de la estimación de lo entregado (1 punto = 1 h)">Horas estimadas entregadas</th>
-              <th className="px-3 py-3 text-right font-semibold" title="8 h × % asignado × días hábiles transcurridos">Capacidad a hoy</th>
-              <th className="px-3 py-3 text-right font-semibold" title="Horas estimadas entregadas ÷ capacidad a hoy">Uso de capacidad</th>
+              <th className="px-3 py-3 text-right font-semibold" title="Completed Work reportado en Azure en lo entregado">Horas trabajadas</th>
               <th className="px-3 py-3 text-right font-semibold" title="De lo entregado con fecha objetivo, cuánto llegó a tiempo">A tiempo</th>
               <th className="px-4 py-3 text-right font-semibold" title="Sin entregar y con la fecha objetivo pasada">Atrasadas</th>
             </tr>
@@ -354,8 +315,6 @@ function PeopleTable({ rows, onOpen }: { rows: PersonRow[]; onOpen: (key: string
                 <td className="px-3 text-right tabular-nums">{r.wip}</td>
                 <td className="px-3 text-right tabular-nums">{r.delivered}</td>
                 <td className="px-3 text-right font-display font-semibold tabular-nums">{fmtH(r.hoursDelivered)}</td>
-                <td className="px-3 text-right tabular-nums text-muted">{r.capacity === null ? "—" : fmtH(r.capacity)}</td>
-                <td className="px-3 text-right tabular-nums">{pct(r.utilization)}</td>
                 <td className="px-3 text-right tabular-nums">{pct(r.onTimeRate)}</td>
                 <td className={clsx("px-4 text-right font-semibold tabular-nums", r.overdue > 0 && "text-critical-fg")}>{r.overdue}</td>
               </tr>
@@ -378,9 +337,9 @@ function Heatmap({ people, health }: { people: Person[]; health: Map<string, Hea
     <div className="card overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div>
-          <h3 className="font-display text-[0.9375rem] font-semibold">Horas entregadas por {byDay ? "día hábil" : "semana"}</h3>
+          <h3 className="font-display text-[0.9375rem] font-semibold">Horas trabajadas por {byDay ? "día hábil" : "semana"}</h3>
           <p className="text-xs text-muted">
-            Horas estimadas (puntos) que entregó cada colaborador por {byDay ? "día hábil (sin fines de semana ni festivos)" : "semana"}. Más oscuro = más horas (máximo {fmtH(max)}).
+            Completed Work reportado en las tareas que entregó cada colaborador, por {byDay ? "día hábil (sin fines de semana ni festivos)" : "semana"}. Más oscuro = más horas (máximo {fmtH(max)}).
           </p>
         </div>
         <Segmented

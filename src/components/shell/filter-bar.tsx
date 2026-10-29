@@ -400,7 +400,7 @@ export function ViewFilter({ className, full = false }: { className?: string; fu
         value: v.key,
         label: full ? v.label : v.short,
         icon: VIEW_ICON[v.key],
-        title: v.dated ? `Analizar solo ${v.label.toLowerCase()}` : `${v.label}: solo cantidades y estado actual (sus fechas no son confiables)`,
+        title: v.dated ? `Analizar solo ${v.label.toLowerCase()} (con métricas de tiempo)` : `${v.label}: quién las tiene, cuántas y en qué estado van (sin fechas)`,
       }))}
     />
   );

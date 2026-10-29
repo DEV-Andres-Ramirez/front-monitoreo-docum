@@ -73,10 +73,11 @@ export const PROJECTS: Record<ProjectKey, ProjectMeta> = {
     accent: "#13A538",
     accentSoft: "#E3F8E8",
     compliance: { userStory: "User Story", task: "Task", bug: "Bug" },
-    // Tres mundos separados; los bugs no usan fechas (las de Azure no son confiables)
+    // Tres mundos separados; solo las tareas tienen métricas de tiempo (HU y bugs: estado y cantidades)
     views: [
       TASKS_VIEW,
-      { key: "hu", label: "Historias de usuario", short: "HU", types: ["User Story"], dated: true },
+      // Las HU tampoco usan tiempo (decisión del usuario): quién las tiene, cuántas y en qué estado van
+      { key: "hu", label: "Historias de usuario", short: "HU", types: ["User Story"], dated: false },
       { key: "bugs", label: "Bugs", short: "Bugs", types: ["Bug"], dated: false },
     ],
   },
@@ -85,8 +86,6 @@ export const PROJECTS: Record<ProjectKey, ProjectMeta> = {
 /** Inicio del análisis (ambos proyectos): el periodo por defecto va de esta fecha a hoy. */
 export const ANALYSIS_START = "2026-10-19";
 
-/** Horas de una jornada completa (100 % de asignación). Esperado diario = JORNADA_HORAS × % asignado. */
-export const JORNADA_HORAS = 8;
 
 /** Zona horaria de operación: define qué es "hoy". */
 export const TIMEZONE = "America/Bogota";

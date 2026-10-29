@@ -1,6 +1,4 @@
 // Modelo de análisis (cliente): identidad, horas sin doble conteo, fechas plan/real y traza.
-import { JORNADA_HORAS } from "@/lib/config";
-import { isBusinessDay, isoLocalDate } from "@/lib/dates";
 import type { AzureItem, DatasetResponse, MemberFlag, RosterMember, StateCategory, Transition } from "./types";
 
 export const DAY = 86_400_000;
@@ -46,7 +44,7 @@ export type Item = AzureItem & {
   tagList: string[];
   isWork: boolean;
   personKey: string | null;
-  /** Horas declaradas: Story Points / Effort / Estimación original (1 punto = 1 hora) */
+  /** Horas trabajadas: Completed Work reportado en Azure (no se usa la estimación) */
   hours: number;
   /** Horas que suman en los totales (0 si el padre tiene hijos con horas: sin doble conteo) */
   countedHours: number;
@@ -102,8 +100,8 @@ export const endOfDay = (t: number) => {
   return d.getTime();
 };
 
-/** Horas declaradas de un ítem (1 punto de esfuerzo = 1 hora). */
-export const declaredHours = (i: AzureItem) => i.sp ?? i.effort ?? i.estimate ?? 0;
+/** Horas de un ítem: el Completed Work reportado en Azure (la estimación no se usa: confundía al cliente). */
+export const workedHours = (i: AzureItem) => i.completedWork ?? 0;
 
 /** Resolución de identidad (alias → correo exacto → parte local → tokens del nombre) a partir del dataset. */
 export function buildIdentity(ds: Pick<DatasetResponse, "roster" | "employees" | "aliases">) {
@@ -174,9 +172,9 @@ export function buildModel(ds: DatasetResponse, now = Date.now()): Model {
   const transitionsById = new Map<number, Transition[]>();
   for (const t of ds.transitions) transitionsById.set(t.id, [...(transitionsById.get(t.id) ?? []), t]);
 
-  // Padres con hijos que declaran horas → el padre no suma (regla "hojas primero")
+  // Padres con hijos que reportan horas → el padre no suma (regla "hojas primero")
   const parentsWithHours = new Set<number>();
-  for (const i of ds.items) if (i.parentId && WORK_TYPES.has(i.type) && declaredHours(i) > 0) parentsWithHours.add(i.parentId);
+  for (const i of ds.items) if (i.parentId && WORK_TYPES.has(i.type) && workedHours(i) > 0) parentsWithHours.add(i.parentId);
 
   const people = new Map<string, Person>();
   const ensureEmployee = (id: string, by: Person["matchedBy"], azureEmail?: string) => {
@@ -245,7 +243,7 @@ export function buildModel(ds: DatasetResponse, now = Date.now()): Model {
   const byId = new Map<number, Item>();
   const items: Item[] = ds.items.map((raw) => {
     const isWork = WORK_TYPES.has(raw.type);
-    const hours = declaredHours(raw);
+    const hours = workedHours(raw);
     const plannedStart = ts(raw.start) ?? ts(raw.iterStart);
     const plannedEnd = ts(raw.target) ?? ts(raw.iterEnd);
     const completedAt = ts(raw.completed);
@@ -327,16 +325,6 @@ export function buildModel(ds: DatasetResponse, now = Date.now()): Model {
     epics: ds.epicIds.map((id) => ({ id, title: byId.get(id)?.title ?? `Épica #${id}` })),
     iterations: [...iterMap.values()].sort((a, b) => a.start - b.start),
   };
-}
-
-/** Capacidad en horas de una persona de Global en [from, to] (8 h × % × días hábiles vigentes). No Global: null. */
-export function capacityHours(p: Person, from: number, to: number) {
-  if (!p.inRoster || !p.allocation) return null;
-  const start = Math.max(from, p.startDate ? new Date(`${p.startDate}T00:00:00`).getTime() : from);
-  const end = Math.min(to, p.endDate ? new Date(`${p.endDate}T23:59:59`).getTime() : to);
-  let days = 0;
-  for (let t = start; t <= end; t += DAY) if (isBusinessDay(isoLocalDate(t))) days += 1;
-  return days * JORNADA_HORAS * p.allocation;
 }
 
 /** Categoría de un ítem en un instante, según su traza de estados. */

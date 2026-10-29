@@ -16,7 +16,7 @@ import type { Item } from "@/lib/analytics/model";
 import { categoryColor } from "@/lib/analytics/state-colors";
 import type { StateCategory } from "@/lib/analytics/types";
 import { formatShort } from "@/lib/dates";
-import { BugsBoard } from "./bugs-board";
+import { UndatedBoard } from "./undated-board";
 import { DatasetGate } from "./dataset-gate";
 import { ComplianceSummary } from "./compliance-summary";
 import { GoalPanel } from "./goal-panel";
@@ -35,12 +35,12 @@ export function OverviewView() {
 
 function Overview() {
   const { view } = useApp();
-  // Bugs: sin fechas (no son confiables), solo cantidades y estado actual
+  // HU y Bugs (Positiva): sin fechas, solo cantidades y estado actual
   if (!view.dated) {
     return (
       <div className="space-y-5">
         <ComplianceSummary />
-        <BugsBoard />
+        <UndatedBoard kind={view.key === "hu" ? "hu" : "bugs"} />
       </div>
     );
   }
@@ -102,11 +102,11 @@ function DatedOverview() {
       spark: spark.map((d) => d.items),
     },
     {
-      label: "Horas entregadas",
+      label: "Horas trabajadas",
       icon: Clock,
       value: <AnimatedNumber value={k.hoursDelivered} decimals={1} suffix=" h" />,
-      hint: `Estimación de lo entregado · en Azure reportaron ${k.completedWork.toLocaleString("es-CO")} h trabajadas`,
-      info: `Suma la estimación de las ${noun} entregadas (1 punto de esfuerzo = 1 hora). Si una ${noun === "HU" ? "HU" : "tarea"} y sus hijas tienen horas, solo suman las hijas.`,
+      hint: `Completed Work reportado en Azure en las ${noun} entregadas`,
+      info: `Suma el campo Completed Work (horas que cada persona reporta en Azure) de las ${noun} entregadas en el periodo. No se usan las horas estimadas.`,
       delta: compare ? change(k.hoursDelivered, p.hoursDelivered) : null,
       spark: spark.map((d) => d.hours),
     },
@@ -164,13 +164,13 @@ function DatedOverview() {
                 onChange={setMetric}
                 options={[
                   { value: "items", label: "Cantidad", title: `Cantidad de ${noun}` },
-                  { value: "hours", label: "Horas", title: "Horas estimadas" },
+                  { value: "hours", label: "Horas", title: "Horas trabajadas (Completed Work)" },
                 ]}
               />
             </div>
           }
-          summary={`${Noun} u horas estimadas entregadas por ${chartUnit === "day" ? "día hábil" : "semana"}.`}
-          table={{ columns: [chartUnit === "day" ? "Día hábil" : "Semana", Noun, "Horas estimadas"], rows: flow.map((b) => [bucketLabel(b.start, chartUnit), b.items, b.hours]) }}
+          summary={`${Noun} entregadas u horas trabajadas (Completed Work) por ${chartUnit === "day" ? "día hábil" : "semana"}.`}
+          table={{ columns: [chartUnit === "day" ? "Día hábil" : "Semana", Noun, "Horas trabajadas"], rows: flow.map((b) => [bucketLabel(b.start, chartUnit), b.items, b.hours]) }}
           empty={flow.every((b) => b.items === 0) ? { title: flowExtended ? "Sin entregas en los últimos 7 días hábiles" : "Sin entregas en el periodo" } : false}
           height={280}
         >

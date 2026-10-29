@@ -107,7 +107,8 @@ export type TrendPoint = {
 };
 
 /** Bug del alcance con su responsable y etapa (los bugs no usan fechas: solo estado y cantidades). */
-export type BugRow = { item: ComplianceItem; assignee: Assignee; stage: Stage; epicId: number | null; feature: ComplianceItem | null };
+/** HU o bug del alcance con su responsable y etapa (sin fechas: solo estado y cantidades). */
+export type ItemRow = { item: ComplianceItem; assignee: Assignee; stage: Stage; epicId: number | null; feature: ComplianceItem | null };
 
 export type ComplianceAnalysis = {
   hu: TypeSummary;
@@ -115,7 +116,9 @@ export type ComplianceAnalysis = {
   /** null si el proyecto no mide bugs. Sin fechas: los campos de periodo y vencidas quedan en 0 */
   bugs: TypeSummary | null;
   /** Bugs del alcance (personas y épicas del filtro) para el tablero de Bugs */
-  bugItems: BugRow[];
+  bugItems: ItemRow[];
+  /** HU del alcance para el tablero de HU (sin fechas, igual que los bugs) */
+  huItems: ItemRow[];
   /** Por épica monitoreada (en el orden configurado) */
   epics: GroupRow[];
   features: GroupRow[];
@@ -127,7 +130,6 @@ export type ComplianceAnalysis = {
     readyForQa: HuRow[];
     unassignedTasks: ComplianceItem[];
     unassignedBugs: ComplianceItem[];
-    overdueHu: HuRow[];
     overdueTasks: ComplianceItem[];
   };
 };
@@ -182,7 +184,7 @@ function summarize(items: ComplianceItem[], level: "qa" | "done", assignees: Map
   };
 }
 
-/** Resumen sin datos de fechas (bugs): sin completados en el periodo ni vencidas. */
+/** Resumen sin datos de fechas (HU y bugs): sin completados en el periodo ni atrasadas. */
 const undated = (s: TypeSummary): TypeSummary => ({ ...s, doneInPeriod: 0, doneInPrev: 0, qaInPeriod: 0, qaInPrev: 0, overdue: 0 });
 
 const emptyGroup = (key: string, label: string): GroupRow => ({
@@ -225,7 +227,6 @@ export function complianceAnalysis(all: ComplianceItem[], o: ComplianceOptions):
     }
     return null;
   };
-  const huOverdue = (i: ComplianceItem) => i.target !== null && i.target < o.today && !i.qa;
   const taskOverdue = (i: ComplianceItem) => i.target !== null && i.target < o.today && !i.done;
 
   // Por HU: sus tareas (todas: la HU es la unidad, aunque las tareas sean de otra persona)
@@ -242,7 +243,8 @@ export function complianceAnalysis(all: ComplianceItem[], o: ComplianceOptions):
       tasksTotal: mine.length,
       tasksDone,
       pct: mine.length ? tasksDone / mine.length : null,
-      overdue: huOverdue(h),
+      // Las HU no usan fechas (decisión del usuario): nunca cuentan como atrasadas
+      overdue: false,
       readyForQa: mine.length > 0 && tasksDone === mine.length && (stage === "Proposed" || stage === "InProgress"),
     };
   });
@@ -272,7 +274,6 @@ export function complianceAnalysis(all: ComplianceItem[], o: ComplianceOptions):
       g.hu.total += 1;
       if (h.qa) g.hu.qa += 1;
       if (h.done) g.hu.done += 1;
-      if (huOverdue(h)) g.overdue += 1;
     }
   }
   for (const t of tasks) {
@@ -309,10 +310,11 @@ export function complianceAnalysis(all: ComplianceItem[], o: ComplianceOptions):
 
   const byName = (a: GroupRow, b: GroupRow) => a.label.localeCompare(b.label, "es");
   return {
-    hu: summarize(hus, "qa", assignees, o),
+    hu: undated(summarize(hus, "qa", assignees, o)),
     tasks: summarize(tasks, "done", assignees, o),
     bugs: o.config.bug ? undated(summarize(bugs, "done", assignees, o)) : null,
     bugItems: bugs.map((b) => ({ item: b, assignee: assignees.get(b.id)!, stage: stageOf(b), epicId: epicOf(b), feature: featureOf(b) })),
+    huItems: hus.map((h) => ({ item: h, assignee: assignees.get(h.id)!, stage: stageOf(h), epicId: epicOf(h), feature: featureOf(h) })),
     epics: [...epicGroups.values()],
     features: [...featureGroups.values()].sort((a, b) => (a.key === "none" ? 1 : b.key === "none" ? -1 : byName(a, b))),
     hus: huRows,
@@ -328,7 +330,6 @@ export function complianceAnalysis(all: ComplianceItem[], o: ComplianceOptions):
       readyForQa: huRows.filter((r) => r.readyForQa),
       unassignedTasks: tasks.filter((t) => !t.done && assignees.get(t.id)!.kind === "sinAsignar"),
       unassignedBugs: bugs.filter((b) => !b.done && assignees.get(b.id)!.kind === "sinAsignar"),
-      overdueHu: huRows.filter((r) => r.overdue),
       overdueTasks: tasks.filter(taskOverdue),
     },
   };

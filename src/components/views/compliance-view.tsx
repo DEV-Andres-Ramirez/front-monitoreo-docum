@@ -83,9 +83,9 @@ function Compliance() {
         {analysis.bugs && <TypeCard kind="bugs" s={analysis.bugs} className="md:col-span-2 2xl:col-span-1" />}
       </div>
       <Findings a={analysis} onOpen={openItem} />
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      {/* Solo las tareas tienen tendencia: HU y bugs no usan fechas */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <FlowCard a={analysis} />
-        <TrendCard a={analysis} kind="hu" />
         <TrendCard a={analysis} kind="tasks" />
       </div>
       {analysis.epics.length > 1 && (
@@ -267,7 +267,17 @@ function TypeCard({ kind, s, withoutTasks, className }: { kind: Kind; s: TypeSum
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {kind === "bugs" ? (
+        {kind === "hu" ? (
+          // HU: sin fechas (decisión del usuario): solo cantidades por etapa
+          <>
+            <Stat label="Sin terminar" value={s.total - s.done} hint="aún no en producción" />
+            <Stat label="Por iniciar" value={s.byStage.Proposed} />
+            <Stat label={k.labels.InProgress} value={s.byStage.InProgress} />
+            <Stat label={k.labels.Resolved} value={s.byStage.Resolved} />
+            <Stat label="Sin tareas" value={withoutTasks ?? 0} hint="HU sin tareas creadas" tone={withoutTasks ? "warning" : undefined} />
+            <Stat label="Sin asignar" value={s.unassignedOpen} hint="sin terminar y sin responsable" tone={s.unassignedOpen > 0 ? "warning" : undefined} />
+          </>
+        ) : kind === "bugs" ? (
           // Bugs: sin fechas (no son confiables): solo cantidades por estado
           <>
             <Stat label="Abiertos" value={s.total - s.done} hint="sin cerrar" />
@@ -279,25 +289,12 @@ function TypeCard({ kind, s, withoutTasks, className }: { kind: Kind; s: TypeSum
           </>
         ) : (
           <>
-            {kind === "hu" ? (
-              <Stat label="En el periodo" value={`+${s.qaInPeriod} a QA · +${s.doneInPeriod} a prod.`} hint={comparison ? `${comparison}: +${s.qaInPrev} · +${s.doneInPrev}` : "desde el 19 oct"} />
-            ) : (
-              <Stat label={`${capitalize(k.done)} en el periodo`} value={`+${s.doneInPeriod}`} hint={comparison ? `${comparison}: +${s.doneInPrev}` : "desde el 19 oct"} />
-            )}
+            <Stat label={`${capitalize(k.done)} en el periodo`} value={`+${s.doneInPeriod}`} hint={comparison ? `${comparison}: +${s.doneInPrev}` : "desde el 19 oct"} />
             <Stat label={k.labels.InProgress} value={s.byStage.InProgress} />
-            <Stat label={kind === "hu" ? "Por iniciar" : k.labels.Proposed} value={s.byStage.Proposed} />
-            <Stat
-              label="Atrasadas"
-              value={s.overdue}
-              hint={kind === "hu" ? "sin llegar a QA y con la fecha objetivo pasada" : "sin cerrar y con la fecha objetivo pasada"}
-              tone={s.overdue > 0 ? "critical" : undefined}
-            />
-            {kind === "hu" ? (
-              <Stat label="Sin tareas" value={withoutTasks ?? 0} hint="HU sin tareas creadas" tone={withoutTasks ? "warning" : undefined} />
-            ) : (
-              <Stat label="Pendientes sin asignar" value={s.unassignedOpen} hint="sin cerrar y sin responsable" tone={s.unassignedOpen > 0 ? "warning" : undefined} />
-            )}
-            {kind === "tasks" ? <Stat label="Cumplimiento" value={pctText(s.pctDone)} /> : <Stat label={k.labels.Resolved} value={s.byStage.Resolved} />}
+            <Stat label={k.labels.Proposed} value={s.byStage.Proposed} />
+            <Stat label="Atrasadas" value={s.overdue} hint="sin cerrar y con la fecha objetivo pasada" tone={s.overdue > 0 ? "critical" : undefined} />
+            <Stat label="Pendientes sin asignar" value={s.unassignedOpen} hint="sin cerrar y sin responsable" tone={s.unassignedOpen > 0 ? "warning" : undefined} />
+            <Stat label="Cumplimiento" value={pctText(s.pctDone)} />
           </>
         )}
       </div>
@@ -311,7 +308,6 @@ function Findings({ a, onOpen }: { a: ComplianceAnalysis; onOpen: (id: number) =
   const list = [
     { key: "ready", tone: "good" as const, icon: CheckCircle2, label: "HU con todas sus tareas cerradas que aún no pasan a QA", items: a.findings.readyForQa.map((r) => ({ item: r.item, who: r.assignee })) },
     { key: "noTasks", tone: "warning" as const, icon: ClipboardList, label: "HU sin tareas creadas", items: a.findings.huWithoutTasks.map((r) => ({ item: r.item, who: r.assignee })) },
-    { key: "overdueHu", tone: "critical" as const, icon: AlertTriangle, label: "HU atrasadas (sin llegar a QA y con la fecha objetivo pasada)", items: a.findings.overdueHu.map((r) => ({ item: r.item, who: r.assignee })) },
     { key: "overdueTasks", tone: "critical" as const, icon: AlertTriangle, label: "Tareas atrasadas (sin cerrar y con la fecha objetivo pasada)", items: a.findings.overdueTasks.map((item) => ({ item, who: null })) },
     { key: "unassigned", tone: "warning" as const, icon: UserX, label: "Tareas sin asignar (pendientes)", items: a.findings.unassignedTasks.map((item) => ({ item, who: null })) },
     { key: "unassignedBugs", tone: "warning" as const, icon: Bug, label: "Bugs abiertos sin asignar", items: a.findings.unassignedBugs.map((item) => ({ item, who: null })) },
@@ -350,7 +346,7 @@ function Findings({ a, onOpen }: { a: ComplianceAnalysis; onOpen: (id: number) =
                         <span className="font-mono text-subtle">#{item.id}</span>
                         <span className="min-w-0 flex-1 truncate">{item.title}</span>
                         {who && <span className="hidden max-w-[14rem] text-muted sm:block">{who.kind === "sinAsignar" ? "Sin asignar" : who.name}</span>}
-                        {item.target && <span className="shrink-0 tabular-nums text-subtle">obj. {shortDate(item.target)}</span>}
+                        {item.target && item.type === "Task" && <span className="shrink-0 tabular-nums text-subtle">obj. {shortDate(item.target)}</span>}
                       </button>
                     </li>
                   ))}
@@ -498,7 +494,7 @@ function GroupTable({ rows, withBugs, icon: Icon, title, subtitle, label }: { ro
               <th className="px-3 py-2.5 text-left font-semibold">HU (en producción · en QA o más)</th>
               <th className="px-3 py-2.5 text-left font-semibold">Tareas cerradas</th>
               {withBugs && <th className="px-3 py-2.5 text-left font-semibold">Bugs cerrados</th>}
-              <th className="px-4 py-2.5 text-right font-semibold" title="Sin cumplir y con la fecha objetivo pasada (los bugs no cuentan: sus fechas no son confiables)">Atrasadas</th>
+              <th className="px-4 py-2.5 text-right font-semibold" title="Tareas sin cerrar y con la fecha objetivo pasada (HU y bugs no usan fechas)">Tareas atrasadas</th>
             </tr>
           </thead>
           <tbody>
@@ -539,7 +535,7 @@ function GroupTable({ rows, withBugs, icon: Icon, title, subtitle, label }: { ro
 }
 
 // ------------------------------------------------------------------ Por HU
-type HuFilter = "all" | "noTasks" | "pending" | "complete" | "overdue";
+type HuFilter = "all" | "noTasks" | "pending" | "complete";
 type HuSort = "pctAsc" | "pctDesc" | "stage" | "id";
 const STAGE_ORDER: Record<Stage, number> = { Proposed: 0, InProgress: 1, Resolved: 2, Completed: 3 };
 
@@ -576,7 +572,6 @@ function HuTable({ rows, onOpen }: { rows: HuRow[]; onOpen: (id: number) => void
     noTasks: rows.filter((r) => r.tasksTotal === 0).length,
     pending: rows.filter((r) => r.tasksTotal > 0 && r.tasksDone < r.tasksTotal).length,
     complete: rows.filter((r) => r.tasksTotal > 0 && r.tasksDone === r.tasksTotal).length,
-    overdue: rows.filter((r) => r.overdue).length,
   };
   const visible = useMemo(() => {
     const q = normalizeText(query.replace(/^#/, ""));
@@ -584,7 +579,6 @@ function HuTable({ rows, onOpen }: { rows: HuRow[]; onOpen: (id: number) => void
       if (filter === "noTasks" && r.tasksTotal !== 0) return false;
       if (filter === "pending" && !(r.tasksTotal > 0 && r.tasksDone < r.tasksTotal)) return false;
       if (filter === "complete" && !(r.tasksTotal > 0 && r.tasksDone === r.tasksTotal)) return false;
-      if (filter === "overdue" && !r.overdue) return false;
       return !q || String(r.item.id).includes(q) || normalizeText(`${r.item.title ?? ""} ${r.assignee.name} ${r.feature?.title ?? ""}`).includes(q);
     });
     const stageOf = (r: HuRow) => STAGE_ORDER[(r.item.cat === "Removed" ? "Proposed" : r.item.cat) as Stage];
@@ -602,7 +596,6 @@ function HuTable({ rows, onOpen }: { rows: HuRow[]; onOpen: (id: number) => void
     { key: "pending", label: "Con tareas pendientes" },
     { key: "complete", label: "Tareas completas" },
     { key: "noTasks", label: "Sin tareas" },
-    { key: "overdue", label: "Atrasadas" },
   ];
 
   return (
@@ -660,8 +653,7 @@ function HuTable({ rows, onOpen }: { rows: HuRow[]; onOpen: (id: number) => void
                   <th className="px-4 py-2.5 text-left font-semibold">HU</th>
                   <th className="px-3 py-2.5 text-left font-semibold">Etapa</th>
                   <th className="px-3 py-2.5 text-left font-semibold">Asignado</th>
-                  <th className="px-3 py-2.5 text-left font-semibold">Tareas cerradas</th>
-                  <th className="px-4 py-2.5 text-right font-semibold">Objetivo</th>
+                  <th className="px-4 py-2.5 text-left font-semibold">Tareas cerradas</th>
                 </tr>
               </thead>
               <tbody>
@@ -681,12 +673,8 @@ function HuTable({ rows, onOpen }: { rows: HuRow[]; onOpen: (id: number) => void
                     <td className="max-w-[16rem] px-3 py-2.5 text-xs">
                       <AssigneeName a={r.assignee} />
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-4 py-2.5">
                       <TasksProgress r={r} />
-                    </td>
-                    <td className={clsx("px-4 py-2.5 text-right text-xs tabular-nums", r.overdue ? "font-semibold text-critical-fg" : "text-muted")}>
-                      {r.item.target ? shortDate(r.item.target) : "—"}
-                      {r.overdue && <span className="block text-[0.625rem] font-semibold uppercase">atrasada</span>}
                     </td>
                   </tr>
                 ))}
@@ -704,10 +692,6 @@ function HuTable({ rows, onOpen }: { rows: HuRow[]; onOpen: (id: number) => void
                   </p>
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                     <StagePill item={r.item} />
-                    <span className={clsx("tabular-nums", r.overdue ? "font-semibold text-critical-fg" : "text-muted")}>
-                      {r.item.target ? `obj. ${shortDate(r.item.target)}` : "sin objetivo"}
-                      {r.overdue && " · atrasada"}
-                    </span>
                   </div>
                   <TasksProgress r={r} />
                   <div className="text-xs text-muted">
@@ -759,7 +743,7 @@ function PeopleTable({ rows, withBugs }: { rows: (GroupRow & { assignee: Assigne
               <th className="px-3 py-2.5 text-right font-semibold">Producción</th>
               <th className="px-3 py-2.5 text-left font-semibold">Tareas cerradas</th>
               {withBugs && <th className="px-3 py-2.5 text-left font-semibold">Bugs cerrados</th>}
-              <th className="px-4 py-2.5 text-right font-semibold" title="Sin cumplir y con la fecha objetivo pasada (los bugs no cuentan: sus fechas no son confiables)">Atrasadas</th>
+              <th className="px-4 py-2.5 text-right font-semibold" title="Tareas sin cerrar y con la fecha objetivo pasada (HU y bugs no usan fechas)">Tareas atrasadas</th>
             </tr>
           </thead>
           <tbody>

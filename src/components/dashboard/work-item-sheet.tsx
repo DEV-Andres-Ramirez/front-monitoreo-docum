@@ -80,13 +80,15 @@ function Detail({ item: i }: { item: Item }) {
           </span>
           <span className="text-[0.6875rem] font-normal text-subtle">{CATEGORY_LABEL[i.cat]}</span>
         </Stat>
-        <Stat label="Horas (puntos)">
-          {i.hours ? `${i.hours.toLocaleString("es-CO")} h` : "—"}
-          <span className="text-[0.6875rem] font-normal text-subtle">{i.hours && !i.countedHours ? "no suman: cuentan sus tareas" : i.sp !== null ? "Story Points" : i.effort !== null ? "Effort" : i.estimate !== null ? "Estimación original" : "sin estimar"}</span>
-        </Stat>
-        <Stat label="Trabajo reportado">
+        <Stat label="Horas trabajadas">
           {i.completedWork !== null ? `${i.completedWork.toLocaleString("es-CO")} h` : "—"}
-          <span className="text-[0.6875rem] font-normal text-subtle">{i.remaining !== null ? `${i.remaining} h restantes` : "completado en Azure"}</span>
+          <span className="text-[0.6875rem] font-normal text-subtle">
+            {i.completedWork === null ? "sin Completed Work en Azure" : i.hours && !i.countedHours ? "no suman: cuentan sus hijas" : "Completed Work en Azure"}
+          </span>
+        </Stat>
+        <Stat label="Horas restantes">
+          {i.remaining !== null ? `${i.remaining.toLocaleString("es-CO")} h` : "—"}
+          <span className="text-[0.6875rem] font-normal text-subtle">Remaining Work en Azure</span>
         </Stat>
         <Stat label="Sprint">
           <span className="truncate">{i.iteration?.split("\\").pop() ?? "—"}</span>

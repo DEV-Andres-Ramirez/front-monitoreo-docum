@@ -19,8 +19,8 @@ export function ScheduleView() {
     return (
       <EmptyState
         variant="chart"
-        title="Los bugs no tienen cronograma"
-        description="Las fechas que llegan de Azure para los bugs no son confiables, así que no se dibujan en el Gantt. Mira su estado actual en el Resumen o en Colaboradores, o cambia a Tareas o Historias de usuario."
+        title={view.key === "hu" ? "Las historias de usuario no tienen cronograma" : "Los bugs no tienen cronograma"}
+        description={`Solo las tareas se miden con tiempo. ${view.label} se siguen por su estado actual: míralo en el Resumen o en Colaboradores, o cambia a Tareas para ver el Gantt.`}
       />
     );
   }

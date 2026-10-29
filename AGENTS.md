@@ -20,10 +20,11 @@ Tablero interno del **Scrum Master** (único usuario, común a ambos proyectos) 
 - **005 · Positiva SGDEA**: org `3tcapitalco`, proyecto `005 - POSITIVA SGDEA NEW`. Épicas: `578` Deuda Técnica y Contractual, `568` Épica de gestión, `153` Deuda y `82` NP - Evolutivos (`AZURE_005_EPIC_IDS="578,568,153,82"`).
 
 Reglas de negocio (decididas con el usuario):
-- **1 punto de esfuerzo = 1 hora.**
-  - Horas = `StoryPoints ?? Effort ?? OriginalEstimate`.
+- **Horas = Completed Work** (`CompletedWork` de Azure Analytics, "Trabajo completado"): las que cada persona reporta. **No se usan las horas estimadas** (StoryPoints / Effort / OriginalEstimate): confundían al cliente (decisión del usuario, ambos proyectos).
+  - `workedHours()` en `model.ts`.
+  - **Horas trabajadas** = Completed Work de las tareas **entregadas** en el periodo. Casi siempre se llena al cerrar la tarea.
   - **Sin doble conteo:** si un padre tiene hijos con horas, suman los hijos.
-  - Se compara contra `CompletedWork`.
+  - **No hay capacidad, "horas posibles" ni "uso de capacidad":** se quitaron.
 - **Personas:** **Global** es la base de personal de LinkTic. En la UI **siempre se dice "Global", nunca "Excel" ni "planeación"**. Hoy se carga desde `context/…xlsx` → `0002_seed.sql` (55 personas, `in_global = true`).
   - El **personal del proyecto** es Global **+ miembros No Global**: `project_members.in_global = false`, sin cargo ni % (sin capacidad). En la UI **se dicen "Sin asignación al proyecto"** (nunca "No Global"); etiqueta `NoGlobalBadge` junto al nombre, vía `PersonBadges`. Cuentan en el análisis como cualquier miembro (`Person.inRoster = true`, `inGlobal = false`, `isNoGlobal()` / `personRoleLabel()` en `model.ts`).
   - Hoy, en 348: David Felipe Vergara Bogota y Jhostin Alexander Ladino Gonzalez (0009). En 005: Cristian Roa, Carlos Cansina, Josimar Bonilla, Dario Lopez y Jose Fernando Lozano Murcia (0011; se quitó el alias que hacía contar a Dario como Luis Gabriel Melendez Gongora). Para agregar otro: insertar en `employees` (la cédula es opcional) y en `project_members` con `in_global = false`, `role` y `allocation` en null y `assignment_type = 'No Global'`.
@@ -38,7 +39,10 @@ Reglas de negocio (decididas con el usuario):
 - **Mundos de análisis** (`ProjectMeta.views`, `Filters.view` / `Filters.types`, `scopedWork()` filtra por tipo):
   - **348:** solo **Tareas** en todo el análisis (Resumen, Colaboradores, semáforo, Gantt): decisión del usuario.
   - **005:** **Tareas · Historias de usuario · Bugs** separados, con el selector `ViewFilter` (solo en Resumen, Colaboradores y Cronograma); por defecto, Tareas.
-  - Los **Bugs** (`dated: false`) **no usan fechas**: las de Azure no son confiables y daban alertas falsas. Solo se ven cantidades y estado actual (`bugs-board.tsx`, datos de `/compliance`), sin periodo, atrasos, semáforo ni Gantt. En Cumplimiento, los bugs no tienen "en el periodo", atrasadas ni tendencia.
+  - **Solo las Tareas tienen métricas de tiempo.**
+    - **HU y Bugs** (`dated: false`) **no usan fechas**: los bugs porque las fechas de Azure no son confiables, y las HU por decisión del usuario.
+    - Solo se ve quién las tiene, cuántas y en qué estado van (`undated-board.tsx`: `UndatedBoard`, `ItemsByPerson`, `PersonItems`; datos de `/compliance`: `huItems` / `bugItems`). No tienen periodo, atrasos, semáforo ni Gantt.
+    - En Cumplimiento, HU y bugs no tienen "en el periodo", atrasadas, tendencia ni fecha objetivo.
 - **Periodo** (`period.ts`):
   - por defecto `sinceStart` ("Desde el 19 oct", `ANALYSIS_START` en `config.ts`) hasta hoy;
   - atajos: solo Hoy, Ayer (= **día hábil anterior**), Esta semana y Semana pasada, más un rango personalizado;
@@ -51,27 +55,27 @@ Reglas de negocio (decididas con el usuario):
   - plan = `StartDate`/`TargetDate` del ítem; si no existen, las fechas del **sprint**;
   - real = `InProgressDate` → entrega (`Custom.FechadeEntregaReal` ?? `ResolvedDate` ?? `CompletedDate`);
   - a tiempo si la entrega ≤ fin del día objetivo.
-- **Capacidad a hoy** = 8 h × % asignado × días hábiles vigentes **transcurridos** en el periodo (`capacityHours(p, r.from, min(r.to, now))` en `perPerson`: sin días futuros); **uso de capacidad** (antes "utilización") = horas estimadas entregadas ÷ capacidad.
 - **Lenguaje de la UI:**
   - "atrasadas" (no "vencidas");
-  - "uso de capacidad";
+  - "horas trabajadas" (Completed Work);
   - "Sin asignación al proyecto";
   - preguntas en los títulos de las gráficas;
   - cada KPI con su explicación y un (i) con la fórmula.
   - Se quitaron Burnup, Cycle time por ítem y las tarjetas WIP y Cycle time; no volver a mostrarlos sin pedirlo.
 - **Semáforo (ambos proyectos, `src/lib/analytics/health.ts`; `PersonRow.health` en `perPerson`):**
   - **Sin carga** = sin ítems en el periodo;
-  - **Va mal** = 3+ atrasados, o sin entregas con 3+ días hábiles transcurridos, o uso de capacidad < 50 % (solo con capacidad), o a tiempo < 60 % (con 3+ entregas con objetivo);
-  - **En riesgo** = 1–2 atrasados, uso de capacidad 50–80 %, a tiempo 60–80 % o nada en curso con ítems por iniciar;
+  - **Va mal** = 3+ atrasados, o sin entregas con 3+ días hábiles transcurridos, o a tiempo < 60 % (con 3+ entregas con objetivo);
+  - **En riesgo** = 1–2 atrasados, a tiempo 60–80 % o nada en curso con ítems por iniciar;
   - **Va bien** = nada de lo anterior. Con menos de 3 días hábiles transcurridos solo cuentan atrasos y puntualidad;
-  - **No evaluado** = tiene marca especial; **Sin carga** se cuenta aparte;
-  - se mide con el mundo elegido (348: tareas; 005: Tareas o HU; en Bugs no hay semáforo). La columna de Cumplimiento se mide siempre con tareas;
+  - **No evaluado** = tiene marca especial (se muestra aunque no tenga carga);
+  - **Sin carga** queda **oculto** en Colaboradores hasta que se pulse "Mostrar N sin carga": el filtro va en sessionStorage (`docum:people-health`), así que cada visita lo vuelve a ocultar. No sale en los contadores ni en la barra;
+  - se mide solo con tareas (348 y el mundo Tareas de 005; en HU y Bugs no hay semáforo). La columna de Cumplimiento también se mide con tareas;
   - umbrales en `HEALTH_RULES`; UI en `team-health.tsx` (`TeamHealthCard` del Resumen, contadores, `useTeamRows()`), `HealthBadge` en `primitives.tsx`, Colaboradores, detalle y tabla por persona de Cumplimiento. Colores de estado reservados, siempre con ícono y texto.
 - **Días hábiles** = lunes a viernes **sin festivos de Colombia** (`colombianHolidays()` / `isBusinessDay()` en `src/lib/dates.ts`).
 - **Cumplimiento (solo 005, `PROJECTS["005"].compliance` en `config.ts`; vista `/cumplimiento` + tarjeta en el Resumen):**
   - total, completados y % de HU, Tareas y Bugs (`compliance.bug`) de las épicas; cuenta **todo** lo de las épicas (de quien sea o sin asignar; con personas elegidas, solo lo de ellas; con épicas elegidas, solo lo de ellas);
   - HU en dos niveles: **cumplida = en producción** (Completed) y **entregada a QA o más** (Resolved o Completed); tarea y bug cumplidos = Completed (`Closed` / `4. Cerrado`); en bugs también se muestra "en revisión QA o más";
-  - atrasada = objetivo (o fin del sprint) pasado sin cumplir (HU: sin QA); los bugs nunca cuentan como atrasados;
+  - atrasada = tarea con el objetivo (o el fin del sprint) pasado y sin cerrar; las HU y los bugs nunca cuentan como atrasados;
   - en el Resumen, `ComplianceSummary` muestra solo el mundo elegido;
   - "Lista para QA" = HU con todas sus tareas cerradas que sigue en Por iniciar o En desarrollo.
 - **Meta de cierre (solo 348, `PROJECTS["348"].goal` en `config.ts`):**
@@ -171,7 +175,7 @@ Reglas de negocio (decididas con el usuario):
   - tras cualquier DDL, revisar `get_advisors`.
 - **Migraciones aplicadas:** `init_schema`, `seed_personal_oct2026`, `stats_and_restore`, `azure_sync` (0004), `azure_dataset_assigned` (0005), `dataset_monitored_epics` (0006), `dataset_backfilled_delivery` (0007), `goal_tags` (0008), `no_global_members` (0009), `compliance_items` (0010), `no_global_005` (0011) y `member_flags` (0012).
   - Se aplican con el MCP del proyecto (`.mcp.json`, ref `klrierizueihrenhcema`) o con `scripts/apply-migrations.mjs`.
-  - Antes de escribir con cualquier conector de Supabase, confirma con `list_projects` (solo lectura) que ve `klrierizueihrenhcema`. El 19-oct el conector `claude.ai Supabase` estaba en otra cuenta; el 27-oct se reconectó con la cuenta dueña y con él se aplicó la 0011.
+  - Antes de escribir con cualquier conector de Supabase, confirma con `list_projects` (solo lectura) que ve `klrierizueihrenhcema`. El conector `claude.ai Supabase` cambia de cuenta: el 27-oct estaba en la dueña (con él se aplicaron 0011 y 0012) y el 29-oct volvió a la personal (`baas-amo`). Si no ve el proyecto, no escribas. Para solo leer está la API REST con la llave del servidor.
 - **Nueva carga de Global:** reemplazar el archivo de `context/` → `python3 scripts/generate-seed.py` → aplicar `0002_seed.sql`. Es un upsert con `in_global = true`, no borra a los No Global; si Global incluye a uno de ellos, deja de ser No Global.
 
 ## Convenciones
